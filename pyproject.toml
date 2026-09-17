@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dirpluck"
+dynamic = ["version"]
+description = "Select files from declared runtime and fixed sources and package them into ZIP archives."
+readme = "README.md"
+authors = [{ name = "minoru_jp" }]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = []
+keywords = ["llm", "developer-tools", "file-selection", "directory", "cli", "toml", "zip"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+dirpluck = "dirpluck.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dirpluck*"]
+
+[tool.setuptools.package-data]
+dirpluck = ["docs/*.md"]
+
+[tool.setuptools.dynamic]
+version = { attr = "dirpluck.__version__" }
