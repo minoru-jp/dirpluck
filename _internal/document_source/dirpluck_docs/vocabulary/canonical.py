@@ -14,7 +14,7 @@ class VOCABULARY:
 
     @term("設定ファイル")
     class TERM_2:
-        r'''dirpluck の一回の実行で実現するひとつの抽出意図を記述する TOML ファイル。0個または1個の対象定義、0個以上のコンパニオン、少なくとも1個の source、および出力定義から成る。設定内では1個の平坦なケース名だけを選択でき、対象とコンパニオンの抽出選択を同じケース名で切り替えられる。source の構成、コンパニオンの path、出力方針まで変える場合は別の設定ファイルを用いる。設定探索は cwd と `./dirpluck/` の直下だけで行い、同じファイル名が複数見つかった場合は曖昧としてエラーにする。'''
+        r'''dirpluck の一回の実行で実現するひとつの抽出意図を記述する TOML ファイル。0個または1個の対象定義、0個以上のコンパニオン、0個以上の名前付き共有パターン、少なくとも1個の source、および出力定義から成る。設定内では1個の平坦なケース名だけを選択でき、対象とコンパニオンの抽出選択を同じケース名で切り替えられる。共有パターンは設定ファイル内で明示的に参照して再利用し、ケース継承や暗黙の merge には用いない。source の構成、コンパニオンの path、出力方針まで変える場合は別の設定ファイルを用いる。設定探索は cwd と `./dirpluck/` の直下だけで行い、同じファイル名が複数見つかった場合は曖昧としてエラーにする。'''
         glossary @= True
 
     @term("対象")
@@ -39,7 +39,7 @@ class VOCABULARY:
 
     @term("抽出")
     class TERM_7:
-        r'''対象またはコンパニオンからアーカイブへ含めるファイルを確定する処理。`include` は存在を必須とする相対パス、`include_if_exists` は存在する場合だけ追加する任意候補、`exclude` は選択済み範囲に適用する限定的な名前フィルタである。少なくとも `include` または `include_if_exists` の一方が必要で、`if_empty = "allow"` は必須 `include` を持たない場合だけ指定できる。'''
+        r'''対象またはコンパニオンからアーカイブへ含めるファイルを確定する処理。`include` は存在を必須とする相対パス、`include_if_exists` は存在する場合だけ追加する任意候補、`exclude` は選択済み範囲に適用する限定的な名前フィルタである。これらは選択定義へ直接記述できるほか、include 用または exclude 用の共有パターンを明示的に参照して追加できる。include 用の共有パターンは `include_pattern_refs` または `include_if_exists_pattern_refs`、exclude 用は `exclude_pattern_refs` から参照し、include 用を必須候補または任意候補のどちらとして扱うかは選択側で決める。少なくとも直接記述または共有パターン参照による `include` / `include_if_exists` 相当の候補の一方が必要で、`if_empty = "allow"` は必須候補を持たない場合だけ指定できる。'''
         glossary @= True
 
     @term("アーカイブ")
@@ -58,7 +58,12 @@ class VOCABULARY:
         glossary @= True
 
 
-    @term("0.1.0")
+    @term("0.2.0")
     class TERM_11:
-        r'''現在の公開リリースのバージョン。README ではバージョン番号を直接記述せず、この語彙から差し込む。'''
+        r'''この文書群が対象とするリリースのバージョン。README ではバージョン番号を直接記述せず、この語彙から差し込む。'''
         preserve_spelling @= True
+
+    @term("共有パターン")
+    class TERM_12:
+        r'''同じ設定ファイル内の複数の選択定義から明示的に再利用する名前付きパターン集合。include 用は `[shared.include_patterns]`、exclude 用は `[shared.exclude_patterns]` に `name = [...]` の形で定義し、それぞれ対応するパターン文法で検証する。選択定義は `include_pattern_refs`、`include_if_exists_pattern_refs`、`exclude_pattern_refs` から共有パターン名を参照して自身の直接記述へ追加し、参照していない共有パターンは適用されない。共有パターンはケース継承、暗黙の merge、source 間の自動適用を行わない。'''
+        glossary @= True

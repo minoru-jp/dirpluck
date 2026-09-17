@@ -7,6 +7,11 @@
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_1",
       "text": "dirpluck"
+    },
+    {
+      "source": "dirpluck_docs.vocabulary.canonical",
+      "identifier": "TERM_11",
+      "text": "0.2.0"
     }
   ]
 }
@@ -44,6 +49,7 @@ source の構成、コンパニオン path、出力方針が異なる2つの作�
 
 ```text
 Configuration
+├── shared                 optional, named reusable pattern sets
 ├── target                 optional, runtime-bound
 ├── companion.<name>       zero or more, configuration-bound
 └── output                 exactly one
@@ -118,9 +124,60 @@ timestamp = true
 dirpluck --config project-snapshot
 ```
 
+## 共有パターン
+
+同じ設定ファイル内で複数の選択から同じ include または exclude パターン集合を使いたい場合は、名前付きの共有パターンを定義できます。共有するのは完全な選択定義ではなくパターン配列だけです。
+
+include 用は `[shared.include_patterns]` に定義します。
+
+```toml
+[shared.include_patterns]
+project-core = [
+    "pyproject.toml",
+    "src",
+    "README.md",
+]
+```
+
+exclude 用は `[shared.exclude_patterns]` に定義します。
+
+```toml
+[shared.exclude_patterns]
+python-dev = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    "*.egg-info/",
+    "*.pyc",
+    ".DS_Store",
+]
+```
+
+名前付き配列は、それぞれ include または exclude の通常のパターン文法で検証されます。ひとつの名前付き配列は空にできません。定義しただけではどの source にも適用されず、各選択から明示的に参照します。
+
+include 用共有パターンは、必須候補として `include_pattern_refs`、任意候補として `include_if_exists_pattern_refs` から参照します。exclude 用共有パターンは `exclude_pattern_refs` から参照します。
+
+```toml
+[target]
+description = "The current project for normal development work."
+include_pattern_refs = ["project-core"]
+exclude_pattern_refs = ["python-dev"]
+
+[target.case.all]
+description = "All project files except shared development artifacts."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+```
+
+共有参照と選択自身の `include` / `include_if_exists` / `exclude` は併用できます。参照した共有パターンを先に展開し、その後に選択へ直接記述したパターンを追加します。同じ実効パターンが重複した場合は設定エラーです。
+
+ケースは base 選択を継承しないため、共有パターン参照も継承しません。上の例で `python-dev` を base と `all` の両方へ適用したいので、両方が `exclude_pattern_refs = ["python-dev"]` を明示しています。これは Case 継承ではなく、同じ名前付きパターン集合を2つの独立した選択が参照しているだけです。
+
 ## 選択フィールド
 
-対象の選択、コンパニオンの base 選択、ケース選択は、それぞれ独立した `description` とファイル選択フィールドを持ちます。
+対象の選択、コンパニオンの base 選択、ケース選択は、それぞれ独立した `description` とファイル選択フィールドを持ちます。直接パターンを記述する代わりに、または直接記述と併用して共有パターンを参照できます。
 
 ### `description`
 
@@ -195,13 +252,13 @@ include_if_exists = ["generated/*.pdf"]
 if_empty = "allow"
 ```
 
-`if_empty = "allow"` は必須の `include` と併用できません。
+`if_empty = "allow"` は必須の `include`、または `include_pattern_refs` による必須共有 include と併用できません。
 
 ## ケース
 
 ケースは設定ファイル全体で共有する1個の平坦な名前付き選択 variation です。一回の実行で有効にできるケース名は最大1個です。
 
-ケースは source の選択全体を置き換えます。base 選択を継承したり merge したりしません。
+ケースは source の選択全体を置き換えます。base 選択を継承したり merge したりしません。base が参照している共有パターンも暗黙には引き継がないため、必要なケースは同じ共有名を自分で参照します。
 
 ### 対象ケース
 
@@ -334,6 +391,13 @@ project-20260916-011623-3-review.zip
 ## 完全な例: 変化する対象と固定参照資料
 
 ```toml
+[shared.exclude_patterns]
+workspace-noise = [
+    ".git/",
+    "__pycache__/",
+    "*.pyc",
+]
+
 [target]
 description = "The submission currently being reviewed."
 include = [
@@ -341,6 +405,7 @@ include = [
     "metadata.json",
 ]
 include_if_exists = ["attachments"]
+exclude_pattern_refs = ["workspace-noise"]
 
 [target.case.audit]
 description = "The submission with additional records required for audit."
@@ -350,6 +415,7 @@ include = [
     "records",
 ]
 include_if_exists = ["attachments"]
+exclude_pattern_refs = ["workspace-noise"]
 
 [companion.guidelines]
 path = "review-guidelines"

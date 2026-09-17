@@ -6,15 +6,15 @@ from dirpluck_docs.vocabulary import terms
 @canonical
 @vocabulary(terms)
 @title("{{TERM_1}} 仕様")
-class SPECIFICATION:
+class TITLE_0:
     r'''{{TERM_1}} がサポートする CLI と{{TERM_2}}形式の厳密な動作意味論を定義する。README は用途と設計モデル、`CONFIGURATION.md` は TOML の書き方を説明する。正確な挙動が必要な場合はこの文書を参照する。'''
     vocabulary_refs @= (terms.TERM_1, terms.TERM_2)
 
-    @title('公開面')
+    @title('1. 公開面')
     class TITLE_1:
         r'''互換性を保証する公開面は `dirpluck` CLI と、この文書で定義する TOML 設定形式です。パッケージ内の Python モジュールは、将来 Python API として明示されない限り内部実装として扱います。'''
 
-    @title('設定探索')
+    @title('2. 設定探索')
     class TITLE_2:
         r'''設定探索は再帰せず、cwd を基準とした次の2箇所だけで行います。
 
@@ -27,11 +27,13 @@ class SPECIFICATION:
 
 `--configs` は検出可能な候補を列挙します。cwd 直下では dirpluck 設定らしい構造を持つ TOML だけを列挙し、`./dirpluck/` 直下では TOML を候補として列挙します。両方に同名がある場合は ambiguous と表示します。'''
 
-    @title('トップレベル構造')
+    @title('3. トップレベル構造')
     class TITLE_3:
         r'''受理するトップレベル構造は次だけです。
 
 ```text
+[shared.include_patterns]
+[shared.exclude_patterns]
 [target]
 [target.case.<name>]
 [companion.<name>]
@@ -43,6 +45,7 @@ class SPECIFICATION:
 
 ひとつの設定ファイルはひとつの抽出意図を表し、次を含みます。
 
+- 0個以上の名前付き{{TERM_12}}
 - 0個または1個の論理的な対象定義
 - 0個以上のコンパニオン
 - 対象またはコンパニオンの少なくとも1個の source
@@ -50,9 +53,13 @@ class SPECIFICATION:
 
 対象は runtime-bound source 定義で、1個の論理的な `[target]` 定義を CLI から受け取った1個以上のディレクトリへ適用します。すべての runtime 対象は同じ選択済み対象定義を使います。コンパニオンは設定の `path` に固定される configuration-bound source です。
 
-共有選択定義、bundle、設定継承、設定 merge、CLI からの選択 override はありません。'''
+{{TERM_12}}は名前付きパターン配列だけを再利用する仕組みで、完全な共有選択定義ではありません。bundle、設定継承、設定 merge、CLI からの選択 override はありません。
 
-    @title('ケース')
+`[shared.include_patterns]` と `[shared.exclude_patterns]` はそれぞれ省略可能です。`[shared]` を記述する場合は少なくともどちらか一方が必要で、記述した各 table には少なくとも1個の名前付き配列が必要です。各名前は空でない文字列で、各配列は1件以上の文字列を含みます。include 用の配列は include パターン文法、exclude 用の配列は exclude パターン文法で設定ロード時に検証します。定義しただけの共有パターンはどの選択にも適用されません。'''
+
+        vocabulary_refs @= (terms.TERM_12,)
+
+    @title('4. ケース')
     class TITLE_4:
         r'''ケースは設定ファイル全体で0個または1個だけ有効になる平坦な名前付き selection variation です。ケース名は組み合わせず、多階層化せず、`--case` は最大1回だけ指定できます。
 
@@ -64,9 +71,9 @@ class SPECIFICATION:
 
 ケース指定時に対象がない場合、少なくとも1個のコンパニオンが同名ケースを定義する必要があります。各コンパニオンは同名ケースがあれば使い、なければ base へフォールバックします。
 
-対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。'''
+対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。base 選択にある共有パターン参照も継承しないため、ケースで同じ共有パターンを使う場合はそのケース自身が同じ名前を明示的に参照します。'''
 
-    @title('対象とコンパニオン')
+    @title('5. 対象とコンパニオン')
     class TITLE_5:
         r'''対象は省略可能です。`[target]` または `[target.case.<name>]` が存在する場合、その設定はひとつの runtime-bound 対象規則を定義します。対象の `path` は設定ファイルへ保存せず、TOML から複数の別個な対象規則を定義することもできません。
 
@@ -80,31 +87,37 @@ class SPECIFICATION:
 
 必要なら `[companion.<name>.case.<case-name>]` に完全な代替選択を追加できます。選択ケースが存在しないコンパニオンは削除されず、base 選択へフォールバックします。'''
 
-    @title('選択定義')
+    @title('6. 選択定義')
     class TITLE_6:
-        r'''各 `[target]`、`[target.case.<name>]`、`[companion.<name>]`、`[companion.<name>.case.<case-name>]` の選択には、空でない `description` と、`include` または `include_if_exists` の少なくとも一方が必要です。
+        r'''各 `[target]`、`[target.case.<name>]`、`[companion.<name>]`、`[companion.<name>.case.<case-name>]` の選択には、空でない `description` と、直接記述または共有参照による `include` / `include_if_exists` 相当の候補の少なくとも一方が必要です。
 
-`include` と `include_if_exists` を記述する場合、それぞれ1件以上の文字列を含む必要があります。同一フィールド内の重複は拒否し、正規化後の同じパターンを両方のフィールドへ書くこともできません。
+直接記述の `include` と `include_if_exists` は、それぞれ1件以上の文字列を含む必要があります。共有参照フィールドも、指定する場合は1件以上の共有名を含む文字列配列です。同一フィールド内の重複参照は拒否します。
 
-### `include`
+### `include` と `include_pattern_refs`
 
-通常実行では、すべての `include` パターンが少なくとも1件のファイルシステム実体に一致する必要があります。0件一致はエラーです。
+`include` は必須 include パターンを直接記述します。`include_pattern_refs` は `[shared.include_patterns]` の名前を参照し、その配列を必須 include パターンとして展開します。通常実行では、展開後のすべての必須パターンが少なくとも1件のファイルシステム実体に一致する必要があります。0件一致はエラーです。
 
-### `include_if_exists`
+### `include_if_exists` と `include_if_exists_pattern_refs`
 
-`include` と同じパターン文法を使いますが、0件一致を正常として扱い、選択へ何も追加しません。
+`include_if_exists` は任意 include パターンを直接記述します。`include_if_exists_pattern_refs` は `[shared.include_patterns]` の名前を参照し、その配列を任意 include パターンとして展開します。必須 include と同じパターン文法を使いますが、0件一致を正常として扱い、選択へ何も追加しません。
 
-### `exclude`
+同じ共有 include パターン集合を、ある選択では `include_pattern_refs`、別の選択では `include_if_exists_pattern_refs` から参照できます。必須か任意かは共有定義ではなく参照側が決めます。
 
-`include` または `include_if_exists` によって既に選ばれた範囲の実体名だけをフィルタします。`exclude` 自身は場所を選択しません。
+### `exclude` と `exclude_pattern_refs`
+
+`exclude` は除外パターンを直接記述します。`exclude_pattern_refs` は `[shared.exclude_patterns]` の名前を参照して除外パターンを展開します。どちらも include によって既に選ばれた範囲の実体名だけをフィルタし、場所を選択しません。
+
+### 展開と重複
+
+共有参照は参照配列の順序で展開し、その後に同種の直接記述パターンを追加します。存在しない共有名の参照は設定エラーです。展開後、必須 include 内、任意 include 内、exclude 内に同じ実効パターンが重複した場合は設定エラーです。必須 include と任意 include の両方に同じ正規化済みパターンが現れる場合も設定エラーです。
 
 ### `if_empty`
 
 既定値は `error` です。
 
-`if_empty = "allow"` は必須の `include` を持たない optional-only の選択だけで指定できます。最終ファイル数が0件で空を許す場合、その対象ディレクトリをアーカイブ内の明示的な空ディレクトリエントリとして保持できます。'''
+`if_empty = "allow"` は展開後の必須 include パターンを持たない optional-only の選択だけで指定できます。最終ファイル数が0件で空を許す場合、その対象ディレクトリをアーカイブ内の明示的な空ディレクトリエントリとして保持できます。'''
 
-    @title('include パターン文法')
+    @title('7. include パターン文法')
     class TITLE_7:
         r'''include パターンは対象またはコンパニオンからの POSIX 形式の相対パスです。絶対パス、パターン全体としての `.`、`..` による逸脱を拒否します。検証前にバックスラッシュは `/` へ正規化します。
 
@@ -125,7 +138,7 @@ packages/*/dist/package-*.whl
 
 `**`、`?`、文字クラス (`[]`)、`!` はサポートしません。複数一致した場合にバージョン、更新日時、その他のメタデータを解釈しません。'''
 
-    @title('exclude パターン文法')
+    @title('8. exclude パターン文法')
     class TITLE_8:
         r'''exclude は相対パスではなく、ひとつの実体名を照合します。
 
@@ -142,7 +155,7 @@ name*     前方一致
 
 `*` 単体、`*/`、`foo*bar` のような内部 wildcard、`**`、`?`、文字クラス、`!`、バックスラッシュ、パス区切りは拒否します。'''
 
-    @title('ファイルシステム境界とシンボリックリンク')
+    @title('9. ファイルシステム境界とシンボリックリンク')
     class TITLE_9:
         r'''cwd を実行境界とします。
 
@@ -154,7 +167,7 @@ name*     前方一致
 
 対象には `.` として cwd 自体を指定できます。この場合も cwd の内容を ZIP ルートへ平坦化せず、cwd の実ディレクトリ名を先頭要素として保持します。'''
 
-    @title('アーカイブ計画とパス')
+    @title('10. アーカイブ計画とパス')
     class TITLE_10:
         r'''選択されたファイルは ZIP 内で cwd から見た実際のファイルシステム相対パスを保持します。
 
@@ -164,7 +177,7 @@ name*     前方一致
 
 アーカイブ計画は決定的な順序で作成し、偶発的なファイルシステム列挙順序へ依存しません。'''
 
-    @title('出力')
+    @title('11. 出力')
     class TITLE_11:
         r'''`[output]` は必須で、固定出力または動的命名出力のどちらか一方だけを定義します。両形式のフィールドを混在させると設定エラーです。
 
@@ -215,7 +228,7 @@ suffix = "review"
 
 どちらの形式でも、出力ファイル自身をアーカイブ入力として選択することはできません。'''
 
-    @title('dry-run')
+    @title('12. dry-run')
     class TITLE_12:
         r'''`--dry-run` は通常実行と同じ source 解決、ケース解決、選択、アーカイブ計画ロジックを使いますが、出力を作成・変更しません。
 
@@ -225,7 +238,7 @@ suffix = "review"
 
 設定矛盾、対象と `DIRECTORY` の不整合、不正なパス、存在しないケース名、固定出力での `--sequence` 指定は dry-run でもエラーです。dry-run は出力を書かないため、timestamp から実出力名を確定せず、既存出力との衝突方針も適用しません。'''
 
-    @title('CLI 形式')
+    @title('13. CLI 形式')
     class TITLE_13:
         r'''対象を定義する設定を1個以上の runtime ディレクトリで生成します。
 

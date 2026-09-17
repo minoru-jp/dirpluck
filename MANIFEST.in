@@ -1,4 +1,5 @@
 include README.md
+include USAGE.md
 include CONFIGURATION.md
 include GLOSSARY.md
 include SPECIFICATION.md
@@ -7,7 +8,8 @@ include LICENSE
 include pyproject.toml
 recursive-include src *.py *.md
 recursive-include tests *.py
-prune _internal
+recursive-include tools *.py
+recursive-include _internal *.py *.md *.toml
 prune .github
 exclude .gitignore
 global-exclude __pycache__ *.py[cod] .DS_Store

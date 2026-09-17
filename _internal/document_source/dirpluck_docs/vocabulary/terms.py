@@ -29,27 +29,28 @@ __all__ = [
     "TERM_9",
     "TERM_10",
     "TERM_11",
+    "TERM_12",
 ]
 
 
 class TERM_1:
     r"""dirpluck
 
-本ライブラリの名称。設定ファイルに記述されたひとつの抽出意図に従い、省略可能な CLI 束縛の対象と、設定に固定されたコンパニオンからファイルを選択して ZIP アーカイブを作成する。対象を持たずコンパニオンだけで構成することもできる。"""
+本ライブラリの名称。設定ファイルに記述されたひとつの抽出意図に従い、省略可能な CLI 束縛の対象定義を1個以上の実行時ディレクトリへ適用し、または設定に固定されたコンパニオンからファイルを選択して ZIP アーカイブを作成する。対象を持たずコンパニオンだけで構成することもできる。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_1
 
 class TERM_2:
     r"""設定ファイル
 
-dirpluck の一回の実行で実現するひとつの抽出意図を記述する TOML ファイル。0個または1個の対象、0個以上のコンパニオン、少なくとも1個の source、および出力定義から成る。設定内では1個の平坦なケース名だけを選択でき、対象とコンパニオンの抽出選択を同じケース名で切り替えられる。source の構成、コンパニオンの path、出力方針まで変える場合は別の設定ファイルを用いる。設定探索は cwd と `./dirpluck/` の直下だけで行い、同じファイル名が複数見つかった場合は曖昧としてエラーにする。"""
+dirpluck の一回の実行で実現するひとつの抽出意図を記述する TOML ファイル。0個または1個の対象定義、0個以上のコンパニオン、0個以上の名前付き共有パターン、少なくとも1個の source、および出力定義から成る。設定内では1個の平坦なケース名だけを選択でき、対象とコンパニオンの抽出選択を同じケース名で切り替えられる。共有パターンは設定ファイル内で明示的に参照して再利用し、ケース継承や暗黙の merge には用いない。source の構成、コンパニオンの path、出力方針まで変える場合は別の設定ファイルを用いる。設定探索は cwd と `./dirpluck/` の直下だけで行い、同じファイル名が複数見つかった場合は曖昧としてエラーにする。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_2
 
 class TERM_3:
     r"""対象
 
-設定ファイルが必要とするときだけ存在する CLI 束縛の source。`[target]` に既定の抽出設定を直接記述でき、必要な場合だけ `[target.case.<name>]` に独立した名前付きケースを追加できる。対象には固定 `path` を設定しない。対象を定義する設定では CLI の `DIRECTORY` が必須で、対象を定義しない設定では `DIRECTORY` の指定を拒否する。"""
+設定ファイルが必要とするときだけ存在する CLI 束縛の source 定義。`[target]` に既定の抽出設定を直接記述でき、必要な場合だけ `[target.case.<name>]` に独立した名前付きケースを追加できる。対象には固定 `path` を設定せず、TOML に書く対象定義は最大1個のままにする。対象を定義する設定では CLI の `DIRECTORY` が1個以上必須で、同じ選択済み対象規則をすべてへ適用する。対象を定義しない設定では `DIRECTORY` の指定を拒否する。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_3
 
@@ -70,14 +71,14 @@ class TERM_5:
 class TERM_6:
     r"""対象ディレクトリ
 
-抽出を行う実際のディレクトリ。対象は存在する場合に CLI から与えられ、コンパニオンは設定ファイルの固定 `path` から決定される。使用される source ディレクトリはいずれも存在し、実行時のカレントディレクトリ内に解決されなければならず、シンボリックリンクを利用した外部への逸脱も拒否する。対象には cwd 自体を指定でき、その場合もアーカイブでは cwd の実ディレクトリ名を保持する。"""
+抽出を行う実際のディレクトリ。対象は存在する場合に CLI から1個以上与えられ、すべて同じ対象定義を使う。コンパニオンは設定ファイルの固定 `path` から決定される。使用される source ディレクトリはいずれも存在し、実行時のカレントディレクトリ内に解決されなければならず、シンボリックリンクを利用した外部への逸脱も拒否する。対象には cwd 自体を指定でき、その場合もアーカイブでは cwd の実ディレクトリ名を保持する。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_6
 
 class TERM_7:
     r"""抽出
 
-対象またはコンパニオンからアーカイブへ含めるファイルを確定する処理。`include` は存在を必須とする相対パス、`include_if_exists` は存在する場合だけ追加する任意候補、`exclude` は選択済み範囲に適用する限定的な名前フィルタである。少なくとも `include` または `include_if_exists` の一方が必要で、`if_empty = "allow"` は必須 `include` を持たない場合だけ指定できる。"""
+対象またはコンパニオンからアーカイブへ含めるファイルを確定する処理。`include` は存在を必須とする相対パス、`include_if_exists` は存在する場合だけ追加する任意候補、`exclude` は選択済み範囲に適用する限定的な名前フィルタである。これらは選択定義へ直接記述できるほか、include 用または exclude 用の共有パターンを明示的に参照して追加できる。include 用の共有パターンは `include_pattern_refs` または `include_if_exists_pattern_refs`、exclude 用は `exclude_pattern_refs` から参照し、include 用を必須候補または任意候補のどちらとして扱うかは選択側で決める。少なくとも直接記述または共有パターン参照による `include` / `include_if_exists` 相当の候補の一方が必要で、`if_empty = "allow"` は必須候補を持たない場合だけ指定できる。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_7
 
@@ -102,10 +103,16 @@ class TERM_10:
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_10
 
-
 class TERM_11:
-    r"""0.1.0
+    r"""0.2.0
 
-現在の公開リリースのバージョン。README ではバージョン番号を直接記述せず、この語彙から差し込む。"""
+この文書群が対象とするリリースのバージョン。README ではバージョン番号を直接記述せず、この語彙から差し込む。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_11
+
+class TERM_12:
+    r"""共有パターン
+
+同じ設定ファイル内の複数の選択定義から明示的に再利用する名前付きパターン集合。include 用は `[shared.include_patterns]`、exclude 用は `[shared.exclude_patterns]` に `name = [...]` の形で定義し、それぞれ対応するパターン文法で検証する。選択定義は `include_pattern_refs`、`include_if_exists_pattern_refs`、`exclude_pattern_refs` から共有パターン名を参照して自身の直接記述へ追加し、参照していない共有パターンは適用されない。共有パターンはケース継承、暗黙の merge、source 間の自動適用を行わない。"""
+
+    __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_12

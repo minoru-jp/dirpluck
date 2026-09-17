@@ -110,9 +110,38 @@ When `include` or `include_if_exists` selects a directory, files below that dire
 
 Before sharing an Archive or sending it outside the workspace, review broad selections and add exclusions appropriate to that workspace. `.git/`, `.env*`, `*.pem`, and `*.key` are common examples, but no example list can identify every sensitive file. dirpluck deliberately does not infer which files are secrets or exclude them automatically.
 
+When the same exclusion list is needed by the base selection and several Cases, or by several sources, define it once as a **Shared pattern**. What is shared is only the pattern array, not a complete selection; every selection that uses it names the shared set explicitly. For example, a normal development selection and an “almost everything” Case can reuse the same exclusions.
+
+```toml
+[shared.exclude_patterns]
+python-dev = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    "*.egg-info/",
+    "*.pyc",
+    ".DS_Store",
+]
+
+[target]
+description = "The current development target."
+include_if_exists = ["src", "tests", "README.md"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+
+[target.case.all]
+description = "All target files except shared development artifacts."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+```
+
+Cases do not inherit from the base selection, so `exclude_pattern_refs` must be written explicitly on every selection that needs it. This preserves the rule that a Case is a complete replacement while allowing long pattern arrays to be reused.
+
 ## Why the model is intentionally narrow
 
-The examples above are different uses of the same claim: **one Configuration represents one extraction intent**. dirpluck keeps that intent local and explicit instead of turning the Configuration into a general-purpose search language or a hierarchy of reusable profiles.
+The examples above are different uses of the same claim: **one Configuration represents one extraction intent**. dirpluck keeps that intent local and explicit instead of turning the Configuration into a general-purpose search language or a hierarchy of reusable profiles. Reuse is limited to named include/exclude pattern arrays; complete source or Case selections are not implicitly shared or inherited.
 
 This means dirpluck does not infer which files are important, select the newest artifact, search arbitrary directory depth, or invent relationships between sources. Those decisions stay visible in the Configuration. If two workflows need different source sets, different Companion paths, or different Output policy, they are different Configurations rather than layers of hidden overrides.
 
@@ -126,7 +155,7 @@ A Configuration contains at least one source and exactly one Output definition. 
 
 A **Case** is one flat, Configuration-wide selection variation. When a Target exists, it must define the selected Case; each Companion may define the same Case and otherwise falls back to its base selection. Without a Target, a Case is valid when at least one Companion defines it.
 
-Selections describe required and optional entries inside each source. Output is also part of the Configuration: it can update one fixed path or accumulate Archives under timestamp-based names. Generated output rejects a name that already exists during normal execution, and an explicit CLI sequence number is available when overlapping or same-second runs need distinct names.
+Selections describe required and optional entries inside each source. Repeated pattern sets may be given Shared pattern names and referenced explicitly from the selections that need them. Output is also part of the Configuration: it can update one fixed path or accumulate Archives under timestamp-based names. Generated output rejects a name that already exists during normal execution, and an explicit CLI sequence number is available when overlapping or same-second runs need distinct names.
 
 For the complete TOML authoring guide, including Target and Companion forms, Cases, selection fields, and full examples, see [CONFIGURATION.md](CONFIGURATION.md). For exact matching, discovery, filesystem-boundary, Archive, Output, dry-run, and error semantics, see [SPECIFICATION.md](SPECIFICATION.md).
 
@@ -186,7 +215,7 @@ There are intentionally no CLI options that temporarily replace selection rules 
 
 ## Installation
 
-Python 3.11 or later is required. Current release: `0.1.0`.
+Python 3.11 or later is required. Current release: `0.2.0`.
 
 ```console
 pip install dirpluck
@@ -207,8 +236,9 @@ The CLI is dirpluck's compatibility-supported public interface. Python modules a
 The documentation is split by purpose:
 
 - **README.md** explains what dirpluck is useful for, how its model maps to those uses, and the main design boundaries.
+- **USAGE.md** is a compact operational reference for the positive-use rules needed when running dirpluck.
 - **CONFIGURATION.md** explains how to write the TOML Configuration and provides complete authoring examples.
 - **SPECIFICATION.md** defines exact matching, discovery, boundary, Archive, Output, dry-run, and error semantics.
 - **GLOSSARY.md** provides compact definitions of the domain terms used across the project.
 
-The wheel includes these public documents under `dirpluck/docs/` so their meaning remains available alongside the installed CLI. Repository-only document-generation infrastructure stays outside the PyPI distributions.
+The wheel includes only `USAGE.md` under `dirpluck/docs/`, keeping the information needed at use time alongside the installed CLI. README, CONFIGURATION, SPECIFICATION, GLOSSARY, CHANGELOG, and the document-generation infrastructure are available from the sdist or repository.

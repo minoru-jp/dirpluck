@@ -10,6 +10,28 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.2.0")
+    class RELEASE_2:
+        r'''共有パターンを導入し、抽出条件をケース間や source 間で明示的に再利用できるようにする。'''
+
+        @change(ADDED)
+        class CHANGE_1:
+            r'''{{TERM_12}}を導入する。`[shared.include_patterns]` と `[shared.exclude_patterns]` に `name = [...]` の形で名前付きパターン集合を定義し、対象またはコンパニオンの base / case 選択から `include_pattern_refs` / `include_if_exists_pattern_refs` / `exclude_pattern_refs` で明示的に参照できるようにする。共有パターンは参照した選択にだけ追加され、base から case への継承や暗黙の merge、source 間の自動適用は行わない。'''
+            vocabulary_refs @= (terms.TERM_12,)
+
+        @change(ADDED)
+        class CHANGE_2:
+            r'''include 用の{{TERM_12}}は include のパターン文法で、exclude 用の共有パターンは exclude のパターン文法で検証する。include 用の共有パターンは `include_pattern_refs` から必須候補、`include_if_exists_pattern_refs` から任意候補として参照でき、exclude 用は `exclude_pattern_refs` から参照できる。いずれも直接記述した `include` / `include_if_exists` / `exclude` と併用できる。'''
+            vocabulary_refs @= (terms.TERM_12,)
+
+        @change(ADDED)
+        class CHANGE_3:
+            r'''sdist をリリースの再構築・検証に使えるソース配布物として拡充し、従来の tests と公開文書に加えて `_internal/` の文書正本・日本語中間文書と `tools/` の同期・配布検証ツールを収録する。`_internal/`、`tools/`、tests、`.github/` は wheel へ含めない。'''
+
+        @change(ADDED)
+        class CHANGE_4:
+            r'''実行時に必要な操作規則を短く確認できる公開 `USAGE.md` を追加する。文書は正本から日本語中間文書を生成して英訳する既存フローで管理し、リポジトリルート、sdist、および wheel の `dirpluck/docs/USAGE.md` に収録する。wheel に同梱する文書は `USAGE.md` のみに整理し、`README.md`、`CONFIGURATION.md`、`GLOSSARY.md`、`SPECIFICATION.md` は sdist またはリポジトリで提供する。'''
+
     @release("0.1.0")
     class RELEASE_1:
         r'''最初の公開リリース。'''
@@ -22,7 +44,7 @@ class CHANGELOG:
         @change(ADDED)
         class CHANGE_2:
             r'''{{TERM_4}}を設定ファイル全体で1個だけ有効になる平坦な名前付き selection variation として一般化する。対象がある場合は `[target.case.<name>]` が選択ケースを必ず定義し、各コンパニオンは同名の `[companion.<name>.case.<name>]` があれば使い、なければ base へフォールバックする。対象がない場合は少なくとも1個のコンパニオンがケースを定義する。ケース定義は完全な選択で継承・merge せず、source 構成、コンパニオン path、出力方針は変更しない。ケースの組み合わせと多階層化も拒否する。'''
-            vocabulary_refs @= (terms.TERM_3, terms.TERM_4)
+            vocabulary_refs @= (terms.TERM_4,)
 
         @change(ADDED)
         class CHANGE_3:

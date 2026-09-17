@@ -14,6 +14,7 @@ Every Configuration contains:
 
 ```text
 Configuration
+├── shared                 optional, named reusable pattern sets
 ├── target                 optional, runtime-bound
 ├── companion.<name>       zero or more, configuration-bound
 └── output                 exactly one
@@ -88,9 +89,60 @@ Run it without a positional directory:
 dirpluck --config project-snapshot
 ```
 
+## Shared patterns
+
+When several selections in the same Configuration need the same include or exclude pattern set, define a named Shared pattern. Only the pattern array is shared, not a complete selection definition.
+
+Define include patterns under `[shared.include_patterns]`:
+
+```toml
+[shared.include_patterns]
+project-core = [
+    "pyproject.toml",
+    "src",
+    "README.md",
+]
+```
+
+Define exclude patterns under `[shared.exclude_patterns]`:
+
+```toml
+[shared.exclude_patterns]
+python-dev = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    "*.egg-info/",
+    "*.pyc",
+    ".DS_Store",
+]
+```
+
+Each named array is validated with the normal include or exclude pattern grammar for its table. A named array cannot be empty. Defining a Shared pattern does not apply it to any source; selections must reference it explicitly.
+
+Reference a shared include set as required candidates with `include_pattern_refs`, or as optional candidates with `include_if_exists_pattern_refs`. Reference a shared exclude set with `exclude_pattern_refs`.
+
+```toml
+[target]
+description = "The current project for normal development work."
+include_pattern_refs = ["project-core"]
+exclude_pattern_refs = ["python-dev"]
+
+[target.case.all]
+description = "All project files except shared development artifacts."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+```
+
+Shared references may be combined with a selection's own `include` / `include_if_exists` / `exclude`. Referenced Shared patterns are expanded first, followed by patterns written directly on the selection. A duplicate effective pattern is a Configuration error.
+
+Cases do not inherit the base selection, so they do not inherit its Shared pattern references either. In the example above, both the base selection and `all` explicitly reference `python-dev`. This is not Case inheritance; two independent selections are referencing the same named pattern set.
+
 ## Selection fields
 
-Every Target selection, Companion base selection, and Case selection has its own `description` and file-selection fields.
+Every Target selection, Companion base selection, and Case selection has its own `description` and file-selection fields. Shared patterns may be referenced instead of direct patterns or combined with them.
 
 ### `description`
 
@@ -165,13 +217,13 @@ include_if_exists = ["generated/*.pdf"]
 if_empty = "allow"
 ```
 
-`if_empty = "allow"` cannot be combined with required `include` patterns.
+`if_empty = "allow"` cannot be combined with required `include` patterns or required Shared includes referenced through `include_pattern_refs`.
 
 ## Cases
 
 A Case is one flat, named selection variation shared by the Configuration. At most one Case name can be active in a run.
 
-Cases replace a source's selection as a whole. They do not inherit from or merge with the base selection.
+Cases replace a source's selection as a whole. They do not inherit from or merge with the base selection. Shared pattern references on the base selection are not inherited either, so a Case that needs the same Shared pattern must reference the same name itself.
 
 ### Target Case
 
@@ -304,6 +356,13 @@ The CLI does not temporarily replace the Output form. If two workflows need diff
 ## Complete example: changing Target with fixed references
 
 ```toml
+[shared.exclude_patterns]
+workspace-noise = [
+    ".git/",
+    "__pycache__/",
+    "*.pyc",
+]
+
 [target]
 description = "The submission currently being reviewed."
 include = [
@@ -311,6 +370,7 @@ include = [
     "metadata.json",
 ]
 include_if_exists = ["attachments"]
+exclude_pattern_refs = ["workspace-noise"]
 
 [target.case.audit]
 description = "The submission with additional records required for audit."
@@ -320,6 +380,7 @@ include = [
     "records",
 ]
 include_if_exists = ["attachments"]
+exclude_pattern_refs = ["workspace-noise"]
 
 [companion.guidelines]
 path = "review-guidelines"

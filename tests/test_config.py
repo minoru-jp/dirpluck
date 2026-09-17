@@ -55,6 +55,228 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.output.path, "out.zip")
             self.assertEqual(config.output.if_exists, "error")
 
+
+    def test_shared_patterns_expand_into_target_case_and_companion_selections(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [shared.include_patterns]
+                core = ["src", "README.md"]
+                optional = ["docs", "examples"]
+
+                [shared.exclude_patterns]
+                python-dev = ["__pycache__/", "*.pyc"]
+
+                [target]
+                description = "Default."
+                include_pattern_refs = ["core"]
+                exclude_pattern_refs = ["python-dev"]
+
+                [target.case.all]
+                description = "All."
+                include_if_exists = ["*"]
+                exclude_pattern_refs = ["python-dev"]
+                if_empty = "allow"
+
+                [companion.framework]
+                path = "framework"
+                description = "Framework."
+                include_if_exists_pattern_refs = ["optional"]
+                exclude_pattern_refs = ["python-dev"]
+                if_empty = "allow"
+            '''))
+            self.assertEqual(config.shared.include["core"], ("src", "README.md"))
+            self.assertEqual(
+                tuple(pattern.raw for pattern in config.shared.exclude["python-dev"]),
+                ("__pycache__/", "*.pyc"),
+            )
+            self.assertEqual(config.target.default.include, ("src", "README.md"))
+            self.assertEqual(
+                tuple(pattern.raw for pattern in config.target.default.exclude),
+                ("__pycache__/", "*.pyc"),
+            )
+            self.assertEqual(config.target.cases["all"].include_if_exists, ("*",))
+            self.assertEqual(
+                config.companions["framework"].selection.include_if_exists,
+                ("docs", "examples"),
+            )
+
+    def test_shared_include_patterns_can_be_required_or_optional_per_reference(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [shared.include_patterns]
+                common = ["src", "README.md"]
+
+                [target]
+                description = "Required."
+                include_pattern_refs = ["common"]
+
+                [target.case.optional]
+                description = "Optional."
+                include_if_exists_pattern_refs = ["common"]
+                if_empty = "allow"
+            '''))
+            self.assertEqual(config.target.default.include, ("src", "README.md"))
+            self.assertEqual(
+                config.target.cases["optional"].include_if_exists,
+                ("src", "README.md"),
+            )
+
+    def test_shared_and_local_patterns_are_combined_in_declared_order(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [shared.include_patterns]
+                first = ["src"]
+                second = ["tests"]
+
+                [shared.exclude_patterns]
+                cache = ["__pycache__/"]
+                compiled = ["*.pyc"]
+
+                [target]
+                description = "Combined."
+                include_pattern_refs = ["first", "second"]
+                include = ["README.md"]
+                exclude_pattern_refs = ["cache", "compiled"]
+                exclude = [".DS_Store"]
+            '''))
+            self.assertEqual(config.target.default.include, ("src", "tests", "README.md"))
+            self.assertEqual(
+                tuple(pattern.raw for pattern in config.target.default.exclude),
+                ("__pycache__/", "*.pyc", ".DS_Store"),
+            )
+
+    def test_shared_pattern_references_are_not_inherited_by_cases(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [shared.exclude_patterns]
+                python-dev = ["__pycache__/", "*.pyc"]
+
+                [target]
+                description = "Default."
+                include = ["src"]
+                exclude_pattern_refs = ["python-dev"]
+
+                [target.case.review]
+                description = "Review."
+                include = ["tests"]
+            '''))
+            self.assertEqual(
+                tuple(pattern.raw for pattern in config.target.default.exclude),
+                ("__pycache__/", "*.pyc"),
+            )
+            self.assertEqual(config.target.cases["review"].exclude, ())
+
+    def test_unknown_shared_pattern_reference_is_rejected(self):
+        for field in (
+            "include_pattern_refs",
+            "include_if_exists_pattern_refs",
+            "exclude_pattern_refs",
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                suffix = '\nif_empty = "allow"' if field == "include_if_exists_pattern_refs" else ""
+                manifest = self._write(root, f'''
+                    [target]
+                    description = "Default."
+                    {field} = ["missing"]
+                    {suffix}
+                ''')
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+    def test_shared_include_and_exclude_patterns_use_their_own_grammars(self):
+        invalid = (
+            ("include_patterns", "bad", "src/**/x.py"),
+            ("exclude_patterns", "bad", "src/generated/"),
+        )
+        for table, name, pattern in invalid:
+            with self.subTest(table=table), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f'''
+                    [shared.{table}]
+                    {name} = [{pattern!r}]
+
+                    [target]
+                    description = "Default."
+                    include = ["src"]
+                ''')
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+    def test_shared_pattern_sets_must_be_non_empty_arrays(self):
+        for table in ("include_patterns", "exclude_patterns"):
+            with self.subTest(table=table), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f'''
+                    [shared.{table}]
+                    empty = []
+
+                    [target]
+                    description = "Default."
+                    include = ["src"]
+                ''')
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+    def test_duplicate_effective_patterns_from_shared_and_local_are_rejected(self):
+        cases = (
+            '''
+                [shared.include_patterns]
+                common = ["src"]
+                [target]
+                description = "Default."
+                include_pattern_refs = ["common"]
+                include = ["src"]
+            ''',
+            '''
+                [shared.exclude_patterns]
+                common = ["*.pyc"]
+                [target]
+                description = "Default."
+                include = ["src"]
+                exclude_pattern_refs = ["common"]
+                exclude = ["*.pyc"]
+            ''',
+        )
+        for body in cases:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                with self.assertRaises(ConfigurationError):
+                    load_config(self._write(root, body))
+
+    def test_if_empty_allow_rejects_required_shared_include_patterns(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, '''
+                [shared.include_patterns]
+                required = ["src"]
+
+                [target]
+                description = "Default."
+                include_pattern_refs = ["required"]
+                if_empty = "allow"
+            ''')
+            with self.assertRaises(ConfigurationError):
+                load_config(manifest)
+
+    def test_unknown_shared_key_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, '''
+                [shared]
+                filters = ["python"]
+
+                [target]
+                description = "Default."
+                include = ["src"]
+            ''')
+            with self.assertRaises(ConfigurationError):
+                load_config(manifest)
+
     def test_target_only_default_is_valid(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -43,10 +43,7 @@ jobs:
       - name: Verify packaged documents are synchronized
         shell: bash
         run: |
-          cmp README.md src/dirpluck/docs/README.md
-          cmp CONFIGURATION.md src/dirpluck/docs/CONFIGURATION.md
-          cmp GLOSSARY.md src/dirpluck/docs/GLOSSARY.md
-          cmp SPECIFICATION.md src/dirpluck/docs/SPECIFICATION.md
+          cmp USAGE.md src/dirpluck/docs/USAGE.md
 
       - name: Build wheel and sdist
         run: python -m build

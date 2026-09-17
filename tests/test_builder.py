@@ -90,6 +90,47 @@ class BuilderTests(unittest.TestCase):
             self.assertIn("Directory source: CLI input #1", readme)
             self.assertIn("Directory source: CLI input #2", readme)
 
+
+    def test_all_case_can_reuse_shared_exclude_patterns(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            (project / "src" / "__pycache__").mkdir(parents=True)
+            (project / ".git").mkdir()
+            (project / "src" / "main.py").write_text("x", encoding="utf-8")
+            (project / "src" / "__pycache__" / "main.pyc").write_bytes(b"cache")
+            (project / ".git" / "config").write_text("git", encoding="utf-8")
+            (project / "notes.txt").write_text("notes", encoding="utf-8")
+
+            config = self._config(root, '''
+                [shared.exclude_patterns]
+                python-dev = [".git/", "__pycache__/", "*.pyc"]
+
+                [target]
+                description = "Default selection."
+                include = ["src"]
+                exclude_pattern_refs = ["python-dev"]
+
+                [target.case.all]
+                description = "Everything except shared development artifacts."
+                include_if_exists = ["*"]
+                exclude_pattern_refs = ["python-dev"]
+                if_empty = "allow"
+            ''')
+
+            output = build_archive(
+                config,
+                BuildRequest.create("application", case="all"),
+                cwd=root,
+            )
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+
+            self.assertIn("application/src/main.py", names)
+            self.assertIn("application/notes.txt", names)
+            self.assertNotIn("application/.git/config", names)
+            self.assertNotIn("application/src/__pycache__/main.pyc", names)
+
     def test_multiple_runtime_targets_use_the_same_named_case(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

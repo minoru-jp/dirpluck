@@ -7,6 +7,11 @@
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_1",
       "text": "dirpluck"
+    },
+    {
+      "source": "dirpluck_docs.vocabulary.canonical",
+      "identifier": "TERM_11",
+      "text": "0.2.0"
     }
   ]
 }
@@ -30,7 +35,7 @@
 
 # dirpluck 仕様
 
-この文書は、dirpluck がサポートする CLI と設定形式の厳密な動作意味論を定義します。README は用途と設計モデル、CONFIGURATION.md は TOML の書き方を説明します。正確な挙動が必要な場合はこの文書を参照します。
+dirpluck がサポートする CLI と設定ファイル形式の厳密な動作意味論を定義する。README は用途と設計モデル、`CONFIGURATION.md` は TOML の書き方を説明する。正確な挙動が必要な場合はこの文書を参照する。
 
 ## 1. 公開面
 
@@ -51,9 +56,11 @@
 
 ## 3. トップレベル構造
 
-受理する構造は次だけです。
+受理するトップレベル構造は次だけです。
 
 ```text
+[shared.include_patterns]
+[shared.exclude_patterns]
 [target]
 [target.case.<name>]
 [companion.<name>]
@@ -65,6 +72,7 @@
 
 ひとつの設定ファイルはひとつの抽出意図を表し、次を含みます。
 
+- 0個以上の名前付き共有パターン
 - 0個または1個の論理的な対象定義
 - 0個以上のコンパニオン
 - 対象またはコンパニオンの少なくとも1個の source
@@ -72,7 +80,9 @@
 
 対象は runtime-bound source 定義で、1個の論理的な `[target]` 定義を CLI から受け取った1個以上のディレクトリへ適用します。すべての runtime 対象は同じ選択済み対象定義を使います。コンパニオンは設定の `path` に固定される configuration-bound source です。
 
-共有選択定義、bundle、設定継承、設定 merge、CLI からの選択 override はありません。
+共有パターンは名前付きパターン配列だけを再利用する仕組みで、完全な共有選択定義ではありません。bundle、設定継承、設定 merge、CLI からの選択 override はありません。
+
+`[shared.include_patterns]` と `[shared.exclude_patterns]` はそれぞれ省略可能です。`[shared]` を記述する場合は少なくともどちらか一方が必要で、記述した各 table には少なくとも1個の名前付き配列が必要です。各名前は空でない文字列で、各配列は1件以上の文字列を含みます。include 用の配列は include パターン文法、exclude 用の配列は exclude パターン文法で設定ロード時に検証します。定義しただけの共有パターンはどの選択にも適用されません。
 
 ## 4. ケース
 
@@ -86,7 +96,7 @@
 
 ケース指定時に対象がない場合、少なくとも1個のコンパニオンが同名ケースを定義する必要があります。各コンパニオンは同名ケースがあれば使い、なければ base へフォールバックします。
 
-対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。
+対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。base 選択にある共有パターン参照も継承しないため、ケースで同じ共有パターンを使う場合はそのケース自身が同じ名前を明示的に参照します。
 
 ## 5. 対象とコンパニオン
 
@@ -104,27 +114,33 @@
 
 ## 6. 選択定義
 
-各 `[target]`、`[target.case.<name>]`、`[companion.<name>]`、`[companion.<name>.case.<case-name>]` の選択には、空でない `description` と、`include` または `include_if_exists` の少なくとも一方が必要です。
+各 `[target]`、`[target.case.<name>]`、`[companion.<name>]`、`[companion.<name>.case.<case-name>]` の選択には、空でない `description` と、直接記述または共有参照による `include` / `include_if_exists` 相当の候補の少なくとも一方が必要です。
 
-`include` と `include_if_exists` を記述する場合、それぞれ1件以上の文字列を含む必要があります。同一フィールド内の重複は拒否し、正規化後の同じパターンを両方のフィールドへ書くこともできません。
+直接記述の `include` と `include_if_exists` は、それぞれ1件以上の文字列を含む必要があります。共有参照フィールドも、指定する場合は1件以上の共有名を含む文字列配列です。同一フィールド内の重複参照は拒否します。
 
-### `include`
+### `include` と `include_pattern_refs`
 
-通常実行では、すべての `include` パターンが少なくとも1件のファイルシステム実体に一致する必要があります。0件一致はエラーです。
+`include` は必須 include パターンを直接記述します。`include_pattern_refs` は `[shared.include_patterns]` の名前を参照し、その配列を必須 include パターンとして展開します。通常実行では、展開後のすべての必須パターンが少なくとも1件のファイルシステム実体に一致する必要があります。0件一致はエラーです。
 
-### `include_if_exists`
+### `include_if_exists` と `include_if_exists_pattern_refs`
 
-`include` と同じパターン文法を使いますが、0件一致を正常として扱い、選択へ何も追加しません。
+`include_if_exists` は任意 include パターンを直接記述します。`include_if_exists_pattern_refs` は `[shared.include_patterns]` の名前を参照し、その配列を任意 include パターンとして展開します。必須 include と同じパターン文法を使いますが、0件一致を正常として扱い、選択へ何も追加しません。
 
-### `exclude`
+同じ共有 include パターン集合を、ある選択では `include_pattern_refs`、別の選択では `include_if_exists_pattern_refs` から参照できます。必須か任意かは共有定義ではなく参照側が決めます。
 
-`include` または `include_if_exists` によって既に選ばれた範囲の実体名だけをフィルタします。`exclude` 自身は場所を選択しません。
+### `exclude` と `exclude_pattern_refs`
+
+`exclude` は除外パターンを直接記述します。`exclude_pattern_refs` は `[shared.exclude_patterns]` の名前を参照して除外パターンを展開します。どちらも include によって既に選ばれた範囲の実体名だけをフィルタし、場所を選択しません。
+
+### 展開と重複
+
+共有参照は参照配列の順序で展開し、その後に同種の直接記述パターンを追加します。存在しない共有名の参照は設定エラーです。展開後、必須 include 内、任意 include 内、exclude 内に同じ実効パターンが重複した場合は設定エラーです。必須 include と任意 include の両方に同じ正規化済みパターンが現れる場合も設定エラーです。
 
 ### `if_empty`
 
 既定値は `error` です。
 
-`if_empty = "allow"` は必須の `include` を持たない optional-only の選択だけで指定できます。最終ファイル数が0件で空を許す場合、その対象ディレクトリをアーカイブ内の明示的な空ディレクトリエントリとして保持できます。
+`if_empty = "allow"` は展開後の必須 include パターンを持たない optional-only の選択だけで指定できます。最終ファイル数が0件で空を許す場合、その対象ディレクトリをアーカイブ内の明示的な空ディレクトリエントリとして保持できます。
 
 ## 7. include パターン文法
 
@@ -221,7 +237,7 @@ suffix = "review"
 
 `directory` は cwd 内の具体的な cwd 相対ディレクトリでなければならず、`.` は cwd 自体を表す値として使用できます。絶対パス、`..`、glob を拒否します。必要なディレクトリは作成し、シンボリックリンクによる cwd 外への逸脱を拒否します。
 
-`prefix` と `suffix` は空でない1個の filename fragment とし、`.`、`..`、path separator、制御文字、`< > : " | ? *` を拒否します。
+`prefix` と `suffix` は空でない1個の portable filename fragment とし、`.`、`..`、path separator、制御文字、`< > : " | ? *` を拒否します。
 
 生成するファイル名は次の固定形式です。
 

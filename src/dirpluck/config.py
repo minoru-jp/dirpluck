@@ -106,8 +106,16 @@ class ExclusionPattern:
 
 
 @dataclass(frozen=True)
+class SharedPatterns:
+    """Named reusable include and exclude pattern sets."""
+
+    include: Mapping[str, tuple[str, ...]]
+    exclude: Mapping[str, tuple[ExclusionPattern, ...]]
+
+
+@dataclass(frozen=True)
 class Selection:
-    """Selection settings owned directly by one target or companion."""
+    """Effective selection settings owned directly by one target or companion."""
 
     description: str
     include: tuple[str, ...]
@@ -155,6 +163,7 @@ class Config:
     """One extraction intent described by a dirpluck configuration file."""
 
     manifest: Path
+    shared: SharedPatterns
     target: Target | None
     companions: Mapping[str, Companion]
     output: Output
@@ -279,35 +288,212 @@ def _parse_exclusion_pattern(raw: str, where: str) -> ExclusionPattern:
     return ExclusionPattern(raw=raw, value=value, match=match, directory=directory)
 
 
-def _validated_exclusions(value: object, where: str) -> tuple[ExclusionPattern, ...]:
-    raw_patterns = _string_list(value, where, allow_empty=True) if value is not None else ()
+def _validated_exclusions(
+    value: object,
+    where: str,
+    *,
+    allow_empty: bool = True,
+) -> tuple[ExclusionPattern, ...]:
+    raw_patterns = (
+        _string_list(value, where, allow_empty=allow_empty) if value is not None else ()
+    )
     return tuple(_parse_exclusion_pattern(raw, where) for raw in raw_patterns)
 
 
-def _parse_selection(value: object, where: str) -> Selection:
+def _parse_shared_pattern_table(
+    value: object,
+    where: str,
+    *,
+    kind: str,
+) -> Mapping[str, tuple[str, ...] | tuple[ExclusionPattern, ...]]:
+    if value is None:
+        return MappingProxyType({})
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"{where}: expected a table")
+    if not value:
+        raise ConfigurationError(f"{where}: define at least one named pattern set")
+
+    patterns: dict[str, tuple[str, ...] | tuple[ExclusionPattern, ...]] = {}
+    for raw_name, raw_patterns in value.items():
+        name = _require_name(raw_name, where)
+        pattern_where = f"{where}.{name}"
+        if kind == "include":
+            patterns[name] = _validated_includes(raw_patterns, pattern_where)
+        elif kind == "exclude":
+            patterns[name] = _validated_exclusions(
+                raw_patterns, pattern_where, allow_empty=False
+            )
+        else:
+            raise AssertionError(f"unknown shared pattern kind: {kind}")
+    return MappingProxyType(patterns)
+
+
+def _parse_shared(value: object, where: str) -> SharedPatterns:
+    if value is None:
+        return SharedPatterns(
+            include=MappingProxyType({}),
+            exclude=MappingProxyType({}),
+        )
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"{where}: expected a table")
+    _require_only_keys(value, {"include_patterns", "exclude_patterns"}, where)
+    if not value:
+        raise ConfigurationError(
+            f"{where}: define [shared.include_patterns] and/or [shared.exclude_patterns]"
+        )
+
+    include = _parse_shared_pattern_table(
+        value.get("include_patterns"),
+        f"{where}.include_patterns",
+        kind="include",
+    )
+    exclude = _parse_shared_pattern_table(
+        value.get("exclude_patterns"),
+        f"{where}.exclude_patterns",
+        kind="exclude",
+    )
+    if not include and not exclude:
+        raise ConfigurationError(
+            f"{where}: define [shared.include_patterns] and/or [shared.exclude_patterns]"
+        )
+    return SharedPatterns(include=include, exclude=exclude)
+
+
+def _pattern_refs(value: object, where: str) -> tuple[str, ...]:
+    refs = _string_list(value, where)
+    return tuple(_require_name(ref, where) for ref in refs)
+
+
+def _resolve_include_refs(
+    refs: tuple[str, ...],
+    shared: SharedPatterns,
+    where: str,
+) -> tuple[str, ...]:
+    resolved: list[str] = []
+    for name in refs:
+        try:
+            resolved.extend(shared.include[name])
+        except KeyError as exc:
+            raise ConfigurationError(
+                f"{where}: unknown shared include pattern set: {name!r}"
+            ) from exc
+    return tuple(resolved)
+
+
+def _resolve_exclude_refs(
+    refs: tuple[str, ...],
+    shared: SharedPatterns,
+    where: str,
+) -> tuple[ExclusionPattern, ...]:
+    resolved: list[ExclusionPattern] = []
+    for name in refs:
+        try:
+            resolved.extend(shared.exclude[name])
+        except KeyError as exc:
+            raise ConfigurationError(
+                f"{where}: unknown shared exclude pattern set: {name!r}"
+            ) from exc
+    return tuple(resolved)
+
+
+def _reject_duplicate_effective_includes(patterns: tuple[str, ...], where: str) -> None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for pattern in patterns:
+        if pattern in seen and pattern not in duplicates:
+            duplicates.append(pattern)
+        seen.add(pattern)
+    if duplicates:
+        raise ConfigurationError(
+            f"{where}: duplicate effective include pattern(s): "
+            + ", ".join(repr(item) for item in duplicates)
+        )
+
+
+def _reject_duplicate_effective_exclusions(
+    patterns: tuple[ExclusionPattern, ...],
+    where: str,
+) -> None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for pattern in patterns:
+        if pattern.raw in seen and pattern.raw not in duplicates:
+            duplicates.append(pattern.raw)
+        seen.add(pattern.raw)
+    if duplicates:
+        raise ConfigurationError(
+            f"{where}: duplicate effective exclusion pattern(s): "
+            + ", ".join(repr(item) for item in duplicates)
+        )
+
+
+def _parse_selection(
+    value: object,
+    where: str,
+    shared: SharedPatterns,
+) -> Selection:
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
     _require_only_keys(
         value,
-        {"description", "include", "include_if_exists", "exclude", "if_empty"},
+        {
+            "description",
+            "include",
+            "include_if_exists",
+            "exclude",
+            "include_pattern_refs",
+            "include_if_exists_pattern_refs",
+            "exclude_pattern_refs",
+            "if_empty",
+        },
         where,
     )
     description = _required_description(value.get("description"), f"{where}.description")
-    include = _validated_includes(value.get("include"), f"{where}.include")
-    include_if_exists = _validated_includes(
-        value.get("include_if_exists"), f"{where}.include_if_exists"
+
+    include_refs = _pattern_refs(
+        value.get("include_pattern_refs"), f"{where}.include_pattern_refs"
+    )
+    optional_refs = _pattern_refs(
+        value.get("include_if_exists_pattern_refs"),
+        f"{where}.include_if_exists_pattern_refs",
+    )
+    exclude_refs = _pattern_refs(
+        value.get("exclude_pattern_refs"), f"{where}.exclude_pattern_refs"
+    )
+
+    include = (
+        _resolve_include_refs(include_refs, shared, f"{where}.include_pattern_refs")
+        + _validated_includes(value.get("include"), f"{where}.include")
+    )
+    include_if_exists = (
+        _resolve_include_refs(
+            optional_refs, shared, f"{where}.include_if_exists_pattern_refs"
+        )
+        + _validated_includes(
+            value.get("include_if_exists"), f"{where}.include_if_exists"
+        )
     )
     if not include and not include_if_exists:
         raise ConfigurationError(
-            f"{where}: at least one of include or include_if_exists is required"
+            f"{where}: at least one include/include_if_exists pattern or shared include reference is required"
         )
+    _reject_duplicate_effective_includes(include, f"{where}.include")
+    _reject_duplicate_effective_includes(
+        include_if_exists, f"{where}.include_if_exists"
+    )
     overlap = sorted(set(include) & set(include_if_exists))
     if overlap:
         raise ConfigurationError(
             f"{where}: include and include_if_exists must not contain the same pattern(s): "
             + ", ".join(repr(item) for item in overlap)
         )
-    exclude = _validated_exclusions(value.get("exclude"), f"{where}.exclude")
+
+    exclude = (
+        _resolve_exclude_refs(exclude_refs, shared, f"{where}.exclude_pattern_refs")
+        + _validated_exclusions(value.get("exclude"), f"{where}.exclude")
+    )
+    _reject_duplicate_effective_exclusions(exclude, f"{where}.exclude")
+
     if_empty = value.get("if_empty", "error")
     if not isinstance(if_empty, str) or if_empty not in {"error", "allow"}:
         raise ConfigurationError(f"{where}.if_empty: expected 'error' or 'allow'")
@@ -437,7 +623,11 @@ def _parse_output(value: object, where: str) -> Output:
     )
 
 
-def _parse_cases(value: object, where: str) -> Mapping[str, Selection]:
+def _parse_cases(
+    value: object,
+    where: str,
+    shared: SharedPatterns,
+) -> Mapping[str, Selection]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
@@ -452,31 +642,55 @@ def _parse_cases(value: object, where: str) -> Mapping[str, Selection]:
             raise ConfigurationError(
                 f"{where}: case names must be flat and must not contain '.': {name!r}"
             )
-        cases[name] = _parse_selection(raw_case, f"{where}.{name}")
+        cases[name] = _parse_selection(raw_case, f"{where}.{name}", shared)
     return MappingProxyType(cases)
 
 
-def _parse_target(value: object, where: str) -> Target | None:
+def _parse_target(
+    value: object,
+    where: str,
+    shared: SharedPatterns,
+) -> Target | None:
     if value is None:
         return None
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
     _require_only_keys(
         value,
-        {"description", "include", "include_if_exists", "exclude", "if_empty", "case"},
+        {
+            "description",
+            "include",
+            "include_if_exists",
+            "exclude",
+            "include_pattern_refs",
+            "include_if_exists_pattern_refs",
+            "exclude_pattern_refs",
+            "if_empty",
+            "case",
+        },
         where,
     )
 
-    default_keys = {"description", "include", "include_if_exists", "exclude", "if_empty"}
+    default_keys = {
+        "description",
+        "include",
+        "include_if_exists",
+        "exclude",
+        "include_pattern_refs",
+        "include_if_exists_pattern_refs",
+        "exclude_pattern_refs",
+        "if_empty",
+    }
     has_default = any(key in value for key in default_keys)
     default: Selection | None = None
     if has_default:
         default = _parse_selection(
             {key: value[key] for key in default_keys if key in value},
             where,
+            shared,
         )
 
-    cases = _parse_cases(value.get("case"), f"{where}.case")
+    cases = _parse_cases(value.get("case"), f"{where}.case", shared)
 
     if default is None and not cases:
         raise ConfigurationError(
@@ -485,7 +699,11 @@ def _parse_target(value: object, where: str) -> Target | None:
     return Target(default=default, cases=cases)
 
 
-def _parse_companions(value: object, where: str) -> Mapping[str, Companion]:
+def _parse_companions(
+    value: object,
+    where: str,
+    shared: SharedPatterns,
+) -> Mapping[str, Companion]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
@@ -499,7 +717,18 @@ def _parse_companions(value: object, where: str) -> Mapping[str, Companion]:
             raise ConfigurationError(f"{companion_where}: expected a table")
         _require_only_keys(
             raw_companion,
-            {"path", "description", "include", "include_if_exists", "exclude", "if_empty", "case"},
+            {
+                "path",
+                "description",
+                "include",
+                "include_if_exists",
+                "exclude",
+                "include_pattern_refs",
+                "include_if_exists_pattern_refs",
+                "exclude_pattern_refs",
+                "if_empty",
+                "case",
+            },
             companion_where,
         )
         raw_path = raw_companion.get("path")
@@ -513,8 +742,11 @@ def _parse_companions(value: object, where: str) -> Mapping[str, Companion]:
                 if key not in {"path", "case"}
             },
             companion_where,
+            shared,
         )
-        cases = _parse_cases(raw_companion.get("case"), f"{companion_where}.case")
+        cases = _parse_cases(
+            raw_companion.get("case"), f"{companion_where}.case", shared
+        )
         companions[name] = Companion(
             name=name,
             path=path,
@@ -546,10 +778,13 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
 
     manifest = Path(path).expanduser().resolve()
     data = _read_toml(manifest)
-    _require_only_keys(data, {"target", "companion", "output"}, str(manifest))
+    _require_only_keys(data, {"shared", "target", "companion", "output"}, str(manifest))
 
-    target = _parse_target(data.get("target"), f"{manifest} [target]")
-    companions = _parse_companions(data.get("companion"), f"{manifest} [companion]")
+    shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
+    target = _parse_target(data.get("target"), f"{manifest} [target]", shared)
+    companions = _parse_companions(
+        data.get("companion"), f"{manifest} [companion]", shared
+    )
     if target is None and not companions:
         raise ConfigurationError(
             f"{manifest}: define [target] and/or at least one [companion.<name>]"
@@ -559,6 +794,7 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
 
     return Config(
         manifest=manifest,
+        shared=shared,
         target=target,
         companions=companions,
         output=output,

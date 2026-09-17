@@ -24,6 +24,8 @@ Zero matching candidates is an error. If the same candidate filename exists in b
 Only the following forms are accepted:
 
 ```text
+[shared.include_patterns]
+[shared.exclude_patterns]
 [target]
 [target.case.<name>]
 [companion.<name>]
@@ -35,6 +37,7 @@ Unknown keys are errors at every validated level.
 
 A Configuration represents one extraction intent and contains:
 
+- zero or more named Shared patterns;
 - zero or one logical Target definition;
 - zero or more Companions;
 - at least one source in total, meaning a Target and/or one or more Companions;
@@ -42,7 +45,9 @@ A Configuration represents one extraction intent and contains:
 
 The Target is runtime-bound: one logical `[target]` definition may be instantiated by one or more directory arguments from the CLI. Every runtime Target uses the same selected Target definition. Each Companion is configuration-bound: its directory is fixed by its `path`.
 
-There are no shared selection definitions, bundles, Configuration inheritance, Configuration merging, or CLI selection overrides.
+Shared patterns reuse named pattern arrays only; they are not complete shared selection definitions. There are no bundles, Configuration inheritance, Configuration merging, or CLI selection overrides.
+
+`[shared.include_patterns]` and `[shared.exclude_patterns]` are each optional. If `[shared]` is present, at least one of these tables must be present, and every present table must contain at least one named array. Each name must be a non-empty string and each array must contain at least one string. Include arrays are validated using the include pattern grammar and exclude arrays using the exclude pattern grammar when the Configuration is loaded. Merely defining a Shared pattern does not apply it to any selection.
 
 ## 4. Case semantics
 
@@ -68,7 +73,7 @@ When a Case is selected and no Target exists:
 - each Companion with that Case uses its Case selection;
 - every other Companion falls back to its base selection.
 
-Every Target Case and Companion Case is a complete selection definition. It does not inherit from or merge with the source's base selection.
+Every Target Case and Companion Case is a complete selection definition. It does not inherit from or merge with the source's base selection. Shared pattern references on the base selection are not inherited either; a Case that needs the same Shared pattern must explicitly reference the same name.
 
 ## 5. Target and Companion semantics
 
@@ -86,27 +91,33 @@ A Companion may additionally define zero or more complete Case selections under 
 
 ## 6. Selection definition
 
-Every `[target]`, `[target.case.<name>]`, `[companion.<name>]`, and `[companion.<name>.case.<case-name>]` selection requires a non-empty `description` and at least one of `include` or `include_if_exists`.
+Every `[target]`, `[target.case.<name>]`, `[companion.<name>]`, and `[companion.<name>.case.<case-name>]` selection requires a non-empty `description` and at least one `include` / `include_if_exists` equivalent candidate, supplied either directly or through Shared references.
 
-When present, `include` and `include_if_exists` must each contain at least one string. Duplicate entries within a field are rejected, and the same normalized pattern cannot appear in both fields.
+Direct `include` and `include_if_exists` fields, when present, must each contain at least one string. Shared-reference fields, when present, must each contain at least one Shared name. Duplicate references within one field are rejected.
 
-### `include`
+### `include` and `include_pattern_refs`
 
-Every `include` pattern is required to match at least one filesystem entry in a normal invocation. A zero-match required pattern is an error.
+`include` directly declares required include patterns. `include_pattern_refs` names entries from `[shared.include_patterns]` and expands those arrays as required include patterns. During a normal invocation, every resulting required pattern must match at least one filesystem entry. A zero-match required pattern is an error.
 
-### `include_if_exists`
+### `include_if_exists` and `include_if_exists_pattern_refs`
 
-`include_if_exists` uses the same pattern grammar as `include`, but a zero-match pattern is accepted and contributes nothing to the selection.
+`include_if_exists` directly declares optional include patterns. `include_if_exists_pattern_refs` names entries from `[shared.include_patterns]` and expands those arrays as optional include patterns. They use the same grammar as required includes, but zero matches are accepted and add nothing to the selection.
 
-### `exclude`
+The same shared include pattern set may be referenced through `include_pattern_refs` in one selection and `include_if_exists_pattern_refs` in another. Required versus optional behavior is decided by the referring selection, not by the Shared definition.
 
-`exclude` filters entity names only inside areas already selected by `include` or `include_if_exists`. It never selects a path by itself.
+### `exclude` and `exclude_pattern_refs`
+
+`exclude` directly declares exclusion patterns. `exclude_pattern_refs` names entries from `[shared.exclude_patterns]` and expands those arrays as exclusions. Both forms filter entity names only inside areas already selected by includes and never select a path by themselves.
+
+### Expansion and duplicates
+
+Shared references are expanded in reference-array order, followed by direct patterns of the same kind. Referencing an unknown Shared name is a Configuration error. After expansion, duplicate effective patterns within required includes, optional includes, or excludes are Configuration errors. The same normalized pattern appearing in both the required and optional include sets is also a Configuration error.
 
 ### `if_empty`
 
 `if_empty` defaults to `error`.
 
-`if_empty = "allow"` is valid only for an optional-only selection with no required `include` patterns. When the final selected file count is zero and empty results are allowed, the source directory may be represented as an explicit empty directory entry in the Archive.
+`if_empty = "allow"` is valid only for an optional-only selection with no required include patterns after Shared references have been expanded. When the final selected file count is zero and empty results are allowed, the source directory may be represented as an explicit empty directory entry in the Archive.
 
 ## 7. Include pattern grammar
 
