@@ -17,6 +17,9 @@ from .config import (
     ConfigurationImport,
     ExclusionPattern,
     Selection,
+    SharedPatterns,
+    _materialize_selection,
+    _merge_root_visible_shared,
     load_config,
 )
 from .errors import ConfigurationError, SelectionError
@@ -180,7 +183,12 @@ def _validate_request(config: Config, request: BuildRequest) -> None:
         )
 
 
-def _selected_target(config: Config, case: str | None) -> tuple[Selection, str] | None:
+def _selected_target(
+    config: Config,
+    case: str | None,
+    *,
+    shared: SharedPatterns,
+) -> tuple[Selection, str] | None:
     target = config.target
     if target is None:
         return None
@@ -192,7 +200,7 @@ def _selected_target(config: Config, case: str | None) -> tuple[Selection, str] 
                 "the configuration has no default [target]; "
                 f"specify --case NAME (available: {available})"
             )
-        return target.default, "[target]"
+        return _materialize_selection(target.default, shared, "[target]"), "[target]"
 
     try:
         selection = target.cases[case]
@@ -201,21 +209,22 @@ def _selected_target(config: Config, case: str | None) -> tuple[Selection, str] 
         raise SelectionError(
             f"case {case!r} is not defined for target; available cases: {available}"
         ) from exc
-    return selection, f"[target.case.{case}]"
+    location = f"[target.case.{case}]"
+    return _materialize_selection(selection, shared, location), location
 
 
 def _selected_companion(
     companion: Companion,
     case: str | None,
     *,
+    shared: SharedPatterns,
     config_location_prefix: str = "companion",
 ) -> tuple[Selection, str]:
     if case is not None and case in companion.cases:
-        return (
-            companion.cases[case],
-            f"[{config_location_prefix}.{companion.name}.case.{case}]",
-        )
-    return companion.selection, f"[{config_location_prefix}.{companion.name}]"
+        location = f"[{config_location_prefix}.{companion.name}.case.{case}]"
+        return _materialize_selection(companion.cases[case], shared, location), location
+    location = f"[{config_location_prefix}.{companion.name}]"
+    return _materialize_selection(companion.selection, shared, location), location
 
 
 def _available_companion_cases(
@@ -249,6 +258,7 @@ def _resolve_companion_sources(
     case: str | None,
     *,
     execution_root: Path,
+    shared: SharedPatterns,
     key_prefix: str = "",
     import_name: str | None = None,
     config_location_prefix: str = "companion",
@@ -257,7 +267,10 @@ def _resolve_companion_sources(
     resolved_sources: list[ResolvedSource] = []
     for name, companion in companions.items():
         selection, config_location = _selected_companion(
-            companion, case, config_location_prefix=config_location_prefix
+            companion,
+            case,
+            shared=shared,
+            config_location_prefix=config_location_prefix,
         )
         logical_name = name if import_name is None else f"{import_name}.{name}"
         directory, archive_root = _resolve_directory(
@@ -288,6 +301,7 @@ def _resolve_configuration_sources(
     request: BuildRequest,
     *,
     execution_root: Path,
+    shared: SharedPatterns,
     key_prefix: str = "",
     import_name: str | None = None,
 ) -> tuple[ResolvedSource, ...]:
@@ -296,7 +310,7 @@ def _resolve_configuration_sources(
     _validate_request(config, request)
     resolved_sources: list[ResolvedSource] = []
 
-    selected_target = _selected_target(config, request.case)
+    selected_target = _selected_target(config, request.case, shared=shared)
     if selected_target is not None:
         target_selection, target_location = selected_target
         target_count = len(request.directories)
@@ -344,6 +358,7 @@ def _resolve_configuration_sources(
             config.companions,
             request.case,
             execution_root=execution_root,
+            shared=shared,
             key_prefix=key_prefix,
             import_name=import_name,
         )
@@ -390,7 +405,7 @@ def _load_imported_config(spec: ConfigurationImport, import_root: Path) -> Confi
         ) from exc
     if imported.imports:
         raise ConfigurationError(
-            f"import {spec.name!r} configuration must not declare [import.<name>] in 0.3.0"
+            f"import {spec.name!r} configuration must not declare [import.<name>] in 0.4.0"
         )
     return imported
 
@@ -408,18 +423,33 @@ def resolve_sources(
         raise SelectionError(f"current working directory is not a directory: {cwd_path}")
 
     _validate_request(config, request)
+
+    loaded_imports: dict[str, tuple[ConfigurationImport, Path, Config]] = {}
+    imported_shared: dict[str, SharedPatterns] = {}
+    for name in sorted(config.imports):
+        spec = config.imports[name]
+        import_root = _resolve_import_root(spec, config.manifest)
+        imported = _load_imported_config(spec, import_root)
+        loaded_imports[name] = (spec, import_root, imported)
+        imported_shared[name] = imported.shared
+
+    root_visible_shared = _merge_root_visible_shared(
+        config.shared,
+        imported_shared,
+        where=f"{config.manifest} [shared]",
+    )
+
     resolved_sources = list(
         _resolve_configuration_sources(
             config,
             request,
             execution_root=cwd_path,
+            shared=root_visible_shared,
         )
     )
 
-    for name in sorted(config.imports):
-        spec = config.imports[name]
-        import_root = _resolve_import_root(spec, config.manifest)
-        imported = _load_imported_config(spec, import_root)
+    for name in sorted(loaded_imports):
+        spec, import_root, imported = loaded_imports[name]
         duplicate_names = sorted(set(imported.companions) & set(spec.companions))
         if duplicate_names:
             listed = ", ".join(f"{name}.{companion}" for companion in duplicate_names)
@@ -439,6 +469,7 @@ def resolve_sources(
                 imported.companions,
                 spec.case,
                 execution_root=import_root,
+                shared=imported.shared,
                 key_prefix=f"import:{name}:imported:",
                 import_name=name,
             )
@@ -446,6 +477,7 @@ def resolve_sources(
                 spec.companions,
                 spec.case,
                 execution_root=import_root,
+                shared=root_visible_shared,
                 key_prefix=f"import:{name}:added:",
                 import_name=name,
                 config_location_prefix=f"import.{name}.companion",

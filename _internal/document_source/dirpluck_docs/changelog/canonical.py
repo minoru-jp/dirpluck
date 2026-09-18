@@ -10,6 +10,24 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.4.0")
+    class RELEASE_4:
+        r'''import 先 Configuration の共有 include / exclude パターンを、import 名前空間付きで Root 側から明示的に再利用できるようにする。'''
+
+        @change(ADDED)
+        class CHANGE_1:
+            r'''{{TERM_13}}で読み込んだ Configuration の `[shared.include_patterns]` / `[shared.exclude_patterns]` を、{{TERM_14}}側から `<import-name>.<pattern-name>` の修飾名で参照できるようにする。Root local の{{TERM_12}}は従来どおりローカル名で参照し、include / exclude の種別は分離したまま維持する。'''
+            vocabulary_refs @= (terms.TERM_12, terms.TERM_13, terms.TERM_14)
+
+        @change(ADDED)
+        class CHANGE_2:
+            r'''import 由来の修飾{{TERM_12}}を、{{TERM_14}}が所有する Target、Root Companion、`[import.<name>.companion.<name>]` の base / Case Selection から利用できるようにする。import 先 Configuration 自身が宣言する Companion は、引き続きその Configuration 自身の共有パターンをローカル名で解決し、Root 側の名前空間へ再束縛しない。'''
+            vocabulary_refs @= (terms.TERM_12, terms.TERM_14)
+
+        @change(ADDED)
+        class CHANGE_3:
+            r'''Root local の共有パターン名と import 由来の修飾共有パターン名が同じ参照文字列になる場合は、暗黙の優先順位を設けず設定エラーにする。共有パターンは import によって merge・自動適用されず、各 Selection が参照名を明示する既存モデルを維持する。'''
+
     @release("0.3.0")
     class RELEASE_3:
         r'''別ディレクトリの dirpluck Configuration が宣言する Companion を明示的に取り込み、各 Configuration の境界を保ったままひとつのアーカイブへ統合できるようにする。'''

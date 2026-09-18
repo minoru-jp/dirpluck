@@ -2,6 +2,16 @@
 
 Release-by-release changes for dirpluck.
 
+## 0.4.0
+
+Allow the Root Configuration to explicitly reuse Shared include and exclude patterns from imported Configurations under the import namespace.
+
+### Added
+
+- Expose `[shared.include_patterns]` and `[shared.exclude_patterns]` from an imported Configuration to the Root side under qualified names of the form `<import-name>.<pattern-name>`. Root-local Shared patterns keep their existing local names, and include/exclude namespaces remain distinct.
+- Allow qualified imported Shared patterns to be referenced from Root-owned Target, Root Companion, and `[import.<name>.companion.<name>]` base/Case selections. Companions declared by the imported Configuration continue to resolve their own Shared patterns locally inside that Configuration; their references are not rebound into the Root namespace.
+- Reject an ambiguous Root-visible Shared-pattern name when a Root-local name collides with the qualified name of an imported Shared pattern of the same kind. Shared-pattern tables are still not merged or applied automatically; every Selection must name the Shared pattern it uses explicitly.
+
 ## 0.3.0
 
 Allow a Root Configuration to explicitly import Companions declared by another dirpluck Configuration from a different filesystem root while preserving a separate boundary for each Configuration.

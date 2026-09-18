@@ -123,6 +123,23 @@ include_if_exists_pattern_refs = ["project-core"]
 
 Defining a shared pattern does not apply it automatically. Reference it explicitly from each Selection that uses it.
 
+To use a Shared pattern from an imported Configuration, reference it as `<import>.<pattern>`:
+
+```toml
+[import.shikumi]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+
+[target]
+description = "The current project."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["shikumi.python-dev"]
+if_empty = "allow"
+```
+
+Root Targets, Root Companions, and `[import.<name>.companion.<name>]` selections may use qualified imported Shared patterns. Companions declared by the imported Configuration continue to use that Configuration's own `[shared.*]` names locally.
+
+
 ## Case
 
 ```toml
@@ -169,11 +186,12 @@ if_empty = "allow"
 - Add `[import.<name>.companion.<name>]` when the Root Configuration should define another Companion inside the import root.
 - Companion logical names under an import are `<import>.<companion>`. Do not define the same Companion name from both the imported Configuration and the Root Configuration within one import.
 - Root-defined import Companion `path` values are relative to the import root. `path = "."` selects the import root itself. Do not use absolute paths or `..`.
-- Shared pattern references in Root-defined import Companions use the Root Configuration's `[shared.*]`; imported-Configuration Companions use the imported Configuration's `[shared.*]`.
+- Shared patterns from an imported Configuration are available to Root-owned selections as `<import>.<pattern>`.
+- Companions declared by the imported Configuration continue to use the imported Configuration's own `[shared.*]` names locally; importing them does not rewrite those references.
 - The imported and Root-defined Companions together must provide at least one Companion.
 - `case` applies to the whole import Companion namespace. At least one Companion must define that Case. Root `--case` does not propagate.
 - The imported `[output]` is not used. Only the Root Configuration's `[output]` is the final Output.
-- Do not import from an imported Configuration. 0.3.0 allows one import level only.
+- Do not import from an imported Configuration. Imports are one level deep.
 
 ## Output
 
@@ -219,6 +237,7 @@ dirpluck PROJECT --sequence 2
 - `if_empty = "allow"` cannot be used by a Selection that has required `include` patterns.
 - A Case does not inherit base selection fields or shared-pattern references.
 - Shared patterns are not applied automatically.
+- Imported Shared patterns use qualified names of the form `<import>.<pattern>` from Root-owned selections.
 - Define include and exclude shared patterns separately.
 - Root CLI `DIRECTORY` and `--case` values do not propagate into imports.
 - An imported `[output]` is not executed.

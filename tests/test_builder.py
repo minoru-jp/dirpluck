@@ -5,8 +5,15 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from dirpluck.builder import BuildRequest, build_archive, plan_archive, render_archive_tree, resolve_sources
-from dirpluck.config import load_config
+from dirpluck.builder import (
+    BuildRequest,
+    _load_imported_config,
+    build_archive,
+    plan_archive,
+    render_archive_tree,
+    resolve_sources,
+)
+from dirpluck.config import ConfigurationImport, load_config
 from dirpluck.errors import ConfigurationError, SelectionError
 
 
@@ -1174,6 +1181,38 @@ class BuilderTests(unittest.TestCase):
             with self.assertRaises(SelectionError):
                 plan_archive(config, BuildRequest.create(), cwd=root)
 
+    def test_import_loader_rejects_recursive_configuration_import_directly(self):
+        with tempfile.TemporaryDirectory() as temp:
+            external = Path(temp)
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "data"
+                description = "Data."
+                include_if_exists = ["file.txt"]
+                if_empty = "allow"
+
+                [import.nested]
+                root = "."
+                configuration = "nested.toml"
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            spec = ConfigurationImport(
+                name="external",
+                root=".",
+                configuration="config.toml",
+                case=None,
+                companions={},
+            )
+
+            with self.assertRaisesRegex(
+                ConfigurationError,
+                r"must not declare \[import\.<name>\] in 0\.4\.0",
+            ):
+                _load_imported_config(spec, external)
+
     def test_recursive_configuration_import_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Path(temp)
@@ -1525,6 +1564,270 @@ class BuilderTests(unittest.TestCase):
                 names = set(archive.namelist())
             self.assertIn("data/release.txt", names)
             self.assertNotIn("data/base.txt", names)
+
+    def test_root_target_can_use_imported_shared_patterns_by_qualified_name(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            project = root / "project"
+            project.mkdir(parents=True)
+            (project / "keep.txt").write_text("keep", encoding="utf-8")
+            (project / "skip.txt").write_text("skip", encoding="utf-8")
+
+            external = workspace / "external"
+            anchor = external / "anchor"
+            anchor.mkdir(parents=True)
+            (anchor / "anchor.txt").write_text("anchor", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [shared.exclude_patterns]
+                python-dev = ["skip.txt"]
+
+                [companion.anchor]
+                path = "anchor"
+                description = "Anchor."
+                include = ["anchor.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [target]
+                description = "Root target."
+                include_if_exists = ["*"]
+                exclude_pattern_refs = ["external.python-dev"]
+                if_empty = "allow"
+            ''')
+            output = build_archive(config, BuildRequest.create("project"), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+
+            self.assertIn("project/keep.txt", names)
+            self.assertNotIn("project/skip.txt", names)
+            self.assertIn("anchor/anchor.txt", names)
+
+    def test_root_and_import_added_companions_can_use_imported_include_patterns(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            local = root / "local"
+            local.mkdir(parents=True)
+            (local / "keep.txt").write_text("keep", encoding="utf-8")
+            (local / "other.txt").write_text("other", encoding="utf-8")
+
+            external = workspace / "external"
+            anchor = external / "anchor"
+            added = external / "added"
+            anchor.mkdir(parents=True)
+            added.mkdir(parents=True)
+            (anchor / "anchor.txt").write_text("anchor", encoding="utf-8")
+            (added / "keep.txt").write_text("keep", encoding="utf-8")
+            (added / "other.txt").write_text("other", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [shared.include_patterns]
+                core = ["keep.txt"]
+
+                [companion.anchor]
+                path = "anchor"
+                description = "Anchor."
+                include = ["anchor.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [companion.local]
+                path = "local"
+                description = "Root local."
+                include_pattern_refs = ["external.core"]
+
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [import.external.companion.added]
+                path = "added"
+                description = "Root-added external."
+                include_pattern_refs = ["external.core"]
+            ''')
+            output = build_archive(config, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+
+            self.assertIn("local/keep.txt", names)
+            self.assertNotIn("local/other.txt", names)
+            self.assertIn("added/keep.txt", names)
+            self.assertNotIn("added/other.txt", names)
+
+    def test_qualified_imported_pattern_names_keep_include_and_exclude_namespaces_separate(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            project = root / "project"
+            project.mkdir(parents=True)
+            (project / "keep.txt").write_text("keep", encoding="utf-8")
+            (project / "skip.txt").write_text("skip", encoding="utf-8")
+
+            external = workspace / "external"
+            anchor = external / "anchor"
+            anchor.mkdir(parents=True)
+            (anchor / "anchor.txt").write_text("anchor", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [shared.include_patterns]
+                policy = ["keep.txt", "skip.txt"]
+
+                [shared.exclude_patterns]
+                policy = ["skip.txt"]
+
+                [companion.anchor]
+                path = "anchor"
+                description = "Anchor."
+                include = ["anchor.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [target]
+                description = "Root target."
+                include_pattern_refs = ["external.policy"]
+                exclude_pattern_refs = ["external.policy"]
+            ''')
+            output = build_archive(config, BuildRequest.create("project"), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+
+            self.assertIn("project/keep.txt", names)
+            self.assertNotIn("project/skip.txt", names)
+
+    def test_root_local_name_conflicting_with_imported_qualified_shared_name_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            anchor = external / "anchor"
+            anchor.mkdir(parents=True)
+            (anchor / "anchor.txt").write_text("anchor", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [shared.exclude_patterns]
+                policy = ["*.tmp"]
+
+                [companion.anchor]
+                path = "anchor"
+                description = "Anchor."
+                include = ["anchor.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [shared.exclude_patterns]
+                "external.policy" = ["*.cache"]
+
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+            ''')
+            with self.assertRaises(ConfigurationError) as caught:
+                plan_archive(config, BuildRequest.create(), cwd=root)
+            self.assertIn("external.policy", str(caught.exception))
+
+    def test_unknown_imported_shared_pattern_is_rejected_when_import_is_resolved(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            project = root / "project"
+            project.mkdir(parents=True)
+            (project / "keep.txt").write_text("keep", encoding="utf-8")
+            external = workspace / "external"
+            anchor = external / "anchor"
+            anchor.mkdir(parents=True)
+            (anchor / "anchor.txt").write_text("anchor", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.anchor]
+                path = "anchor"
+                description = "Anchor."
+                include = ["anchor.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [target]
+                description = "Root target."
+                include = ["keep.txt"]
+                exclude_pattern_refs = ["external.missing"]
+            ''')
+            with self.assertRaises(ConfigurationError) as caught:
+                plan_archive(config, BuildRequest.create("project"), cwd=root)
+            self.assertIn("external.missing", str(caught.exception))
+
+    def test_root_case_can_use_imported_optional_include_pattern(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            project = root / "project"
+            project.mkdir(parents=True)
+            (project / "docs.txt").write_text("docs", encoding="utf-8")
+
+            external = workspace / "external"
+            anchor = external / "anchor"
+            anchor.mkdir(parents=True)
+            (anchor / "anchor.txt").write_text("anchor", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [shared.include_patterns]
+                docs = ["docs.txt"]
+
+                [companion.anchor]
+                path = "anchor"
+                description = "Anchor."
+                include = ["anchor.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [target.case.review]
+                description = "Review target."
+                include_if_exists_pattern_refs = ["external.docs"]
+                if_empty = "allow"
+            ''')
+            output = build_archive(
+                config,
+                BuildRequest.create("project", case="review"),
+                cwd=root,
+            )
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("project/docs.txt", names)
 
 
     def test_root_and_import_companions_may_share_local_name_because_logical_names_differ(self):

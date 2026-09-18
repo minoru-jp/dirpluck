@@ -6,9 +6,9 @@ For an overview of where this model is useful, start with [README.md](README.md)
 
 ## Start with one extraction intent
 
-Use one Root Configuration for one package you want to be able to reproduce. It may describe changing runtime subjects, fixed material, Companions already declared by another Configuration, or a combination of them.
+Use one Root Configuration for one package you want to be able to reproduce. It may describe changing runtime subjects, fixed material, Companions already declared by another Configuration, Shared patterns imported from another Configuration, or a combination of them.
 
-Cases coordinate selection changes inside one Configuration; they are not a profile stack. When you want to reuse Companion definitions owned by another Configuration, import that Configuration explicitly instead of copying its source paths into the parent.
+Cases coordinate selection changes inside one Configuration; they are not a profile stack. When you want to reuse Companion definitions or Shared patterns owned by another Configuration, import that Configuration explicitly instead of copying its source paths or pattern arrays into the parent.
 
 A Configuration may contain:
 
@@ -22,11 +22,11 @@ Configuration
 └── output                 exactly one
 ```
 
-A Root Configuration must contain at least one local Target / Companion or one Configuration import. Within each import, the Companions declared by the imported Configuration and any `[import.<name>.companion.<name>]` tables declared by the Root Configuration must together provide at least one Companion. In 0.3.0 the imported Configuration cannot import another Configuration. If it also defines a Target, that Target is not used during the importing run.
+A Root Configuration must contain at least one local Target / Companion or one Configuration import. Within each import, the Companions declared by the imported Configuration and any `[import.<name>.companion.<name>]` tables declared by the Root Configuration must together provide at least one Companion. Configuration imports are one level deep: the imported Configuration cannot import another Configuration. If it also defines a Target, that Target is not used during the importing run.
 
 ## Configuration imports
 
-Use a Configuration import when Companion definitions owned by another Configuration should participate in the same Archive. Instead of permitting arbitrary `../` paths on individual Companions, each import declares a separate execution root and the existing boundary rules continue to apply inside that root.
+Use a Configuration import when Companion definitions or Shared patterns owned by another Configuration should participate in the same Root intent. Instead of permitting arbitrary `../` paths on individual Companions, each import declares a separate execution root and the existing boundary rules continue to apply inside that root.
 
 For example, when running from `workspace/dirpluck/`, this can import the Configuration for `shikumi` while using the whole `workspace/` directory as its root:
 
@@ -65,6 +65,8 @@ It must remain inside the import root. Absolute paths, `..`, and globs are not a
 
 The imported file is fully validated as a normal Configuration. Its `[shared.*]`, Target, Companion, Case, and `[output]` definitions are validated as definitions owned by that Configuration. During an importing run, however, only its Companions are used as sources. Its Target and `[output]` are not executed.
 
+The imported Configuration's `[shared.include_patterns]` and `[shared.exclude_patterns]` are also exposed to Root-owned selections under qualified names of the form `<import-name>.<pattern-name>`. For example, an exclude Shared pattern named `python-dev` under import `shikumi-stack` is referenced from the Root side as `shikumi-stack.python-dev`. The import name is therefore a namespace for both Companions and Root-visible Shared patterns.
+
 ### Add a Companion inside the import root
 
 The Root Configuration may explicitly define an additional source inside the import root as a Companion, even when the imported Configuration does not declare that source.
@@ -80,7 +82,7 @@ if_empty = "allow"
 
 `path` is relative to the import root. As with ordinary Companions, absolute paths and `..` are not accepted. Unlike ordinary Companions, this form permits `path = "."` so the import root itself can be treated as a Companion.
 
-Because this Companion definition is owned by the Root Configuration, its Shared pattern references resolve against the Root Configuration's `[shared.*]`. Companions declared by the imported Configuration resolve Shared patterns against that imported Configuration. Identically named Shared patterns on the two sides are not merged and do not cross-reference each other.
+Because this Companion definition is owned by the Root Configuration, its Shared pattern references resolve in the Root-visible Shared-pattern namespace. Root-local Shared patterns use local names, while imported Shared patterns use qualified names such as `<import>.<pattern>`. Companions declared by the imported Configuration continue to resolve their own Shared patterns by local name inside that imported Configuration; importing them does not rewrite those references.
 
 If the imported Configuration already declares `[companion.project]`, the Root Configuration may not also declare `[import.shikumi-stack.companion.project]`, because both would have the logical name `shikumi-stack.project`. A Root-local `[companion.project]` or `other.project` from another import is a different logical name and may coexist.
 
@@ -96,7 +98,7 @@ If omitted, every Companion in the import namespace uses its base selection. If 
 
 ### Imports are one level deep
 
-In 0.3.0, only the Root Configuration may declare Configuration imports. If an imported Configuration itself contains `[import.<name>]`, the run fails. This avoids cycles, depth-dependent Case propagation, and complex Configuration graphs.
+Only the Root Configuration may declare Configuration imports. If an imported Configuration itself contains `[import.<name>]`, the run fails. This avoids cycles, depth-dependent Case propagation, and complex Configuration graphs.
 
 A Root Configuration may contain only Configuration imports and no local Target or Root-local Companion. It still owns the final `[output]`. Each import namespace must contain at least one Companion from either the imported Configuration or a Root-defined `[import.<name>.companion.<name>]`.
 
@@ -169,7 +171,7 @@ dirpluck --config project-snapshot
 
 ## Shared patterns
 
-When several selections in the same Configuration need the same include or exclude pattern set, define a named Shared pattern. Only the pattern array is shared, not a complete selection definition.
+When several selections need the same include or exclude pattern set, define a named Shared pattern. Only the pattern array is shared, not a complete selection definition. Root-owned selections may use Shared patterns defined locally or Shared patterns exposed by an explicitly imported Configuration.
 
 Define include patterns under `[shared.include_patterns]`:
 
@@ -217,6 +219,47 @@ if_empty = "allow"
 Shared references may be combined with a selection's own `include` / `include_if_exists` / `exclude`. Referenced Shared patterns are expanded first, followed by patterns written directly on the selection. A duplicate effective pattern is a Configuration error.
 
 Cases do not inherit the base selection, so they do not inherit its Shared pattern references either. In the example above, both the base selection and `all` explicitly reference `python-dev`. This is not Case inheritance; two independent selections are referencing the same named pattern set.
+
+### Reference Shared patterns from an imported Configuration
+
+Shared patterns from an imported Configuration are referenced from the Root side as `<import-name>.<pattern-name>`.
+
+Suppose `shikumi/dirpluck.toml` contains:
+
+```toml
+[shared.exclude_patterns]
+python-dev = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    "*.pyc",
+]
+```
+
+After declaring the import:
+
+```toml
+[import.shikumi]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+```
+
+a Root-owned Target, Root Companion, or `[import.<name>.companion.<name>]` selection may reference that set as `shikumi.python-dev`:
+
+```toml
+[target]
+description = "The current project."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["shikumi.python-dev"]
+if_empty = "allow"
+```
+
+Imported include sets use the same qualification rule in `include_pattern_refs` or `include_if_exists_pattern_refs`. Include and exclude namespaces remain distinct.
+
+A Companion declared by the imported Configuration itself still resolves Shared patterns by local name inside that imported Configuration. Its references are not rebound to qualified Root names, and imported Shared-pattern tables are not merged with Root-local tables.
+
+If a Root-local Shared pattern name is exactly the same string as a qualified imported Shared-pattern name of the same kind, the reference would be ambiguous and the Configuration is rejected rather than choosing an implicit precedence.
+
 
 ## Selection fields
 

@@ -49,7 +49,7 @@ A Configuration represents one extraction intent and contains:
 
 The Target is runtime-bound: one logical `[target]` definition is instantiated by one or more CLI directories only when that Configuration is run as the Root Configuration. An imported Configuration's Target is validated as part of its schema but is not used by the importing run. Each Companion is configuration-bound: its directory is fixed by its `path` relative to that Configuration's execution root.
 
-Shared patterns reuse named pattern arrays only; they are not complete shared selection definitions. A Configuration import explicitly reuses Companion definitions declared by another complete Configuration. It is not Configuration inheritance or merging, and there are no CLI selection overrides.
+Shared patterns reuse named pattern arrays only; they are not complete shared selection definitions. Within one Configuration they are referenced by local name. A Root Configuration may also reference Shared patterns from an explicitly imported Configuration under qualified names of the form `<import>.<pattern>`. A Configuration import explicitly reuses Companions and Shared patterns declared by another complete Configuration. It is not Configuration inheritance or merging, and there are no CLI selection overrides.
 
 `[shared.include_patterns]` and `[shared.exclude_patterns]` are each optional. If `[shared]` is present, at least one of these tables must be present, and every present table must contain at least one named array. Each name must be a non-empty string and each array must contain at least one string. Include arrays are validated using the include pattern grammar and exclude arrays using the exclude pattern grammar when the Configuration is loaded. Merely defining a Shared pattern does not apply it to any selection.
 
@@ -76,13 +76,13 @@ companion.<name> zero or more Root-owned Companion tables
 
 `configuration` is a relative TOML file path from the import root. Empty strings, absolute paths, traversal with `.` / `..`, globs, and non-`.toml` extensions are rejected. The resolved path must be an existing regular file inside the import root.
 
-Imports do not run normal Configuration discovery. The named file is loaded directly and fully parsed and validated as a normal Configuration. Shared patterns inside the imported Configuration remain local to it; identically named Shared patterns in the Root Configuration are unrelated and are not merged.
+Imports do not run normal Configuration discovery. The named file is loaded directly and fully parsed and validated as a normal Configuration. The imported Configuration's `[shared.include_patterns]` and `[shared.exclude_patterns]` continue to use local names inside that Configuration. In addition, the Root Configuration may reference them as `<import-name>.<pattern-name>`. Root-local and imported Shared-pattern tables are not merged, and references owned by the imported Configuration are not rebound into the Root namespace.
 
 The imported Configuration's Target, if present, is still schema-validated but is not a source in the importing run. The imported Configuration still requires `[output]` as part of the normal schema. That Output is schema-validated but is not selected for the importing run: its filesystem path is not resolved for output, collisions are not checked, parent directories are not created, and nothing is written there.
 
-The Root Configuration may declare zero or more `[import.<name>.companion.<companion-name>]` tables to define additional Companions inside the same import root. Their schema matches ordinary Companion tables, except that `path = "."` is permitted so the import root itself can be selected as a Companion. Other absolute paths, `..`, and globs are rejected, and the resolved directory must remain inside the import root. Selections for Root-defined import Companions resolve Shared patterns in the Root Configuration; Companions declared by the imported Configuration resolve Shared patterns in the imported Configuration.
+The Root Configuration may declare zero or more `[import.<name>.companion.<companion-name>]` tables to define additional Companions inside the same import root. Their schema matches ordinary Companion tables, except that `path = "."` is permitted so the import root itself can be selected as a Companion. Other absolute paths, `..`, and globs are rejected, and the resolved directory must remain inside the import root. A Root-defined import Companion is owned by the Root Configuration, so its selection may reference Root-local Shared patterns by local name or any imported Shared pattern by a qualified `<import>.<pattern>` name. Companions declared by an imported Configuration resolve only that Configuration's own Shared patterns by local name.
 
-The import name is the logical Companion namespace. Root `[companion.x]` is logically `x`; Companion `x` under `[import.a]` is logically `a.x`, regardless of whether it was declared in the imported Configuration or under `[import.a.companion.x]`. If both origins define the same Companion name within one import, the logical name is duplicated and the Configuration is rejected. The same local Companion name may appear under another import or at Root scope because those logical names differ. Logical names are not used as Archive-path prefixes.
+The import name is the logical namespace for both Companions and Root-visible Shared patterns. Root `[companion.x]` is logically `x`; Companion `x` under `[import.a]` is logically `a.x`, regardless of whether it was declared in the imported Configuration or under `[import.a.companion.x]`. Shared pattern `p` from that imported Configuration is referenced from the Root side as `a.p`. If both Companion origins define the same Companion name within one import, the logical name is duplicated and the Configuration is rejected. The same local Companion name may appear under another import or at Root scope because those logical names differ. If a Root-local Shared pattern name is exactly the same string as a qualified imported Shared-pattern name of the same kind, the reference is ambiguous and the Configuration is rejected. Companion logical names are not used as Archive-path prefixes.
 
 Each import namespace must contain at least one Companion from either origin.
 
@@ -94,7 +94,7 @@ The Root Configuration's CLI `--case` never propagates into imports. Every impor
 
 ### Recursive imports
 
-In 0.3.0, an imported Configuration containing any `[import.<name>]` is a Configuration error. The import graph is limited to one level; cycles, transitive imports, and depth-dependent Case propagation are not provided.
+An imported Configuration containing any `[import.<name>]` is a Configuration error. The import graph is limited to one level; cycles, transitive imports, and depth-dependent Case propagation are not provided.
 
 A Root Configuration may contain only imports and no local Target or Companion. An imported Configuration, however, must contain at least one Companion.
 
@@ -122,7 +122,7 @@ When a Case is selected and no Target exists:
 - each Companion with that Case uses its Case selection;
 - every other Companion falls back to its base selection.
 
-Every Target Case and Companion Case is a complete selection definition. It does not inherit from or merge with the source's base selection. Shared pattern references on the base selection are not inherited either; a Case that needs the same Shared pattern must explicitly reference the same name.
+Every Target Case and Companion Case is a complete selection definition. It does not inherit from or merge with the source's base selection. Shared pattern references on the base selection are not inherited either; a Case that needs the same Shared pattern must explicitly reference the same name. Root-owned Case selections may reference Root-local Shared patterns and qualified imported Shared patterns, but no Shared-pattern definitions are inherited or merged across Configuration boundaries.
 
 ## 6. Target and Companion semantics
 

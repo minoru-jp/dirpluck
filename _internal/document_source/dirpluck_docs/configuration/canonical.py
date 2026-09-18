@@ -29,7 +29,7 @@ Configuration
 └── output                 exactly one
 ```
 
-{{TERM_14}}は、自身の対象・コンパニオン、または設定インポートの少なくとも1つを持つ必要があります。各 import では、import 先設定が宣言する Companion と {{TERM_14}} 側の `[import.<name>.companion.<name>]` を合わせて少なくとも1個の Companion が必要です。0.3.0 では import 先設定からさらに別の設定をインポートできません。import 先に Target が定義されていても import 実行では使用しません。
+{{TERM_14}}は、自身の対象・コンパニオン、または設定インポートの少なくとも1つを持つ必要があります。各 import では、import 先設定が宣言する Companion と {{TERM_14}} 側の `[import.<name>.companion.<name>]` を合わせて少なくとも1個の Companion が必要です。設定インポートは1階層だけで、import 先設定からさらに別の設定をインポートできません。import 先に Target が定義されていても import 実行では使用しません。
 
 ## {{TERM_13}}
 
@@ -72,6 +72,8 @@ configuration = "shikumi/dirpluck.toml"
 
 読み込んだ設定ファイルは通常の設定形式として完全に検証されます。`[shared.*]`、Target、Companion、Case、`[output]` はその設定自身の定義として検証されます。ただし import 実行で使用する source は Companion だけです。import 先の Target と `[output]` は実行しません。
 
+import 先の `[shared.include_patterns]` / `[shared.exclude_patterns]` は、{{TERM_14}}側から `<import-name>.<pattern-name>` の修飾名で参照できます。たとえば `shikumi-stack` の import 先に `python-dev` という exclude 共有パターンがあれば、Root 側では `shikumi-stack.python-dev` として参照します。import 名は Companion と共有パターンの両方に対する名前空間です。
+
 ### import root 内へ Companion を追加する
 
 {{TERM_14}}は、import 先設定が宣言していない source も、その import の Companion として明示できます。
@@ -87,7 +89,7 @@ if_empty = "allow"
 
 `path` は import root 相対です。通常の `[companion.<name>]` と同様に絶対 path や `..` は使えませんが、import root 自体を Companion として扱うため `path = "."` はこの形式に限って使用できます。
 
-この Companion は {{TERM_14}} が所有する定義なので、共有パターン参照は {{TERM_14}} の `[shared.*]` を解決します。import 先設定自身が宣言する Companion は import 先設定自身の `[shared.*]` を使います。同名の shared pattern が両方に存在しても merge や相互参照はしません。
+この Companion は {{TERM_14}} が所有する定義なので、共有パターン参照は Root 側から見える共有パターン名前空間で解決します。Root 自身の `[shared.*]` はローカル名で、import 先の `[shared.*]` は `<import>.<pattern>` の修飾名で参照できます。import 先設定自身が宣言する Companion は import 先設定自身の `[shared.*]` をローカル名で使い、Root 側から参照可能になった修飾名によって参照先を書き換えません。
 
 import 先設定に `[companion.project]` が既にあり、{{TERM_14}}でも `[import.shikumi-stack.companion.project]` を定義した場合、どちらも論理名 `shikumi-stack.project` になるため設定エラーです。一方、Root の `[companion.project]` や別 import の `other.project` とは名前空間が異なるため共存できます。
 
@@ -103,7 +105,7 @@ case = "distribution"
 
 ### 再帰 import は行わない
 
-0.3.0 では設定インポートを宣言できるのは{{TERM_14}}だけです。import 先設定に `[import.<name>]` が存在する場合はエラーにします。これにより循環参照、深さ依存の Case 伝播、複雑な設定 graph を作りません。
+設定インポートを宣言できるのは{{TERM_14}}だけです。import 先設定に `[import.<name>]` が存在する場合はエラーにします。これにより循環参照、深さ依存の Case 伝播、複雑な設定 graph を作りません。
 
 {{TERM_14}}は自身の Target / Root Companion を持たず、設定インポートだけで構成することもできます。その場合でも最終 `[output]` は{{TERM_14}}自身へ記述します。各 import 名前空間には、import 先設定由来または {{TERM_14}} 側追加の Companion が少なくとも1個必要です。
 
@@ -176,7 +178,7 @@ timestamp = true
 
 ## {{TERM_12}}
 
-同じ設定ファイル内で複数の選択から同じ include または exclude パターン集合を使いたい場合は、名前付きの共有パターンを定義できます。共有するのは完全な選択定義ではなくパターン配列だけです。
+複数の選択から同じ include または exclude パターン集合を使いたい場合は、名前付きの共有パターンを定義できます。共有するのは完全な選択定義ではなくパターン配列だけです。Root が所有する選択は、Root 自身の共有パターンに加えて、明示的に import した Configuration の共有パターンも名前空間付きで参照できます。
 
 include 用は `[shared.include_patterns]` に定義します。
 
@@ -224,6 +226,47 @@ if_empty = "allow"
 共有参照と選択自身の `include` / `include_if_exists` / `exclude` は併用できます。参照した共有パターンを先に展開し、その後に選択へ直接記述したパターンを追加します。同じ実効パターンが重複した場合は設定エラーです。
 
 ケースは base 選択を継承しないため、共有パターン参照も継承しません。上の例で `python-dev` を base と `all` の両方へ適用したいので、両方が `exclude_pattern_refs = ["python-dev"]` を明示しています。これは Case 継承ではなく、同じ名前付きパターン集合を2つの独立した選択が参照しているだけです。
+
+### import した共有パターンを参照する
+
+import 先 Configuration の共有パターンは、Root 側で `<import-name>.<pattern-name>` の修飾名として参照します。
+
+たとえば import 先の `shikumi/dirpluck.toml` に次があるとします。
+
+```toml
+[shared.exclude_patterns]
+python-dev = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    "*.pyc",
+]
+```
+
+Root Configuration で次の import を宣言すると、
+
+```toml
+[import.shikumi]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+```
+
+Root が所有する Target、Root Companion、または `[import.<name>.companion.<name>]` の Selection から `shikumi.python-dev` を参照できます。
+
+```toml
+[target]
+description = "The current project."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["shikumi.python-dev"]
+if_empty = "allow"
+```
+
+include 用も同じ規則で、`include_pattern_refs` / `include_if_exists_pattern_refs` に `<import>.<pattern>` を指定します。include と exclude の名前空間は従来どおり別です。
+
+import 先 Configuration が自身で宣言している Companion は、引き続き import 先自身の共有パターンをローカル名で解決します。Root から見える `shikumi.python-dev` に置換したり、Root の同名パターンと merge したりしません。
+
+Root ローカルの共有パターン名と、import から公開された修飾名が同じ参照名になる場合は曖昧なので設定エラーです。共有パターン名そのものは自動で別名化せず、import 名を含む修飾名によって名前空間を分離します。
+
 
 ## 選択フィールド
 

@@ -119,7 +119,7 @@ Companions under an import use logical names of the form `<import>.<companion>` 
 
 Only `root` is allowed to cross the parent cwd boundary explicitly. It is resolved as a relative path from the directory containing the Root Configuration file itself, so if the Configuration is stored under `./dirpluck/`, that location is the reference point even when the process cwd is unchanged. Absolute paths are not accepted. Once the import root is resolved, it becomes the imported Configuration's filesystem boundary, and the Companions used by the import and their selected files are confined to it again. The parent CLI `--case` and `DIRECTORY` values do not propagate implicitly, and the imported Configuration's Target and `[output]` are not used.
 
-This lets a parent reuse Companion definitions already declared for another project without copying that project's Companion paths and selection rules into a second Configuration, while still allowing parent-specific extra sources to remain Companions instead of becoming Targets. Shared pattern references for Root-defined import Companions resolve in the Root Configuration; imported-Configuration Companions keep their own Shared-pattern namespace. In 0.3.0, imports are one level deep: an imported Configuration cannot import another Configuration.
+This lets a parent reuse Companion definitions already declared for another project without copying that project's Companion paths and selection rules into a second Configuration, while still allowing parent-specific extra sources to remain Companions instead of becoming Targets. Shared patterns from an imported Configuration are available to Root-owned selections under qualified names such as `<import>.<pattern>`. Imported-Configuration Companions continue to resolve their own local Shared-pattern names inside the imported Configuration; importing them does not rewrite those references. Imports remain one level deep: an imported Configuration cannot import another Configuration.
 
 ### Keep LLM-assisted work reproducible
 
@@ -133,7 +133,7 @@ When `include` or `include_if_exists` selects a directory, files below that dire
 
 Before sharing an Archive or sending it outside the workspace, review broad selections and add exclusions appropriate to that workspace. `.git/`, `.env*`, `*.pem`, and `*.key` are common examples, but no example list can identify every sensitive file. dirpluck deliberately does not infer which files are secrets or exclude them automatically.
 
-When the same exclusion list is needed by the base selection and several Cases, or by several sources, define it once as a **Shared pattern**. What is shared is only the pattern array, not a complete selection; every selection that uses it names the shared set explicitly. For example, a normal development selection and an “almost everything” Case can reuse the same exclusions.
+When the same exclusion list is needed by the base selection and several Cases, or by several sources, define it once as a **Shared pattern**. What is shared is only the pattern array, not a complete selection; every selection that uses it names the shared set explicitly. Shared patterns from an imported Configuration can also be reused by the Root Configuration through qualified names such as `<import>.<pattern>`. For example, a normal development selection and an “almost everything” Case can reuse the same exclusions.
 
 ```toml
 [shared.exclude_patterns]
@@ -178,7 +178,7 @@ A **Root Configuration** contains at least one local source or Configuration imp
 
 A **Case** is one flat selection variation within a Configuration. When a Target exists, it must define the selected Case; each Companion may define the same Case and otherwise falls back to its base selection. Without a Target, a Case is valid when at least one Companion defines it. Cases do not propagate between the Root Configuration and imports.
 
-Selections describe required and optional entries inside each source. Repeated pattern sets may be given Shared pattern names and referenced explicitly from the selections that need them. To reuse Companions from another Configuration, use a **Configuration import** and explicitly declare its execution root, Configuration file, and, when needed, a Companion Case. Only the Root Configuration owns the final Output; an imported Configuration's Target and `[output]` are not used.
+Selections describe required and optional entries inside each source. Repeated pattern sets may be given Shared pattern names and referenced explicitly from the selections that need them. To reuse Companions or Shared patterns from another Configuration, use a **Configuration import** and explicitly declare its execution root, Configuration file, and, when needed, a Companion Case. Imported Shared patterns are referenced from Root-owned selections as `<import>.<pattern>`. Only the Root Configuration owns the final Output; an imported Configuration's Target and `[output]` are not used.
 
 For the complete TOML authoring guide, including Target and Companion forms, Cases, selection fields, and full examples, see [CONFIGURATION.md](CONFIGURATION.md). For exact matching, discovery, filesystem-boundary, Archive, Output, dry-run, and error semantics, see [SPECIFICATION.md](SPECIFICATION.md).
 
@@ -238,7 +238,7 @@ There are intentionally no CLI options that temporarily replace selection rules 
 
 ## Installation
 
-Python 3.11 or later is required. Current release: `0.3.0`.
+Python 3.11 or later is required. Current release: `0.4.0`.
 
 ```console
 pip install dirpluck

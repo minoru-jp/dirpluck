@@ -11,7 +11,7 @@
     {
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_11",
-      "text": "0.3.0"
+      "text": "0.4.0"
     }
   ]
 }
@@ -36,6 +36,16 @@
 # dirpluck CHANGELOG
 
 dirpluck のリリースごとの変更履歴。
+
+## 0.4.0
+
+import 先 Configuration の共有 include / exclude パターンを、import 名前空間付きで Root 側から明示的に再利用できるようにする。
+
+### Added
+
+- 設定インポートで読み込んだ Configuration の `[shared.include_patterns]` / `[shared.exclude_patterns]` を、ルート設定ファイル側から `<import-name>.<pattern-name>` の修飾名で参照できるようにする。Root local の共有パターンは従来どおりローカル名で参照し、include / exclude の種別は分離したまま維持する。
+- import 由来の修飾共有パターンを、ルート設定ファイルが所有する Target、Root Companion、`[import.<name>.companion.<name>]` の base / Case Selection から利用できるようにする。import 先 Configuration 自身が宣言する Companion は、引き続きその Configuration 自身の共有パターンをローカル名で解決し、Root 側の名前空間へ再束縛しない。
+- Root local の共有パターン名と import 由来の修飾共有パターン名が同じ参照文字列になる場合は、暗黙の優先順位を設けず設定エラーにする。共有パターンは import によって merge・自動適用されず、各 Selection が参照名を明示する既存モデルを維持する。
 
 ## 0.3.0
 

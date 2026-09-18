@@ -130,6 +130,23 @@ include_if_exists_pattern_refs = ["project-core"]
 
 共有パターンは定義しただけでは適用されない。使用する Selection から明示的に参照する。
 
+import 先の共有パターンを Root 側で使う場合は `<import>.<pattern>` を指定する。
+
+```toml
+[import.shikumi]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+
+[target]
+description = "The current project."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["shikumi.python-dev"]
+if_empty = "allow"
+```
+
+Root Target、Root Companion、`[import.<name>.companion.<name>]` は import 由来の修飾共有パターンを参照できる。import 先設定由来 Companion は自身の `[shared.*]` をローカル名で使う。
+
+
 ## Case
 
 ```toml
@@ -176,11 +193,12 @@ if_empty = "allow"
 - 必要なら `[import.<name>.companion.<name>]` を追加し、import root 内の source を Root 側から Companion として定義する。
 - import 配下の論理名は `<import>.<companion>`。import 先設定由来と Root 側追加で同名 Companion を定義しない。
 - Root 側追加 Companion の `path` は import root 相対。`path = "."` で import root 自体を Companion にできる。絶対 path と `..` は使用しない。
-- Root 側追加 Companion の shared pattern 参照は Root Configuration の `[shared.*]` を使う。import 先設定由来 Companion は import 先の `[shared.*]` を使う。
+- import 先の shared pattern は Root 側から `<import>.<pattern>` で参照できる。Root Target、Root Companion、Root 側追加 Companionから利用できる。
+- import 先設定由来 Companion は import 先自身の `[shared.*]` をローカル名で使う。Root 側の参照で置換しない。
 - import 先設定由来または Root 側追加を合わせて少なくとも1個の Companion が必要。
 - `case` は import 名前空間の Companion 群だけに適用する。少なくとも1個の Companion がその Case を定義している必要がある。Root の `--case` は伝播しない。
 - import 先の `[output]` は使用しない。最終出力は{{TERM_14}}の `[output]` だけ。
-- import 先 Configuration からさらに import しない。0.3.0 は1階層だけ。
+- import 先 Configuration からさらに import しない。import は1階層だけ。
 
 ## Output
 
@@ -226,6 +244,7 @@ suffix = "dev"
 - `if_empty = "allow"` は必須 `include` を持つ Selection には使えない。
 - Case は base の selection field や共有パターン参照を継承しない。
 - 共有パターンは自動適用されない。
+- import 先の共有パターンは `<import>.<pattern>` の修飾名で参照する。
 - include 用と exclude 用の共有パターンは別々に定義する。
 - {{TERM_14}}の CLI `DIRECTORY` と `--case` は import 先へ自動伝播しない。
 - import 先の Target は使用されない。

@@ -1,9 +1,17 @@
 from pathlib import Path
 import tempfile
 import textwrap
+from types import MappingProxyType
 import unittest
 
-from dirpluck.config import load_config
+from dirpluck.config import (
+    ExclusionPattern,
+    SharedPatterns,
+    _locally_resolvable_refs,
+    _looks_like_import_qualified_ref,
+    _merge_root_visible_shared,
+    load_config,
+)
 from dirpluck.errors import ConfigurationError
 
 
@@ -12,6 +20,115 @@ OUTPUT = '''
 path = "out.zip"
 if_exists = "error"
 '''
+
+
+class SharedNamespaceHelperTests(unittest.TestCase):
+    def test_import_qualified_ref_requires_an_import_namespace_prefix(self):
+        import_names = frozenset({"external", "tooling"})
+        cases = (
+            ("external.python-dev", True),
+            ("tooling.core", True),
+            ("external", False),
+            ("externality.python-dev", False),
+            ("python-dev", False),
+        )
+        for name, expected in cases:
+            with self.subTest(name=name):
+                self.assertEqual(
+                    _looks_like_import_qualified_ref(name, import_names), expected
+                )
+
+    def test_root_visible_shared_qualifies_imported_names_and_keeps_kinds_separate(self):
+        local = SharedPatterns(
+            include=MappingProxyType({"local": ("src",)}),
+            exclude=MappingProxyType({
+                "local": (
+                    ExclusionPattern(
+                        raw="*.tmp", value=".tmp", match="suffix", directory=False
+                    ),
+                )
+            }),
+        )
+        imported = SharedPatterns(
+            include=MappingProxyType({"common": ("docs",)}),
+            exclude=MappingProxyType({
+                "common": (
+                    ExclusionPattern(
+                        raw="*.pyc", value=".pyc", match="suffix", directory=False
+                    ),
+                )
+            }),
+        )
+
+        merged = _merge_root_visible_shared(
+            local, {"external": imported}, where="root [shared]"
+        )
+
+        self.assertEqual(merged.include["local"], ("src",))
+        self.assertEqual(merged.include["external.common"], ("docs",))
+        self.assertEqual(merged.exclude["local"][0].raw, "*.tmp")
+        self.assertEqual(merged.exclude["external.common"][0].raw, "*.pyc")
+
+    def test_root_visible_shared_rejects_local_name_that_collides_with_qualified_import(self):
+        imported_include = SharedPatterns(
+            include=MappingProxyType({"common": ("docs",)}),
+            exclude=MappingProxyType({}),
+        )
+        imported_exclude = SharedPatterns(
+            include=MappingProxyType({}),
+            exclude=MappingProxyType({
+                "common": (
+                    ExclusionPattern(
+                        raw="*.pyc", value=".pyc", match="suffix", directory=False
+                    ),
+                )
+            }),
+        )
+        cases = (
+            (
+                SharedPatterns(
+                    include=MappingProxyType({"external.common": ("src",)}),
+                    exclude=MappingProxyType({}),
+                ),
+                imported_include,
+                "include",
+            ),
+            (
+                SharedPatterns(
+                    include=MappingProxyType({}),
+                    exclude=MappingProxyType({
+                        "external.common": (
+                            ExclusionPattern(
+                                raw="*.tmp",
+                                value=".tmp",
+                                match="suffix",
+                                directory=False,
+                            ),
+                        )
+                    }),
+                ),
+                imported_exclude,
+                "exclude",
+            ),
+        )
+        for local, imported, kind in cases:
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(
+                    ConfigurationError, rf"ambiguous shared {kind} pattern name"
+                ):
+                    _merge_root_visible_shared(
+                        local, {"external": imported}, where="root [shared]"
+                    )
+
+    def test_import_qualified_local_name_is_not_resolved_before_import_merge(self):
+        refs = ("plain", "external.common")
+        local = {"plain": object(), "external.common": object()}
+
+        self.assertEqual(
+            _locally_resolvable_refs(refs, local, frozenset({"external"})),
+            ("plain",),
+        )
+
 
 
 class ConfigTests(unittest.TestCase):

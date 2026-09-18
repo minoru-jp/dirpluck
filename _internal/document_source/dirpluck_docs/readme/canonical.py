@@ -107,7 +107,7 @@ if_exists = "overwrite"
 
 ### 別の設定ファイルが持つコンパニオン定義を取り込む
 
-関連プロジェクトが別ディレクトリにあり、そのプロジェクト側ですでに Companion を dirpluck Configuration として管理している場合、その path と pattern を親側へ複製する必要はありません。{{TERM_14}}から{{TERM_13}}として明示的に取り込み、import 先設定の Companion と必要な Companion Case を再利用できます。さらに親側は `[import.<name>.companion.<name>]` で import root 内の追加 source を Companion として定義できます。import 先の Target は使用しません。
+関連プロジェクトが別ディレクトリにあり、そのプロジェクト側ですでに Companion や共有パターンを dirpluck Configuration として管理している場合、その path や pattern 配列を親側へ複製する必要はありません。{{TERM_14}}から{{TERM_13}}として明示的に取り込み、import 先設定の Companion、共有パターン、必要な Companion Case を再利用できます。さらに親側は `[import.<name>.companion.<name>]` で import root 内の追加 source を Companion として定義できます。import 先の Target は使用しません。
 
 ```toml
 [import.shikumi-stack]
@@ -126,7 +126,7 @@ import 配下の Companion は import 先設定由来か親側追加かにかか
 
 `root` だけが親の cwd 境界を越えることを明示的に許されます。`root` は{{TERM_14}}自身の所在ディレクトリからの相対 path として解決されるため、実行 cwd が同じでも設定ファイルを `./dirpluck/` に置いた場合はその位置を基準にします。絶対 path は使用しません。import 先ではその root が新しい filesystem boundary になり、利用する Companion と選択ファイルは再びその中に限定されます。親の CLI `--case` や `DIRECTORY` は import 先へ暗黙に伝播せず、import 先の Target と `[output]` も使いません。
 
-これにより、別プロジェクトの Companion path と選択規則を親 Configuration へコピーせず再利用しつつ、親固有の追加 source も Target に昇格させず import 名前空間の Companion として明示できます。Root 側追加 Companion の shared pattern 参照は Root Configuration、import 先設定由来 Companion の参照は import 先 Configuration の名前空間で解決します。0.3.0 では import は1階層だけで、import 先からさらに別の Configuration を import することはありません。
+これにより、別プロジェクトの Companion path と選択規則を親 Configuration へコピーせず再利用しつつ、親固有の追加 source も Target に昇格させず import 名前空間の Companion として明示できます。import 先の共有パターンは `<import>.<pattern>` の修飾名で Root 側の Target、Root Companion、Root 側追加 Companion から参照できます。一方、import 先設定由来 Companion は自身の Configuration の共有パターンをローカル名で使い続け、Root 側の参照によって意味を書き換えません。import は1階層だけで、import 先からさらに別の Configuration を import することはありません。
 
 ### LLM と扱う作業コンテキストを再現可能にする
 
@@ -140,7 +140,7 @@ LLM を使う作業も同じ問題のひとつです。継続的な作業では�
 
 アーカイブを共有したり外部へ渡したりする場合は、広い選択を確認し、そのワークスペースに必要な除外を明示してください。`.git/`、`.env*`、`*.pem`、`*.key` などは典型例ですが、どの名前が秘密情報かを網羅的に判断できる一覧ではありません。{{TERM_1}} 自身が秘密情報を推論して自動除外することはありません。
 
-同じ除外一覧を base と複数ケース、または複数 source から使う場合は、{{TERM_12}}として一度だけ定義できます。共有するのは完全な選択ではなくパターン配列だけで、利用する各選択が名前を明示的に参照します。たとえば通常の開発範囲と「ほぼ全部」を含めるケースで同じ除外を使えます。
+同じ除外一覧を base と複数ケース、または複数 source から使う場合は、{{TERM_12}}として一度だけ定義できます。共有するのは完全な選択ではなくパターン配列だけで、利用する各選択が名前を明示的に参照します。import した Configuration の共有パターンも `<import>.<pattern>` の修飾名で Root 側から再利用できます。たとえば通常の開発範囲と「ほぼ全部」を含めるケースで同じ除外を使えます。
 
 ```toml
 [shared.exclude_patterns]
@@ -171,7 +171,7 @@ if_empty = "allow"
 
 ## なぜモデルを意図的に狭くするのか
 
-ここまでの例はすべて、**ひとつの{{TERM_14}}はひとつの最終アーカイブ意図を表す**という同じ主張の別の使い方です。{{TERM_1}} は設定を汎用検索言語や profile 継承の階層へ広げず、抽出判断を局所的で明示的なまま保ちます。同じ設定内では名前付き include / exclude パターン配列を再利用でき、別の設定が持つ Companion 定義は{{TERM_13}}として明示的に取り込めます。どちらも暗黙の継承や merge ではありません。
+ここまでの例はすべて、**ひとつの{{TERM_14}}はひとつの最終アーカイブ意図を表す**という同じ主張の別の使い方です。{{TERM_1}} は設定を汎用検索言語や profile 継承の階層へ広げず、抽出判断を局所的で明示的なまま保ちます。同じ設定内では名前付き include / exclude パターン配列を再利用でき、別の設定が持つ Companion と共有パターンは{{TERM_13}}として名前空間付きで明示的に取り込めます。どちらも暗黙の継承や merge ではありません。
 
 そのため {{TERM_1}} は、どのファイルが重要かを推論したり、最新成果物を選んだり、任意深度を探索したり、source 間の関係を自動で発明したりしません。それらの判断は設定ファイル上に残ります。別の設定を利用する場合も、個々の path を無差別に cwd 外へ開放するのではなく、`[import.<name>]` で利用する Configuration と実行 root を明示します。
 
@@ -185,7 +185,7 @@ if_empty = "allow"
 
 **ケース**は設定ファイル全体で共有する1個の平坦な選択 variation です。対象がある場合は対象が選択ケースを定義し、各コンパニオンは同名ケースがあれば使い、なければ base へフォールバックします。対象がない場合は少なくとも1個のコンパニオンがそのケースを定義します。
 
-各 source の選択では必須項目と任意項目を記述します。同じパターン集合を繰り返す場合は{{TERM_12}}として名前を付け、必要な選択から明示的に参照できます。別の Configuration の Companion を再利用する場合は{{TERM_13}}として実行 root、設定 file、必要なら Companion Case を明示します。最終出力は{{TERM_14}}だけが所有し、import 先の Target と `[output]` は使用しません。
+各 source の選択では必須項目と任意項目を記述します。同じパターン集合を繰り返す場合は{{TERM_12}}として名前を付け、必要な選択から明示的に参照できます。別の Configuration の Companion や共有パターンを再利用する場合は{{TERM_13}}として実行 root、設定 file、必要なら Companion Case を明示します。import 先共有パターンは `<import>.<pattern>` で Root 側から参照します。最終出力は{{TERM_14}}だけが所有し、import 先の Target と `[output]` は使用しません。
 
 TOML の完全な書き方、対象とコンパニオンの形、ケース、選択フィールド、完全な例は `CONFIGURATION.md` を参照してください。matching、設定探索、ファイルシステム境界、アーカイブ、出力、dry-run、エラーの厳密な意味論は `SPECIFICATION.md` に定義します。
 

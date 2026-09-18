@@ -11,7 +11,7 @@
     {
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_11",
-      "text": "0.3.0"
+      "text": "0.4.0"
     }
   ]
 }
@@ -84,7 +84,7 @@ CLI からルート設定ファイルを選ぶ設定探索は再帰せず、cwd 
 
 対象は runtime-bound source 定義で、1個の論理的な `[target]` 定義を CLI から受け取った1個以上のディレクトリへ適用します。すべての runtime 対象は同じ選択済み対象定義を使います。コンパニオンは設定の `path` に固定される configuration-bound source です。
 
-共有パターンは同じ設定ファイル内の名前付きパターン配列だけを再利用する仕組みで、完全な共有選択定義ではありません。設定インポートは別の完全な設定ファイルが宣言する Companion 定義を明示的に再利用する仕組みで、設定継承や設定 merge ではありません。CLI からの選択 override もありません。
+共有パターンは名前付きパターン配列だけを再利用する仕組みで、完全な共有選択定義ではありません。同じ設定ファイル内ではローカル名で参照し、ルート設定ファイルは明示的に import した Configuration の共有パターンを `<import>.<pattern>` の修飾名でも参照できます。設定インポートは別の完全な設定ファイルが宣言する Companion と共有パターンを明示的に再利用する仕組みで、設定継承や設定 merge ではありません。CLI からの選択 override もありません。
 
 `[shared.include_patterns]` と `[shared.exclude_patterns]` はそれぞれ省略可能です。`[shared]` を記述する場合は少なくともどちらか一方が必要で、記述した各 table には少なくとも1個の名前付き配列が必要です。各名前は空でない文字列で、各配列は1件以上の文字列を含みます。include 用の配列は include パターン文法、exclude 用の配列は exclude パターン文法で設定ロード時に検証します。定義しただけの共有パターンはどの選択にも適用されません。
 
@@ -111,13 +111,13 @@ companion.<name> zero or more Root-owned Companion tables
 
 `configuration` は import root から見た相対 TOML file path です。空文字列、絶対 path、`.` / `..` による逸脱、glob、`.toml` 以外の拡張子を拒否します。解決先は import root 内の実在 regular file でなければなりません。
 
-import では通常の設定探索を行いません。`configuration` が指す1 file を直接読み、通常の設定 schema として完全に parse / validate します。import 先設定の `[shared.*]` はその設定内だけで有効です。root 側と import 側で共有パターン名が同じでも相互参照や merge は行いません。
+import では通常の設定探索を行いません。`configuration` が指す1 file を直接読み、通常の設定 schema として完全に parse / validate します。import 先設定の `[shared.include_patterns]` / `[shared.exclude_patterns]` は、その設定自身では従来どおりローカル名で有効です。さらに ルート設定ファイル 側からは `<import-name>.<pattern-name>` の修飾名として参照できます。Root local の共有パターンと import 由来の共有パターンを merge したり、import 先設定自身の参照先を Root 側の名前へ再束縛したりはしません。
 
 import 先設定も通常形式として `[output]` を必須としますが、その output は import 実行では採用しません。output field の schema validation は行いますが、出力 path の作成、既存出力 collision の確認、書き込みは行いません。import 先に `[target]` / `[target.case.<name>]` が存在しても、それらは通常の直接実行用として検証するだけで、import 実行では source として使用しません。
 
-ルート設定ファイルは `[import.<name>.companion.<companion-name>]` を0個以上宣言して、同じ import root 内へ追加 Companion を定義できます。schema は通常の `[companion.<name>]` と同じですが、`path = "."` を許可して import root 自体を Companion にできます。その他の絶対 path、`..`、glob は拒否し、解決結果は import root 内の実在ディレクトリでなければなりません。Root 側追加 Companion の selection は ルート設定ファイル の shared pattern 名前空間で解決し、import 先設定由来 Companion は import 先設定の shared pattern 名前空間で解決します。
+ルート設定ファイルは `[import.<name>.companion.<companion-name>]` を0個以上宣言して、同じ import root 内へ追加 Companion を定義できます。schema は通常の `[companion.<name>]` と同じですが、`path = "."` を許可して import root 自体を Companion にできます。その他の絶対 path、`..`、glob は拒否し、解決結果は import root 内の実在ディレクトリでなければなりません。Root 側追加 Companion は ルート設定ファイル が所有する Selection なので、Root local の共有パターンをローカル名で、任意の import 由来共有パターンを `<import>.<pattern>` の修飾名で参照できます。import 先設定由来 Companion は import 先設定の shared pattern 名前空間だけをローカル名で解決します。
 
-import 名は Companion の論理名前空間です。Root の `[companion.x]` は `x`、`[import.a]` 配下の Companion `x` は import 先設定由来か Root 側追加かにかかわらず `a.x` を論理名とします。同じ import 内で import 先設定と Root 側追加が同じ Companion 名を定義する場合は論理名が重複するため設定エラーです。別 import や Root local Companion との同名は名前空間が異なるため許可します。論理名は Archive path prefix には使いません。
+import 名は Companion と Root-visible shared pattern の論理名前空間です。Root の `[companion.x]` は `x`、`[import.a]` 配下の Companion `x` は import 先設定由来か Root 側追加かにかかわらず `a.x` を論理名とします。import 先の共有パターン `p` は Root 側から `a.p` として参照します。同じ import 内で import 先設定と Root 側追加が同じ Companion 名を定義する場合は論理名が重複するため設定エラーです。別 import や Root local Companion との同名は名前空間が異なるため許可します。Root local 共有パターン名と、import 由来の修飾共有パターン名が同じ参照文字列になる場合は曖昧なので設定エラーです。Companion 論理名は Archive path prefix には使いません。
 
 各 import 名前空間には、import 先設定由来または Root 側追加の Companion が少なくとも1個必要です。
 
@@ -129,7 +129,7 @@ import 名は Companion の論理名前空間です。Root の `[companion.x]` �
 
 ### 再帰 import
 
-0.3.0 では import 先設定に `[import.<name>]` が1個でも存在する場合は設定エラーです。設定インポートの graph は1階層に限定し、循環参照、推移的 import、深さ依存の Case 束縛を提供しません。
+import 先設定に `[import.<name>]` が1個でも存在する場合は設定エラーです。設定インポートの graph は1階層に限定し、循環参照、推移的 import、深さ依存の Case 束縛を提供しません。
 
 ルート設定ファイルはローカル Target / Companion を持たず import だけを持つことができます。各 import では、import 先設定自身に Companion がなくても `[import.<name>.companion.<name>]` が1個以上あれば有効です。両方とも0個なら利用可能な source がないためエラーです。
 
@@ -145,7 +145,7 @@ import 名は Companion の論理名前空間です。Root の `[companion.x]` �
 
 ケース指定時に対象がない場合、少なくとも1個のコンパニオンが同名ケースを定義する必要があります。各コンパニオンは同名ケースがあれば使い、なければ base へフォールバックします。設定インポートの `case` もこの Companion-only 規則を使い、import 先設定由来と Root 側追加の Companion を同じ import 名前空間として扱います。import 先に Target が存在しても Target Case は評価しません。
 
-対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。base 選択にある共有パターン参照も継承しないため、ケースで同じ共有パターンを使う場合はそのケース自身が同じ名前を明示的に参照します。Root と import の間でも Case や共有パターンを継承・merge しません。
+対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。base 選択にある共有パターン参照も継承しないため、ケースで同じ共有パターンを使う場合はそのケース自身が同じ名前を明示的に参照します。Root と import の間でも Case や共有パターン定義を継承・merge しません。ただし Root が所有する Case Selection は、Root local の共有パターンに加えて import 由来の修飾共有パターンを明示参照できます。
 
 ## 6. 対象とコンパニオン
 
@@ -169,21 +169,21 @@ import 名は Companion の論理名前空間です。Root の `[companion.x]` �
 
 ### `include` と `include_pattern_refs`
 
-`include` は必須 include パターンを直接記述します。`include_pattern_refs` は `[shared.include_patterns]` の名前を参照し、その配列を必須 include パターンとして展開します。通常実行では、展開後のすべての必須パターンが少なくとも1件のファイルシステム実体に一致する必要があります。0件一致はエラーです。
+`include` は必須 include パターンを直接記述します。`include_pattern_refs` は include 用共有パターン名を参照し、その配列を必須 include パターンとして展開します。Root が所有する Selection では Root local 名または `<import>.<pattern>` の修飾名を使用でき、import 先設定自身が所有する Companion Selection ではその設定自身のローカル名だけを使用します。通常実行では、展開後のすべての必須パターンが少なくとも1件のファイルシステム実体に一致する必要があります。0件一致はエラーです。
 
 ### `include_if_exists` と `include_if_exists_pattern_refs`
 
-`include_if_exists` は任意 include パターンを直接記述します。`include_if_exists_pattern_refs` は `[shared.include_patterns]` の名前を参照し、その配列を任意 include パターンとして展開します。必須 include と同じパターン文法を使いますが、0件一致を正常として扱い、選択へ何も追加しません。
+`include_if_exists` は任意 include パターンを直接記述します。`include_if_exists_pattern_refs` は include 用共有パターン名を参照し、その配列を任意 include パターンとして展開します。参照名の解決規則は `include_pattern_refs` と同じです。必須 include と同じパターン文法を使いますが、0件一致を正常として扱い、選択へ何も追加しません。
 
 同じ共有 include パターン集合を、ある選択では `include_pattern_refs`、別の選択では `include_if_exists_pattern_refs` から参照できます。必須か任意かは共有定義ではなく参照側が決めます。
 
 ### `exclude` と `exclude_pattern_refs`
 
-`exclude` は除外パターンを直接記述します。`exclude_pattern_refs` は `[shared.exclude_patterns]` の名前を参照して除外パターンを展開します。どちらも include によって既に選ばれた範囲の実体名だけをフィルタし、場所を選択しません。
+`exclude` は除外パターンを直接記述します。`exclude_pattern_refs` は exclude 用共有パターン名を参照して除外パターンを展開します。Root が所有する Selection では Root local 名または `<import>.<pattern>` の修飾名を使用でき、import 先設定自身が所有する Companion Selection ではその設定自身のローカル名だけを使用します。どちらも include によって既に選ばれた範囲の実体名だけをフィルタし、場所を選択しません。
 
 ### 展開と重複
 
-共有参照は参照配列の順序で展開し、その後に同種の直接記述パターンを追加します。存在しない共有名の参照は設定エラーです。展開後、必須 include 内、任意 include 内、exclude 内に同じ実効パターンが重複した場合は設定エラーです。必須 include と任意 include の両方に同じ正規化済みパターンが現れる場合も設定エラーです。
+共有参照は参照配列の順序で展開し、その後に同種の直接記述パターンを追加します。存在しない共有名の参照は設定エラーです。Root local の共有パターン参照名と import 由来の修飾参照名が同じ文字列になる場合も、どちらを選ぶか暗黙に決めず設定エラーです。展開後、必須 include 内、任意 include 内、exclude 内に同じ実効パターンが重複した場合は設定エラーです。必須 include と任意 include の両方に同じ正規化済みパターンが現れる場合も設定エラーです。
 
 ### `if_empty`
 

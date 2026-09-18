@@ -122,6 +122,12 @@ class Selection:
     include_if_exists: tuple[str, ...]
     exclude: tuple[ExclusionPattern, ...]
     if_empty: str
+    include_pattern_refs: tuple[str, ...] = ()
+    include_if_exists_pattern_refs: tuple[str, ...] = ()
+    exclude_pattern_refs: tuple[str, ...] = ()
+    direct_include: tuple[str, ...] = ()
+    direct_include_if_exists: tuple[str, ...] = ()
+    direct_exclude: tuple[ExclusionPattern, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -151,6 +157,16 @@ class ConfigurationImport:
     configuration: str
     case: str | None
     companions: Mapping[str, Companion]
+
+
+@dataclass(frozen=True)
+class _ImportHeader:
+    """Import fields needed before Root-owned selections can be parsed."""
+
+    name: str
+    root: str
+    configuration: str
+    case: str | None
 
 
 @dataclass(frozen=True)
@@ -376,6 +392,40 @@ def _pattern_refs(value: object, where: str) -> tuple[str, ...]:
     return tuple(_require_name(ref, where) for ref in refs)
 
 
+def _looks_like_import_qualified_ref(name: str, import_names: frozenset[str]) -> bool:
+    return any(name.startswith(f"{import_name}.") for import_name in import_names)
+
+
+def _validate_pattern_ref_names(
+    refs: tuple[str, ...],
+    local_names: Mapping[str, object],
+    import_names: frozenset[str],
+    where: str,
+    *,
+    kind: str,
+) -> None:
+    for name in refs:
+        if name in local_names or _looks_like_import_qualified_ref(name, import_names):
+            continue
+        raise ConfigurationError(
+            f"{where}: unknown shared {kind} pattern set: {name!r}"
+        )
+
+
+def _locally_resolvable_refs(
+    refs: tuple[str, ...],
+    local_names: Mapping[str, object],
+    import_names: frozenset[str],
+) -> tuple[str, ...]:
+    """Return refs that are unambiguously local before imports are resolved."""
+
+    return tuple(
+        name
+        for name in refs
+        if name in local_names and not _looks_like_import_qualified_ref(name, import_names)
+    )
+
+
 def _resolve_include_refs(
     refs: tuple[str, ...],
     shared: SharedPatterns,
@@ -443,6 +493,7 @@ def _parse_selection(
     value: object,
     where: str,
     shared: SharedPatterns,
+    import_names: frozenset[str] = frozenset(),
 ) -> Selection:
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
@@ -473,19 +524,55 @@ def _parse_selection(
         value.get("exclude_pattern_refs"), f"{where}.exclude_pattern_refs"
     )
 
+    _validate_pattern_ref_names(
+        include_refs,
+        shared.include,
+        import_names,
+        f"{where}.include_pattern_refs",
+        kind="include",
+    )
+    _validate_pattern_ref_names(
+        optional_refs,
+        shared.include,
+        import_names,
+        f"{where}.include_if_exists_pattern_refs",
+        kind="include",
+    )
+    _validate_pattern_ref_names(
+        exclude_refs,
+        shared.exclude,
+        import_names,
+        f"{where}.exclude_pattern_refs",
+        kind="exclude",
+    )
+
+    direct_include = _validated_includes(value.get("include"), f"{where}.include")
+    direct_include_if_exists = _validated_includes(
+        value.get("include_if_exists"), f"{where}.include_if_exists"
+    )
+    direct_exclude = _validated_exclusions(value.get("exclude"), f"{where}.exclude")
+
+    local_include_refs = _locally_resolvable_refs(
+        include_refs, shared.include, import_names
+    )
+    local_optional_refs = _locally_resolvable_refs(
+        optional_refs, shared.include, import_names
+    )
+    local_exclude_refs = _locally_resolvable_refs(
+        exclude_refs, shared.exclude, import_names
+    )
+
     include = (
-        _resolve_include_refs(include_refs, shared, f"{where}.include_pattern_refs")
-        + _validated_includes(value.get("include"), f"{where}.include")
+        _resolve_include_refs(local_include_refs, shared, f"{where}.include_pattern_refs")
+        + direct_include
     )
     include_if_exists = (
         _resolve_include_refs(
-            optional_refs, shared, f"{where}.include_if_exists_pattern_refs"
+            local_optional_refs, shared, f"{where}.include_if_exists_pattern_refs"
         )
-        + _validated_includes(
-            value.get("include_if_exists"), f"{where}.include_if_exists"
-        )
+        + direct_include_if_exists
     )
-    if not include and not include_if_exists:
+    if not include and not include_if_exists and not include_refs and not optional_refs:
         raise ConfigurationError(
             f"{where}: at least one include/include_if_exists pattern or shared include reference is required"
         )
@@ -501,15 +588,15 @@ def _parse_selection(
         )
 
     exclude = (
-        _resolve_exclude_refs(exclude_refs, shared, f"{where}.exclude_pattern_refs")
-        + _validated_exclusions(value.get("exclude"), f"{where}.exclude")
+        _resolve_exclude_refs(local_exclude_refs, shared, f"{where}.exclude_pattern_refs")
+        + direct_exclude
     )
     _reject_duplicate_effective_exclusions(exclude, f"{where}.exclude")
 
     if_empty = value.get("if_empty", "error")
     if not isinstance(if_empty, str) or if_empty not in {"error", "allow"}:
         raise ConfigurationError(f"{where}.if_empty: expected 'error' or 'allow'")
-    if if_empty == "allow" and include:
+    if if_empty == "allow" and (include or include_refs):
         raise ConfigurationError(
             f"{where}.if_empty: 'allow' cannot be used when required include patterns are declared"
         )
@@ -519,6 +606,81 @@ def _parse_selection(
         include_if_exists=include_if_exists,
         exclude=exclude,
         if_empty=if_empty,
+        include_pattern_refs=include_refs,
+        include_if_exists_pattern_refs=optional_refs,
+        exclude_pattern_refs=exclude_refs,
+        direct_include=direct_include,
+        direct_include_if_exists=direct_include_if_exists,
+        direct_exclude=direct_exclude,
+    )
+
+
+def _materialize_selection(
+    selection: Selection,
+    shared: SharedPatterns,
+    where: str,
+) -> Selection:
+    """Resolve every Shared-pattern reference against one visible namespace."""
+
+    include = (
+        _resolve_include_refs(
+            selection.include_pattern_refs,
+            shared,
+            f"{where}.include_pattern_refs",
+        )
+        + selection.direct_include
+    )
+    include_if_exists = (
+        _resolve_include_refs(
+            selection.include_if_exists_pattern_refs,
+            shared,
+            f"{where}.include_if_exists_pattern_refs",
+        )
+        + selection.direct_include_if_exists
+    )
+    if not include and not include_if_exists:
+        raise ConfigurationError(
+            f"{where}: at least one include/include_if_exists pattern or shared include reference is required"
+        )
+
+    _reject_duplicate_effective_includes(include, f"{where}.include")
+    _reject_duplicate_effective_includes(
+        include_if_exists, f"{where}.include_if_exists"
+    )
+    overlap = sorted(set(include) & set(include_if_exists))
+    if overlap:
+        raise ConfigurationError(
+            f"{where}: include and include_if_exists must not contain the same pattern(s): "
+            + ", ".join(repr(item) for item in overlap)
+        )
+
+    exclude = (
+        _resolve_exclude_refs(
+            selection.exclude_pattern_refs,
+            shared,
+            f"{where}.exclude_pattern_refs",
+        )
+        + selection.direct_exclude
+    )
+    _reject_duplicate_effective_exclusions(exclude, f"{where}.exclude")
+
+    if selection.if_empty == "allow" and include:
+        raise ConfigurationError(
+            f"{where}.if_empty: 'allow' cannot be used when required include patterns are declared"
+        )
+
+    return Selection(
+        description=selection.description,
+        include=include,
+        include_if_exists=include_if_exists,
+        exclude=exclude,
+        if_empty=selection.if_empty,
+        include_pattern_refs=selection.include_pattern_refs,
+        include_if_exists_pattern_refs=selection.include_if_exists_pattern_refs,
+        exclude_pattern_refs=selection.exclude_pattern_refs,
+        direct_include=selection.direct_include,
+        direct_include_if_exists=selection.direct_include_if_exists,
+        direct_exclude=selection.direct_exclude,
     )
 
 
@@ -633,11 +795,12 @@ def _validate_import_configuration(path: str, where: str) -> str:
     return pure.as_posix()
 
 
-def _parse_imports(
+def _parse_import_headers(
     value: object,
     where: str,
-    shared: SharedPatterns,
-) -> Mapping[str, ConfigurationImport]:
+) -> Mapping[str, _ImportHeader]:
+    """Parse import metadata without parsing Root-owned import Companions yet."""
+
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
@@ -645,7 +808,7 @@ def _parse_imports(
     if not value:
         raise ConfigurationError(f"{where}: define at least one named import")
 
-    imports: dict[str, ConfigurationImport] = {}
+    headers: dict[str, _ImportHeader] = {}
     for raw_name, raw_import in value.items():
         name = _require_name(raw_name, where)
         import_where = f"{where}.{name}"
@@ -673,18 +836,77 @@ def _parse_imports(
         else:
             case = _require_name(raw_case, f"{import_where}.case")
 
+        headers[name] = _ImportHeader(
+            name=name,
+            root=root,
+            configuration=configuration,
+            case=case,
+        )
+    return MappingProxyType(headers)
+
+
+def _merge_root_visible_shared(
+    local: SharedPatterns,
+    imported: Mapping[str, SharedPatterns],
+    *,
+    where: str,
+) -> SharedPatterns:
+    """Build the Root-visible Shared-pattern namespace."""
+
+    include: dict[str, tuple[str, ...]] = dict(local.include)
+    exclude: dict[str, tuple[ExclusionPattern, ...]] = dict(local.exclude)
+
+    for import_name, shared in imported.items():
+        for pattern_name, patterns in shared.include.items():
+            qualified = f"{import_name}.{pattern_name}"
+            if qualified in include:
+                raise ConfigurationError(
+                    f"{where}: ambiguous shared include pattern name: {qualified!r}"
+                )
+            include[qualified] = patterns
+        for pattern_name, patterns in shared.exclude.items():
+            qualified = f"{import_name}.{pattern_name}"
+            if qualified in exclude:
+                raise ConfigurationError(
+                    f"{where}: ambiguous shared exclude pattern name: {qualified!r}"
+                )
+            exclude[qualified] = patterns
+
+    return SharedPatterns(
+        include=MappingProxyType(include),
+        exclude=MappingProxyType(exclude),
+    )
+
+
+def _parse_imports(
+    value: object,
+    where: str,
+    shared: SharedPatterns,
+    import_names: frozenset[str] = frozenset(),
+) -> Mapping[str, ConfigurationImport]:
+    headers = _parse_import_headers(value, where)
+    if not headers:
+        return MappingProxyType({})
+    assert isinstance(value, dict)
+    imports: dict[str, ConfigurationImport] = {}
+    for name, header in headers.items():
+        raw_import = value[name]
+        assert isinstance(raw_import, dict)
+        import_where = f"{where}.{name}"
+
         companions = _parse_companions(
             raw_import.get("companion"),
             f"{import_where}.companion",
             shared,
             allow_root_path=True,
+            import_names=import_names,
         )
 
         imports[name] = ConfigurationImport(
             name=name,
-            root=root,
-            configuration=configuration,
-            case=case,
+            root=header.root,
+            configuration=header.configuration,
+            case=header.case,
             companions=companions,
         )
     return MappingProxyType(imports)
@@ -747,6 +969,7 @@ def _parse_cases(
     value: object,
     where: str,
     shared: SharedPatterns,
+    import_names: frozenset[str] = frozenset(),
 ) -> Mapping[str, Selection]:
     if value is None:
         return MappingProxyType({})
@@ -762,7 +985,9 @@ def _parse_cases(
             raise ConfigurationError(
                 f"{where}: case names must be flat and must not contain '.': {name!r}"
             )
-        cases[name] = _parse_selection(raw_case, f"{where}.{name}", shared)
+        cases[name] = _parse_selection(
+            raw_case, f"{where}.{name}", shared, import_names
+        )
     return MappingProxyType(cases)
 
 
@@ -770,6 +995,7 @@ def _parse_target(
     value: object,
     where: str,
     shared: SharedPatterns,
+    import_names: frozenset[str] = frozenset(),
 ) -> Target | None:
     if value is None:
         return None
@@ -808,9 +1034,12 @@ def _parse_target(
             {key: value[key] for key in default_keys if key in value},
             where,
             shared,
+            import_names,
         )
 
-    cases = _parse_cases(value.get("case"), f"{where}.case", shared)
+    cases = _parse_cases(
+        value.get("case"), f"{where}.case", shared, import_names
+    )
 
     if default is None and not cases:
         raise ConfigurationError(
@@ -825,6 +1054,7 @@ def _parse_companions(
     shared: SharedPatterns,
     *,
     allow_root_path: bool = False,
+    import_names: frozenset[str] = frozenset(),
 ) -> Mapping[str, Companion]:
     if value is None:
         return MappingProxyType({})
@@ -867,9 +1097,13 @@ def _parse_companions(
             },
             companion_where,
             shared,
+            import_names,
         )
         cases = _parse_cases(
-            raw_companion.get("case"), f"{companion_where}.case", shared
+            raw_companion.get("case"),
+            f"{companion_where}.case",
+            shared,
+            import_names,
         )
         companions[name] = Companion(
             name=name,
@@ -905,12 +1139,26 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
     data = _read_toml(manifest)
     _require_only_keys(data, {"shared", "import", "target", "companion", "output"}, str(manifest))
 
-    shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
-    target = _parse_target(data.get("target"), f"{manifest} [target]", shared)
-    companions = _parse_companions(
-        data.get("companion"), f"{manifest} [companion]", shared
+    import_headers = _parse_import_headers(
+        data.get("import"), f"{manifest} [import]"
     )
-    imports = _parse_imports(data.get("import"), f"{manifest} [import]", shared)
+    import_names = frozenset(import_headers)
+    shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
+    target = _parse_target(
+        data.get("target"), f"{manifest} [target]", shared, import_names
+    )
+    companions = _parse_companions(
+        data.get("companion"),
+        f"{manifest} [companion]",
+        shared,
+        import_names=import_names,
+    )
+    imports = _parse_imports(
+        data.get("import"),
+        f"{manifest} [import]",
+        shared,
+        import_names,
+    )
     if target is None and not companions and not imports:
         raise ConfigurationError(
             f"{manifest}: define [target], at least one [companion.<name>], "
