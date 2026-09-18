@@ -73,6 +73,96 @@ class BuilderTests(unittest.TestCase):
             self.assertIn("a/common/src/module.py", names)
             self.assertIn("b/common/src/module.py", names)
 
+    def test_companion_parent_path_outside_base_uses_resolved_directory_name(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "project"
+            external = workspace / "references"
+            root.mkdir()
+            external.mkdir()
+            (external / "note.txt").write_text("reference", encoding="utf-8")
+            config = self._config(root, '''
+                [companion.references]
+                path = "../references"
+                description = "External references."
+                include = ["note.txt"]
+            ''')
+            sources = resolve_sources(config, BuildRequest.create(), cwd=root)
+            self.assertEqual(len(sources), 1)
+            self.assertEqual(sources[0].directory, external.resolve())
+            self.assertEqual(sources[0].archive_root, "references")
+            plan = plan_archive(config, BuildRequest.create(), cwd=root)
+            self.assertIn("references/note.txt", plan.entries)
+
+    def test_companion_absolute_path_inside_base_preserves_base_relative_archive_root(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            companion = root / "nested" / "references"
+            companion.mkdir(parents=True)
+            (companion / "note.txt").write_text("reference", encoding="utf-8")
+            config = self._config(root, f'''
+                [companion.references]
+                path = {companion.as_posix()!r}
+                description = "References."
+                include = ["note.txt"]
+            ''')
+            source = resolve_sources(config, BuildRequest.create(), cwd=root)[0]
+            self.assertEqual(source.archive_root, "nested/references")
+
+    def test_companion_absolute_path_outside_base_uses_resolved_directory_name(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            external = Path(other) / "references"
+            external.mkdir()
+            (external / "note.txt").write_text("reference", encoding="utf-8")
+            config = self._config(root, f'''
+                [companion.references]
+                path = {external.as_posix()!r}
+                description = "References."
+                include = ["note.txt"]
+            ''')
+            source = resolve_sources(config, BuildRequest.create(), cwd=root)[0]
+            self.assertEqual(source.directory, external.resolve())
+            self.assertEqual(source.archive_root, "references")
+            plan = plan_archive(config, BuildRequest.create(), cwd=root)
+            self.assertIn("references/note.txt", plan.entries)
+
+    def test_external_companion_selection_cannot_escape_its_source_boundary(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            external_root = Path(other)
+            source = external_root / "references"
+            source.mkdir()
+            secret = external_root / "secret.txt"
+            secret.write_text("secret", encoding="utf-8")
+            link = source / "escape.txt"
+            try:
+                link.symlink_to(secret)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+            config = self._config(root, f'''
+                [companion.references]
+                path = {source.as_posix()!r}
+                description = "References."
+                include = ["escape.txt"]
+            ''')
+            with self.assertRaises(SelectionError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+    def test_companion_cannot_use_filesystem_root_as_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            filesystem_root = Path(root.anchor)
+            config = self._config(root, f'''
+                [companion.root]
+                path = {filesystem_root.as_posix()!r}
+                description = "Filesystem root."
+                include_if_exists = ["*"]
+                if_empty = "allow"
+            ''')
+            with self.assertRaisesRegex(SelectionError, "filesystem root"):
+                resolve_sources(config, BuildRequest.create(), cwd=root)
+
     def test_multiple_runtime_targets_use_the_same_target_selection(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -93,8 +183,9 @@ class BuilderTests(unittest.TestCase):
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("project-a/src/module.py", names)
             self.assertIn("project-b/src/module.py", names)
-            self.assertIn("Directory source: CLI input #1", readme)
-            self.assertIn("Directory source: CLI input #2", readme)
+            self.assertIn("| project-a/ | Projects selected for review. | 6 |", readme)
+            self.assertIn("| project-b/ | Projects selected for review. | 6 |", readme)
+            self.assertNotIn("Source", readme.splitlines()[2])
 
 
     def test_all_case_can_reuse_shared_exclude_patterns(self):
@@ -324,8 +415,8 @@ class BuilderTests(unittest.TestCase):
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(set(archive.namelist()), {"README.md", "application/"})
                 readme = archive.read("README.md").decode("utf-8")
-            self.assertIn("Selected files: 0", readme)
-            self.assertIn("Empty result policy: `allow`", readme)
+            self.assertIn("| application/ | Greenfield target. | 0 |", readme)
+            self.assertNotIn("Empty result policy", readme)
 
     def test_dry_run_reports_allowed_empty_target(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -419,8 +510,9 @@ class BuilderTests(unittest.TestCase):
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("application/tests/test_main.py", names)
             self.assertNotIn("application/src/main.py", names)
-            self.assertIn("Case: `review`", readme)
-            self.assertIn("[target.case.review]", readme)
+            self.assertIn("| application/ | Review tests only. | 1 |", readme)
+            self.assertNotIn("Case:", readme)
+            self.assertNotIn("[target", readme)
 
     def test_default_case_uses_target_table(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -439,8 +531,9 @@ class BuilderTests(unittest.TestCase):
             output = build_archive(config, BuildRequest.create("application"), cwd=root)
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
-            self.assertIn("Case: `default`", readme)
-            self.assertIn("[target]", readme)
+            self.assertIn("| application/ | Default source. | 1 |", readme)
+            self.assertNotIn("Case:", readme)
+            self.assertNotIn("[target]", readme)
 
     def test_missing_default_requires_explicit_case(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -515,8 +608,9 @@ class BuilderTests(unittest.TestCase):
             self.assertIn("framework/tests/test_core.py", names)
             self.assertNotIn("framework/src/core.py", names)
             self.assertIn("guidelines/README.md", names)
-            self.assertIn("[companion.framework.case.review]", readme)
-            self.assertIn("[companion.guidelines]", readme)
+            self.assertIn("| framework/ | Framework review material. | 1 |", readme)
+            self.assertIn("| guidelines/ | Guidelines always included. | 1 |", readme)
+            self.assertNotIn("companion", readme.lower())
 
     def test_companion_only_configuration_builds_without_target_directory(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -575,9 +669,10 @@ class BuilderTests(unittest.TestCase):
             self.assertIn("documents/current/now.md", names)
             self.assertIn("documents/history/old.md", names)
             self.assertIn("assets/figure.png", names)
-            self.assertIn("Case: `archive`", readme)
-            self.assertIn("[companion.documents.case.archive]", readme)
-            self.assertIn("[companion.assets]", readme)
+            self.assertIn("| documents/ | Archive documents. | 2 |", readme)
+            self.assertIn("| assets/ | Assets. | 1 |", readme)
+            self.assertNotIn("Case:", readme)
+            self.assertNotIn("companion", readme.lower())
 
     def test_target_presence_and_directory_argument_must_match(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -644,6 +739,79 @@ class BuilderTests(unittest.TestCase):
             sources = resolve_sources(config, BuildRequest.create("application"), cwd=root)
             self.assertEqual([source.key for source in sources], ["target", "companion:one", "companion:two"])
 
+
+    def test_archive_readme_includes_effective_about_description(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "application"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, '''
+                [about]
+                description = "Materials prepared for an authentication review."
+
+                [target]
+                description = "Application sources."
+                include = ["file.txt"]
+            ''')
+            output = build_archive(config, BuildRequest.create("application"), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertTrue(
+                readme.startswith(
+                    "# Archive contents\n\n"
+                    "Materials prepared for an authentication review.\n\n"
+                    "| Path | Description | Files |\n"
+                )
+            )
+
+    def test_about_description_resolves_from_outermost_definition_in_import_chain(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            inner = workspace / "inner"
+            data = inner / "data"
+            root.mkdir()
+            data.mkdir(parents=True)
+            (data / "note.txt").write_text("note", encoding="utf-8")
+            (inner / "dirpluck.toml").write_text(textwrap.dedent('''
+                [about]
+                description = "Imported materials."
+
+                [companion.data]
+                path = "data"
+                description = "Reference data."
+                include = ["note.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            inherited = self._config(root, '''
+                [import.base]
+                root = "../inner"
+                configuration = "dirpluck.toml"
+            ''')
+            output = build_archive(inherited, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("\nImported materials.\n\n| Path |", readme)
+
+            outer = self._config(root, '''
+                [about]
+                description = "Project-specific materials."
+
+                [import.base]
+                root = "../inner"
+                configuration = "dirpluck.toml"
+            ''', output="outer.zip")
+            output = build_archive(outer, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("\nProject-specific materials.\n\n| Path |", readme)
+            self.assertNotIn("Imported materials.", readme)
+
     def test_archive_readme_groups_target_and_companion_for_same_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -667,12 +835,70 @@ class BuilderTests(unittest.TestCase):
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("shikumi-devdoc/src/main.py", names)
             self.assertIn("shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl", names)
-            self.assertEqual(readme.count("### `shikumi-devdoc/`"), 1)
-            self.assertIn("#### Target", readme)
-            self.assertIn("#### Companion `devdoc`", readme)
-            self.assertNotIn("multiple declared purposes", readme)
-            self.assertIn("## Configuration chain", readme)
-            self.assertNotIn("llm", readme.lower())
+            self.assertEqual(readme.count("| shikumi-devdoc/ |"), 2)
+            self.assertIn("The project currently being changed.", readme)
+            self.assertIn("The current built distribution used as a reference.", readme)
+            self.assertNotIn("Target", readme)
+            self.assertNotIn("Companion", readme)
+            self.assertNotIn("Configuration", readme)
+
+    def test_archive_readme_hides_source_paths_by_default(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            (root / "application" / "src").mkdir(parents=True)
+            (root / "application" / "src" / "main.py").write_text("x", encoding="utf-8")
+            outside = Path(other) / "reference"
+            outside.mkdir()
+            (outside / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, f'''
+                [target]
+                description = "Application sources."
+                include = ["src"]
+
+                [companion.reference]
+                path = {outside.as_posix()!r}
+                description = "Reference material."
+                include = ["guide.md"]
+            ''')
+            output = build_archive(config, BuildRequest.create("application"), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertEqual(readme.splitlines()[2], "| Path | Description | Files |")
+            self.assertNotIn(root.as_posix(), readme)
+            self.assertNotIn(outside.as_posix(), readme)
+
+    def test_archive_readme_paths_option_includes_resolved_source_paths(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            target = root / "application"
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "main.py").write_text("x", encoding="utf-8")
+            outside = Path(other) / "reference"
+            outside.mkdir()
+            (outside / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, f'''
+                [target]
+                description = "Application sources."
+                include = ["src"]
+
+                [companion.reference]
+                path = {outside.as_posix()!r}
+                description = "Reference material."
+                include = ["guide.md"]
+            ''')
+            output = build_archive(
+                config,
+                BuildRequest.create("application", paths=True),
+                cwd=root,
+            )
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertEqual(readme.splitlines()[2], "| Path | Description | Files | Source |")
+            self.assertIn(target.resolve().as_posix(), readme)
+            self.assertIn(outside.resolve().as_posix(), readme)
+            self.assertNotIn("Configuration", readme)
+            self.assertNotIn("Target", readme)
+            self.assertNotIn("Companion", readme)
 
     def test_target_outside_cwd_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
@@ -687,12 +913,14 @@ class BuilderTests(unittest.TestCase):
             with self.assertRaises(SelectionError):
                 build_archive(config, BuildRequest.create(outside), cwd=root)
 
-    def test_companion_outside_cwd_through_symlink_is_rejected(self):
+    def test_companion_outside_cwd_through_symlink_is_allowed_and_uses_resolved_name(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
             root = Path(temp)
             (root / "application" / "src").mkdir(parents=True)
+            (root / "application" / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
             outside = Path(other) / "framework"
             (outside / "src").mkdir(parents=True)
+            (outside / "src" / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
             link = root / "framework"
             try:
                 link.symlink_to(outside, target_is_directory=True)
@@ -707,8 +935,13 @@ class BuilderTests(unittest.TestCase):
                 description = "Framework."
                 include = ["src"]
             ''')
-            with self.assertRaises(SelectionError):
-                resolve_sources(config, BuildRequest.create("application"), cwd=root)
+            sources = resolve_sources(config, BuildRequest.create("application"), cwd=root)
+            companion = next(source for source in sources if source.kind == "companion")
+            self.assertEqual(companion.directory, outside.resolve())
+            self.assertEqual(companion.archive_root, "framework")
+            output = build_archive(config, BuildRequest.create("application"), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("framework/src/helper.py", set(archive.namelist()))
 
     def test_recursive_directory_include_rejects_external_directory_symlink(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
@@ -845,6 +1078,68 @@ class BuilderTests(unittest.TestCase):
             )
             self.assertTrue(output.is_file())
 
+    def test_fixed_output_may_use_parent_or_absolute_path(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "project"
+            root.mkdir()
+            project = root / "application" / "src"
+            project.mkdir(parents=True)
+            (project / "main.py").write_text("x", encoding="utf-8")
+
+            parent_config = self._config(root, '''
+                [target]
+                description = "Target."
+                include = ["src"]
+                [output]
+                path = "../parent.zip"
+                if_exists = "error"
+            ''')
+            parent_output = build_archive(
+                parent_config,
+                BuildRequest.create("application"),
+                cwd=root,
+            )
+            self.assertEqual(parent_output, workspace / "parent.zip")
+            self.assertTrue(parent_output.is_file())
+
+            absolute = workspace / "absolute.zip"
+            absolute_config = self._config(root, f'''
+                [target]
+                description = "Target."
+                include = ["src"]
+                [output]
+                path = {absolute.as_posix()!r}
+                if_exists = "error"
+            ''')
+            absolute_output = build_archive(
+                absolute_config,
+                BuildRequest.create("application"),
+                cwd=root,
+            )
+            self.assertEqual(absolute_output, absolute)
+            self.assertTrue(absolute_output.is_file())
+
+    def test_generated_output_may_use_absolute_directory(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            project = root / "application" / "src"
+            project.mkdir(parents=True)
+            (project / "main.py").write_text("x", encoding="utf-8")
+            destination = Path(other) / "snapshots"
+            config = self._config(root, f'''
+                [target]
+                description = "Target."
+                include = ["src"]
+                [output]
+                directory = {destination.as_posix()!r}
+                timestamp = true
+            ''')
+            with patch("dirpluck.builder._current_output_timestamp", return_value="20260916-011623"):
+                output = build_archive(config, BuildRequest.create("application"), cwd=root)
+            self.assertEqual(output, destination / "20260916-011623.zip")
+            self.assertTrue(output.is_file())
+
     def test_generated_output_without_sequence_omits_sequence_segment(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -925,10 +1220,11 @@ class BuilderTests(unittest.TestCase):
                     cwd=root,
                 )
 
-    def test_output_path_cannot_escape_cwd_through_parent_symlink(self):
+    def test_output_path_may_leave_cwd_through_parent_symlink(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
             root = Path(temp)
             (root / "application" / "src").mkdir(parents=True)
+            (root / "application" / "src" / "main.py").write_text("x", encoding="utf-8")
             link = root / "artifacts"
             try:
                 link.symlink_to(Path(other), target_is_directory=True)
@@ -939,8 +1235,9 @@ class BuilderTests(unittest.TestCase):
                 description = "Target."
                 include = ["src"]
             ''', output="artifacts/out.zip")
-            with self.assertRaises(SelectionError):
-                build_archive(config, BuildRequest.create("application"), cwd=root)
+            output = build_archive(config, BuildRequest.create("application"), cwd=root)
+            self.assertEqual(output, Path(other) / "out.zip")
+            self.assertTrue((Path(other) / "out.zip").is_file())
 
 
     def test_imported_target_definition_binds_to_cli_directory(self):
@@ -1058,6 +1355,32 @@ class BuilderTests(unittest.TestCase):
             output = build_archive(config, BuildRequest.create("local"), cwd=root)
             with zipfile.ZipFile(output) as archive:
                 self.assertIn("local/file.txt", set(archive.namelist()))
+
+    def test_import_root_may_be_absolute(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            external = Path(other) / "external"
+            data = external / "data"
+            data.mkdir(parents=True)
+            (data / "note.txt").write_text("note", encoding="utf-8")
+            (external / "dirpluck.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "data"
+                description = "Imported data."
+                include = ["note.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, f'''
+                [import.external]
+                root = {external.as_posix()!r}
+                configuration = "dirpluck.toml"
+            ''')
+            sources = resolve_sources(config, BuildRequest.create(), cwd=root)
+            self.assertEqual(len(sources), 1)
+            self.assertEqual(sources[0].directory, data.resolve())
 
     def test_imported_target_keeps_imported_companions_on_import_execution_root(self):
         with tempfile.TemporaryDirectory() as temp:

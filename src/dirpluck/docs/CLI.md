@@ -3,7 +3,7 @@
 This is the compact CLI reference included in the wheel.
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run]
+dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
@@ -12,6 +12,7 @@ dirpluck --version
 - `--config NAME` selects a Configuration filename from the current working directory or `./dirpluck/`; `.toml` may be omitted.
 - `--case NAME` selects one named Case.
 - `--dry-run` prints the planned ZIP contents without writing an archive.
+- `--paths` adds resolved source filesystem paths to the generated Archive README. Paths are omitted by default.
 - `--sequence N` supplies an explicit positive sequence number for a generated output name. It is not automatic numbering.
 - `--configs` lists Configurations discoverable from the current working directory and exits.
 

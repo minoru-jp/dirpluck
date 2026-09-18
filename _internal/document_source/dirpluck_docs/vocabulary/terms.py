@@ -101,7 +101,7 @@ class TERM_9:
 class TERM_10:
     r"""アーカイブREADME
 
-アーカイブのルートに生成され、解決済みの抽出計画と含まれる source を示す索引文書。"""
+アーカイブのルートに生成され、含まれる内容を示す索引文書。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_10
 

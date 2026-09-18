@@ -188,6 +188,7 @@ class Config:
     """One extraction intent described by a dirpluck configuration file."""
 
     manifest: Path
+    about_description: str | None
     shared: SharedPatterns
     target: Target | None
     companions: Mapping[str, Companion]
@@ -242,8 +243,11 @@ def _string_list(value: object, where: str, *, allow_empty: bool = False) -> tup
 def _normalize_include_pattern(value: str, where: str) -> str:
     if not value:
         raise ConfigurationError(f"{where}: include pattern must not be empty")
-    normalized = value.replace("\\", "/")
-    pure = PurePosixPath(normalized)
+    if "\\" in value:
+        raise ConfigurationError(
+            f"{where}: backslashes are not allowed in include patterns: {value!r}"
+        )
+    pure = PurePosixPath(value)
     if pure.is_absolute() or pure == PurePosixPath(".") or ".." in pure.parts:
         raise ConfigurationError(
             f"{where}: include pattern must stay inside its directory: {value!r}"
@@ -628,59 +632,45 @@ def _materialize_selection(
     )
 
 
-def _validate_fixed_path(
-    path: str,
-    where: str,
-    *,
-    allow_root: bool = False,
-) -> str:
+def _validate_filesystem_location(path: str, where: str, *, label: str) -> str:
+    """Validate one concrete host filesystem location written with '/' separators."""
+
     if not path:
-        raise ConfigurationError(f"{where}: path must not be empty")
-    normalized = path.replace("\\", "/")
-    pure = PurePosixPath(normalized)
-    windows = PureWindowsPath(normalized)
-    if (
-        pure.is_absolute()
-        or windows.is_absolute()
-        or windows.drive
-        or ".." in pure.parts
-        or (pure == PurePosixPath(".") and not allow_root)
-    ):
-        boundary = "at or below" if allow_root else "below"
+        raise ConfigurationError(f"{where}: {label} must not be empty")
+    if "\\" in path:
         raise ConfigurationError(
-            f"{where}: fixed path must name a directory {boundary} the Configuration execution root"
+            f"{where}: backslashes are not allowed in filesystem locations"
         )
-    if glob.has_magic(normalized):
-        raise ConfigurationError(f"{where}: fixed path must name one concrete directory")
+    if glob.has_magic(path):
+        raise ConfigurationError(f"{where}: {label} must name one concrete path")
+
+    pure = PurePosixPath(path)
+    windows = PureWindowsPath(path)
+    host = Path(path)
+    has_non_host_root = (
+        (pure.is_absolute() or bool(windows.drive) or bool(windows.root))
+        and not host.is_absolute()
+    )
+    if has_non_host_root:
+        raise ConfigurationError(
+            f"{where}: absolute-root form is not supported by the host operating system"
+        )
     return pure.as_posix()
+
+
+def _validate_fixed_path(path: str, where: str) -> str:
+    return _validate_filesystem_location(path, where, label="path")
 
 
 def _validate_output_path(path: str, where: str) -> str:
-    if not path:
-        raise ConfigurationError(f"{where}: output path must not be empty")
-    normalized = path.replace("\\", "/")
-    pure = PurePosixPath(normalized)
-    if pure.is_absolute() or pure == PurePosixPath(".") or ".." in pure.parts:
-        raise ConfigurationError(
-            f"{where}: output path must stay below the current working directory"
-        )
-    if glob.has_magic(normalized):
-        raise ConfigurationError(f"{where}: output path must be one concrete path")
-    return pure.as_posix()
+    normalized = _validate_filesystem_location(path, where, label="output path")
+    if PurePosixPath(normalized) == PurePosixPath("."):
+        raise ConfigurationError(f"{where}: output path must name a file")
+    return normalized
 
 
 def _validate_output_directory(path: str, where: str) -> str:
-    if not path:
-        raise ConfigurationError(f"{where}: output directory must not be empty")
-    normalized = path.replace("\\", "/")
-    pure = PurePosixPath(normalized)
-    if pure.is_absolute() or ".." in pure.parts:
-        raise ConfigurationError(
-            f"{where}: output directory must stay inside the current working directory"
-        )
-    if glob.has_magic(normalized):
-        raise ConfigurationError(f"{where}: output directory must be one concrete path")
-    return pure.as_posix()
+    return _validate_filesystem_location(path, where, label="output directory")
 
 
 def _validate_output_fragment(value: object, where: str) -> str | None:
@@ -702,27 +692,19 @@ def _validate_output_fragment(value: object, where: str) -> str | None:
 
 
 def _validate_import_root(path: str, where: str) -> str:
-    if not path:
-        raise ConfigurationError(f"{where}: root must not be empty")
-    normalized = path.replace("\\", "/")
-    pure = PurePosixPath(normalized)
-    windows = PureWindowsPath(normalized)
-    if pure.is_absolute() or windows.is_absolute() or windows.drive:
-        raise ConfigurationError(
-            f"{where}: import root must be a portable relative path"
-        )
-    if glob.has_magic(normalized):
-        raise ConfigurationError(f"{where}: import root must name one concrete directory")
-    return pure.as_posix()
+    return _validate_filesystem_location(path, where, label="import root")
 
 
 def _validate_import_configuration(path: str, where: str) -> str:
     if not path:
         raise ConfigurationError(f"{where}: configuration path must not be empty")
-    normalized = path.replace("\\", "/")
-    pure = PurePosixPath(normalized)
-    windows = PureWindowsPath(normalized)
-    raw_parts = tuple(part for part in normalized.split("/") if part != "")
+    if "\\" in path:
+        raise ConfigurationError(
+            f"{where}: backslashes are not allowed in configuration paths"
+        )
+    pure = PurePosixPath(path)
+    windows = PureWindowsPath(path)
+    raw_parts = tuple(part for part in path.split("/") if part != "")
     if (
         pure.is_absolute()
         or windows.is_absolute()
@@ -732,7 +714,7 @@ def _validate_import_configuration(path: str, where: str) -> str:
         raise ConfigurationError(
             f"{where}: configuration must be a relative TOML path without '.' or '..' traversal"
         )
-    if glob.has_magic(normalized):
+    if glob.has_magic(path):
         raise ConfigurationError(f"{where}: configuration must name one concrete TOML file")
     if pure.suffix != ".toml":
         raise ConfigurationError(f"{where}: configuration must end with '.toml'")
@@ -804,7 +786,6 @@ def _parse_imports(
             raw_import.get("companion"),
             f"{import_where}.companion",
             shared,
-            allow_root_path=True,
         )
 
         imports[name] = ConfigurationImport(
@@ -953,8 +934,6 @@ def _parse_companions(
     value: object,
     where: str,
     shared: SharedPatterns,
-    *,
-    allow_root_path: bool = False,
 ) -> Mapping[str, Companion]:
     if value is None:
         return MappingProxyType({})
@@ -986,9 +965,7 @@ def _parse_companions(
         raw_path = raw_companion.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{companion_where}.path: expected a string")
-        path = _validate_fixed_path(
-            raw_path, f"{companion_where}.path", allow_root=allow_root_path
-        )
+        path = _validate_fixed_path(raw_path, f"{companion_where}.path")
         selection = _parse_selection(
             {
                 key: item
@@ -1013,13 +990,27 @@ def _parse_companions(
 
 
 
+
+def _parse_about(value: object, where: str) -> str | None:
+    """Parse the optional Configuration-level description."""
+
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"{where}: expected a table")
+    _require_only_keys(value, {"description"}, where)
+    if "description" not in value:
+        raise ConfigurationError(f"{where}: description is required when [about] is defined")
+    return _required_description(value["description"], f"{where}.description")
+
 def load_config(path: str | Path = CONFIG_NAME) -> Config:
     """Load one dirpluck configuration file without resolving filesystem paths."""
 
     manifest = Path(path).expanduser().resolve()
     data = _read_toml(manifest)
-    _require_only_keys(data, {"shared", "import", "target", "companion", "output"}, str(manifest))
+    _require_only_keys(data, {"about", "shared", "import", "target", "companion", "output"}, str(manifest))
 
+    about_description = _parse_about(data.get("about"), f"{manifest} [about]")
     _parse_import_headers(data.get("import"), f"{manifest} [import]")
     shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
     target = _parse_target(data.get("target"), f"{manifest} [target]", shared)
@@ -1046,6 +1037,7 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
 
     return Config(
         manifest=manifest,
+        about_description=about_description,
         shared=shared,
         target=target,
         companions=companions,

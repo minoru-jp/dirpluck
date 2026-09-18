@@ -28,6 +28,36 @@ if_exists = "overwrite"
 実行ごとに変わる source がある場合は{{TERM_3}}、Configuration に path を固定する source は{{TERM_5}}として表します。必要に応じて{{TERM_12}}、{{TERM_4}}、{{TERM_13}}を追加します。'''
         vocabulary_refs @= (terms.TERM_3, terms.TERM_4, terms.TERM_5, terms.TERM_12, terms.TERM_13)
 
+    @title("About")
+    class TITLE_202:
+        r'''Configuration 全体の目的や、生成される Archive が何をまとめたものかを説明したい場合は `[about]` を使います。`[about]` 自体は任意です。定義する場合は空でない `description` を1つ持ちます。
+
+```toml
+[about]
+description = "Materials prepared for reviewing the authentication redesign."
+```
+
+この description は生成される Archive README の見出し直下に表示され、各 source の `description` より一段上の説明になります。Import chain では外側の Configuration から内側へ探索し、最初に定義された `[about].description` を使います。Chain 全体に定義がなければ README に全体説明は追加しません。正確な resolution は `SPECIFICATION.md` を参照してください。'''
+
+    @title("Path notation")
+    class TITLE_201:
+        r'''Configuration の filesystem location を表す path は、host OS に関係なく `/` を separator として書きます。Backslash は path separator として使いません。
+
+相対 path は field ごとに定められた基準から解決します。Absolute path は host OS が absolute root として認識する形を `/` separator で記述します。
+
+```text
+# POSIX host
+/opt/company/references
+
+# Windows host
+C:/Users/name/references
+//server/share/references
+```
+
+Absolute path はその場所を直接参照するため、Configuration の portability は低くなります。別の OS の absolute-root notation への変換、`~` expansion、environment-variable interpolation は行いません。
+
+この規則は Companion `path`、import `root`、output `path` / `directory` など filesystem location を表す field に適用します。Include pattern や imported `configuration` のように意図的に relative と定義される field は、それぞれの制約に従います。厳密な validation は `SPECIFICATION.md` を参照してください。'''
+
     @title("Target")
     class TITLE_3:
         r'''Target は実行時に CLI から与える source directory へ同じ選択規則を適用するときに使います。
@@ -51,16 +81,23 @@ Target がない Configuration では positional `DIRECTORY` は使いません�
 
     @title("Companion")
     class TITLE_4:
-        r'''Companion は Configuration 側で source directory を固定するときに使います。
+        r'''Companion は Configuration 側で source directory を固定するときに使います。`path` は relative path と absolute path のどちらでも指定できます。
 
 ```toml
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
 include = ["*.md"]
+
+[companion.company_reference]
+path = "/srv/company/reference"
+description = "Reference material maintained outside this project."
+include = ["*.md"]
 ```
 
-複数の Companion は名前を変えて定義します。Companion だけで完結する Configuration も有効です。'''
+Relative `path` は、その Companion definition に対応する Configuration execution root を基準に解決します。`..` を使ってその root の外を参照することもできます。Absolute `path` は host filesystem 上の場所を直接参照します。いずれの場合も、解決された Companion source directory 自体が selection の境界となり、include や symbolic link を使ってその外へ抜けることはできません。
+
+複数の Companion は名前を変えて定義します。Companion だけで完結する Configuration も有効です。Archive 内での path の決め方や symbolic link の厳密な扱いは `SPECIFICATION.md` を参照してください。'''
 
     @title("Selection")
     class TITLE_5:
@@ -68,7 +105,7 @@ include = ["*.md"]
 
         @title("`description`")
         class TITLE_6:
-            r'''その source が抽出意図の中で果たす役割を書きます。生成される{{TERM_10}}にも使われるため、単なる directory 名ではなく意味を記述してください。
+            r'''その source が抽出意図の中で果たす役割を書きます。生成される{{TERM_10}}では、この description が archive path の意味を説明するために使われます。Target / Companion のような dirpluck 固有の役割名を索引へ補足しないため、単なる directory 名ではなく、受け取る側だけでも内容を理解できる説明を記述してください。
 
 ```toml
 description = "Reference material used to evaluate the submission."
@@ -177,7 +214,7 @@ root = ".."
 configuration = "shikumi/dirpluck.toml"
 ```
 
-`root` はこの import を書いた Configuration file の所在 directory からの相対 path、`configuration` は解決した import root 内の TOML file path です。
+`root` は relative path と absolute path のどちらでも指定できます。Relative `root` はこの import を書いた Configuration file の所在 directory を基準に解決し、absolute `root` は host filesystem 上の場所を直接参照します。`configuration` は解決した import root 内の relative TOML file path のままです。
 
 Import された definition と現在の Configuration の definition から{{TERM_15}}が構成されます。同名 definition がある場合の shadowing、chain、cycle、shared pattern resolution の正確な規則は `SPECIFICATION.md` にまとめています。
 
@@ -206,7 +243,7 @@ path = "artifacts/review.zip"
 if_exists = "overwrite"
 ```
 
-`if_exists` は `"error"` または `"overwrite"` です。ひとつの既知 artifact を更新する用途に向きます。'''
+`path` は cwd 基準の relative path または absolute path を指定できます。`if_exists` は `"error"` または `"overwrite"` です。ひとつの既知 artifact を更新する用途に向きます。'''
 
         @title("Generated output")
         class TITLE_16:
@@ -218,13 +255,16 @@ timestamp = true
 suffix = "snapshot"
 ```
 
-定例 snapshot のように run ごとに artifact を蓄積する用途に向きます。同じ秒に複数 run を意図的に開始する場合は CLI `--sequence N` を使えます。
+`directory` は cwd 基準の relative path または absolute path を指定できます。定例 snapshot のように run ごとに artifact を蓄積する用途に向きます。同じ秒に複数 run を意図的に開始する場合は CLI `--sequence N` を使えます。
 
 Filename layout、collision、concurrent write、inner Configuration の output の扱いは `SPECIFICATION.md` を参照してください。'''
 
     @title("Complete example")
     class TITLE_17:
         r'''```toml
+[about]
+description = "Materials prepared for reviewing the current project."
+
 [shared.exclude_patterns]
 python-dev = [
     ".git/",

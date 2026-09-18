@@ -2,6 +2,20 @@
 
 Release history for dirpluck.
 
+## 0.6.0
+
+Expand filesystem-location support, simplify the Archive README into a distribution-friendly content index, and allow a Configuration to describe the Archive as a whole.
+
+### Changed
+
+- Write Configuration filesystem locations with `/` separators on every OS. Companion `path`, import `root`, and Root output `path` / `directory` now accept absolute paths recognized by the host OS, while relative paths handle `.` / `..` according to each field's base. dirpluck does not translate absolute-root notation from another OS, expand `~`, or interpolate environment variables. Include patterns and imported `configuration` remain relative-only and reject backslashes.
+- Allow a Companion to directly reference any existing source directory, including locations outside its Configuration execution root, through relative `..` or an absolute `path`. The resolved Companion source directory itself remains the selection boundary, so includes and symbolic links cannot escape it. When the Companion lies outside its resolution base, the resolved source directory's final name becomes the Archive root; host absolute paths, drive names, and UNC share names are never embedded in Archive paths.
+- Replace the Archive-root `README.md` resolution report with a simple content index. By default it records only `Path`, `Description`, and `Files`, omitting dirpluck-specific details such as Target / Companion roles, Case, Configuration chain, execution roots, and source filesystem paths. CLI `--paths` adds a `Source` column containing each resolved source directory.
+
+### Added
+
+- Add optional `[about].description`. Across a Configuration chain, the first value found from the outermost layer inward becomes the effective description. When present, it is shown directly below the Archive README heading and before the content index; when absent across the whole chain, no overall description is emitted.
+
 ## 0.5.2
 
 Reorganize the public documentation by purpose, make the glossary the conceptual foundation of the documentation set, and keep only the minimal runtime references in the wheel.

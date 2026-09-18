@@ -8,7 +8,7 @@ Rather than copying everything around a workspace like a backup, it is intended 
 
 ### Gather fixed material from several locations
 
-When files for one purpose live in different directories, they can be fixed in a Configuration as Companions.
+When files for one purpose live in different directories, they can be fixed in a Configuration as Companions. A Companion source directory does not need to live near the Configuration and may directly reference another filesystem location.
 
 For example, a review package can combine proposal material, research results, and legal references, or a recurring workflow can gather the same kinds of material each time. A Configuration may consist entirely of Companions when nothing needs to vary at runtime.
 
@@ -70,7 +70,7 @@ For all Configuration fields and a larger example, see [docs/CONFIGURATION.md](d
 
 ## Installation
 
-Python 3.11 or later is required. The current release is `0.5.2`.
+Python 3.11 or later is required. The current release is `0.6.0`.
 
 ```console
 pip install dirpluck

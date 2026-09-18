@@ -54,7 +54,7 @@ class VOCABULARY:
 
     @term("アーカイブREADME")
     class TERM_10:
-        r'''アーカイブのルートに生成され、解決済みの抽出計画と含まれる source を示す索引文書。'''
+        r'''アーカイブのルートに生成され、含まれる内容を示す索引文書。'''
         glossary @= True
 
     @term("共有パターン")

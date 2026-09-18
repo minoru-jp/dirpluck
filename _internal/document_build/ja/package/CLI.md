@@ -33,7 +33,7 @@
 wheel に同梱する最小 CLI reference です。
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run]
+dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
@@ -42,6 +42,7 @@ dirpluck --version
 - `--config NAME` は cwd と `./dirpluck/` から Configuration filename を選びます。`.toml` は省略できます。
 - `--case NAME` は named Case を1個選びます。
 - `--dry-run` は archive を書き込まず ZIP contents の plan を表示します。
+- `--paths` は生成される Archive README に解決済み source filesystem path を追加します。既定では path を記録しません。
 - `--sequence N` は generated output name の明示的な正整数 sequence です。自動採番ではありません。
 - `--configs` は cwd から検出できる Configuration を一覧表示して終了します。
 

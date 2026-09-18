@@ -57,6 +57,60 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.output.if_exists, "error")
 
 
+
+    def test_about_description_is_optional_and_parsed_when_present(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            without_about = load_config(self._write(root, '''
+                [target]
+                description = "Default."
+                include = ["src"]
+            '''))
+            self.assertIsNone(without_about.about_description)
+
+            with_about = load_config(self._write(root, '''
+                [about]
+                description = "Materials for reviewing the authentication redesign."
+
+                [target]
+                description = "Default."
+                include = ["src"]
+            '''))
+            self.assertEqual(
+                with_about.about_description,
+                "Materials for reviewing the authentication redesign.",
+            )
+
+    def test_about_requires_exactly_one_non_empty_description(self):
+        bodies = (
+            '''
+            [about]
+            [target]
+            description = "Default."
+            include = ["src"]
+            ''',
+            '''
+            [about]
+            description = "   "
+            [target]
+            description = "Default."
+            include = ["src"]
+            ''',
+            '''
+            [about]
+            description = "Summary."
+            title = "Not supported"
+            [target]
+            description = "Default."
+            include = ["src"]
+            ''',
+        )
+        for body in bodies:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                with self.assertRaises(ConfigurationError):
+                    load_config(self._write(root, body))
+
     def test_shared_patterns_expand_into_target_case_and_companion_selections(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -605,21 +659,22 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
-    def test_companion_fixed_path_cannot_escape_cwd(self):
-        for path in ("..", "../framework", ".", "/tmp/framework"):
-            with self.subTest(path=path), tempfile.TemporaryDirectory() as temp:
-                root = Path(temp)
-                manifest = self._write(root, f'''
-                    [target]
-                    description = "Default."
-                    include = ["src"]
-                    [companion.framework]
-                    path = {path!r}
-                    description = "Framework."
-                    include = ["src"]
-                ''')
-                with self.assertRaises(ConfigurationError):
-                    load_config(manifest)
+    def test_companion_path_accepts_dot_parent_and_host_absolute(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            absolute = (root.parent / "framework").as_posix()
+            for path in (".", "..", "../framework", absolute):
+                with self.subTest(path=path):
+                    config = load_config(self._write(root, f'''
+                        [target]
+                        description = "Default."
+                        include = ["src"]
+                        [companion.framework]
+                        path = {path!r}
+                        description = "Framework."
+                        include = ["src"]
+                    '''))
+                    self.assertEqual(config.companions["framework"].path, path)
 
     def test_companion_fixed_path_must_be_concrete(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -634,6 +689,32 @@ class ConfigTests(unittest.TestCase):
                 include = ["src"]
             ''')
             with self.assertRaises(ConfigurationError):
+                load_config(manifest)
+
+    def test_companion_path_rejects_backslash_separator(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, r'''
+                [target]
+                description = "Default."
+                include = ["src"]
+                [companion.framework]
+                path = 'shared\framework'
+                description = "Framework."
+                include = ["src"]
+            ''')
+            with self.assertRaisesRegex(ConfigurationError, "backslashes"):
+                load_config(manifest)
+
+    def test_include_pattern_rejects_backslash_separator(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, r'''
+                [target]
+                description = "Default."
+                include = ['src\package']
+            ''')
+            with self.assertRaisesRegex(ConfigurationError, "backslashes"):
                 load_config(manifest)
 
     def test_companion_owns_exactly_one_selection(self):
@@ -904,9 +985,8 @@ class ConfigTests(unittest.TestCase):
 
     def test_generated_output_directory_and_fragments_are_concrete(self):
         bad_values = (
-            ('directory', '../snapshots'),
-            ('directory', '/tmp/snapshots'),
             ('directory', 'snap*shots'),
+            ('directory', r'snap\shots'),
             ('prefix', 'group/name'),
             ('suffix', 'review?'),
             ('prefix', 'bad\nname'),
@@ -928,8 +1008,24 @@ class ConfigTests(unittest.TestCase):
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
 
-    def test_output_path_must_stay_below_cwd_and_be_concrete(self):
-        for path in ("../out.zip", "/tmp/out.zip", "*.zip", "."):
+    def test_generated_output_directory_accepts_parent_and_host_absolute(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            absolute = (root.parent / "snapshots").as_posix()
+            for directory in ("../snapshots", ".", absolute):
+                with self.subTest(directory=directory):
+                    config = load_config(self._write(root, f'''
+                        [target]
+                        description = "Default."
+                        include = ["src"]
+                        [output]
+                        directory = {directory!r}
+                        timestamp = true
+                    ''', add_output=False))
+                    self.assertEqual(config.output.directory, directory)
+
+    def test_output_path_must_be_concrete_file_path(self):
+        for path in ("*.zip", ".", r"artifacts\out.zip"):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 manifest = self._write(root, f'''
@@ -942,6 +1038,22 @@ class ConfigTests(unittest.TestCase):
                 ''', add_output=False)
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
+
+    def test_output_path_accepts_parent_and_host_absolute(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            absolute = (root.parent / "out.zip").as_posix()
+            for path in ("../out.zip", absolute):
+                with self.subTest(path=path):
+                    config = load_config(self._write(root, f'''
+                        [target]
+                        description = "Default."
+                        include = ["src"]
+                        [output]
+                        path = {path!r}
+                        if_exists = "error"
+                    ''', add_output=False))
+                    self.assertEqual(config.output.path, path)
 
 
     def test_root_configuration_may_contain_only_one_import(self):
@@ -987,15 +1099,13 @@ class ConfigTests(unittest.TestCase):
 
     def test_import_fields_are_strictly_validated(self):
         invalid = (
-            ('root = "/tmp"\nconfiguration = "a.toml"', "absolute root"),
-            ('root = "C:/projects/shikumi"\nconfiguration = "a.toml"', "Windows absolute root"),
             ("root = 'C:\\projects\\shikumi'\nconfiguration = \"a.toml\"", "Windows backslash absolute root"),
             ('root = "C:projects/shikumi"\nconfiguration = "a.toml"', "Windows drive-relative root"),
-            ("root = '//server/share'\nconfiguration = \"a.toml\"", "UNC root"),
             ('root = "../*"\nconfiguration = "a.toml"', "glob root"),
             ('root = ".."\nconfiguration = "../a.toml"', "configuration traversal"),
             ('root = ".."\nconfiguration = "./a.toml"', "configuration dot traversal"),
             ('root = ".."\nconfiguration = "C:/a.toml"', "Windows absolute configuration"),
+            ("root = '..'\nconfiguration = 'nested\\a.toml'", "configuration backslash"),
             ('root = ".."\nconfiguration = "a.txt"', "configuration extension"),
         )
         for body, label in invalid:
@@ -1007,6 +1117,19 @@ class ConfigTests(unittest.TestCase):
                 ''')
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
+
+    def test_import_root_accepts_parent_and_host_absolute(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            absolute = (root.parent / "external").as_posix()
+            for import_root in (".", "..", "../external", absolute):
+                with self.subTest(import_root=import_root):
+                    config = load_config(self._write(root, f'''
+                        [import.other]
+                        root = {import_root!r}
+                        configuration = "a.toml"
+                    '''))
+                    self.assertEqual(config.imports["other"].root, import_root)
 
     def test_import_targets_key_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1057,24 +1180,24 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(companion.selection.description, "External project as a companion.")
             self.assertEqual([pattern.raw for pattern in companion.selection.exclude], ["*.tmp"])
 
-    def test_import_added_companion_path_cannot_escape_import_root(self):
-        invalid_paths = ("..", "../other", "/tmp/other", "C:/other")
-        for path in invalid_paths:
-            with self.subTest(path=path), tempfile.TemporaryDirectory() as temp:
-                root = Path(temp)
-                manifest = self._write(root, f'''
-                    [import.external]
-                    root = "../external"
-                    configuration = "dirpluck.toml"
+    def test_import_added_companion_path_may_leave_import_root(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            absolute = (root.parent / "other").as_posix()
+            for path in ("..", "../other", absolute):
+                with self.subTest(path=path):
+                    config = load_config(self._write(root, f'''
+                        [import.external]
+                        root = "../external"
+                        configuration = "dirpluck.toml"
 
-                    [import.external.companion.project]
-                    path = {path!r}
-                    description = "External project."
-                    include_if_exists = ["*"]
-                    if_empty = "allow"
-                ''')
-                with self.assertRaises(ConfigurationError):
-                    load_config(manifest)
+                        [import.external.companion.project]
+                        path = {path!r}
+                        description = "External project."
+                        include_if_exists = ["*"]
+                        if_empty = "allow"
+                    '''))
+                    self.assertEqual(config.imports["external"].companions["project"].path, path)
 
 
 if __name__ == "__main__":

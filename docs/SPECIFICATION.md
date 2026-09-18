@@ -26,6 +26,7 @@ Configuration imports do not use discovery. Each import explicitly names one rel
 The accepted top-level structures are:
 
 ```text
+[about]
 [shared.include_patterns]
 [shared.exclude_patterns]
 [import.<name>]
@@ -37,13 +38,23 @@ The accepted top-level structures are:
 [output]
 ```
 
-Unknown keys are errors. Each Configuration may contain zero or one `[import.<name>]` and zero or one Target. Companions and Shared patterns are named and may have multiple definitions. Every Configuration contains one `[output]`.
+Unknown keys are errors. `[about]` is optional; when present, it contains only a non-empty `description`. Each Configuration may contain zero or one `[import.<name>]` and zero or one Target. Companions and Shared patterns are named and may have multiple definitions. Every Configuration contains one `[output]`.
 
 A Root Configuration does not need to define a Target or Companion itself if, after import composition, the Effective Configuration contains at least one Target or Companion.
 
-## 4. Configuration import and composition
+## 4. Configuration filesystem path notation
 
-A Configuration import is declared as `[import.<name>]`. `<name>` is a non-empty name used to identify the link in diagnostics and the Archive README; it is not a namespace prefix for Companion or Shared-pattern names.
+TOML fields that identify filesystem locations use `/` as the path separator regardless of the host OS. Backslash is not accepted as a separator.
+
+A relative path is resolved from the base directory defined by that field. An absolute path uses a complete absolute-root form recognized by the host OS, written with `/` separators, and refers directly to that location. Examples include `/opt/data` on a POSIX host, and `C:/data` or `//server/share/data` on a Windows host. `dirpluck` does not translate root notation from another OS. A Windows drive-relative form such as `C:foo` is not treated as an absolute path.
+
+Filesystem-location fields do not perform `~` expansion or environment-variable interpolation and do not accept globs. `.` and `..` are accepted or rejected according to the field-specific rule. A Configuration that uses an absolute path depends on the referenced filesystem and is not guaranteed to be portable across operating systems.
+
+This notation applies to import `root`, ordinary and import-root-overlay Companion `path`, and Root output `path` / `directory`. Values defined separately as relative notation, including imported `configuration`, include patterns, and archive paths, follow their own rules.
+
+## 5. Configuration import and composition
+
+A Configuration import is declared as `[import.<name>]`. `<name>` is a non-empty name used to identify the link in diagnostics; it is not a namespace prefix for Companion or Shared-pattern names.
 
 Each import accepts:
 
@@ -57,13 +68,13 @@ A `case` field is not accepted.
 
 ### `root`
 
-`root` is a relative directory path from the directory containing the Configuration file that declares the import. Empty strings, absolute paths, and globs are rejected. `.` and `..` are allowed, and `/` is the canonical path separator. POSIX absolute paths, Windows drive paths, and UNC paths are rejected regardless of the host OS. The resolved path must be an existing directory.
+`root` is a concrete directory path. Empty strings and globs are rejected. A relative `root` is resolved from the directory containing the Configuration file that declares the import and may use `.` and `..`. An absolute `root` refers directly to a directory on the host filesystem. The resolved path must be an existing directory.
 
-The resolved root becomes the execution root and filesystem boundary for the immediately imported Configuration. A later import in the chain follows the same rule and resolves from the Configuration file that declares that import.
+The resolved root becomes the execution root of the immediately imported Configuration. A later import in the chain uses the Configuration file that declares that import as the base for its relative `root`.
 
 ### `configuration`
 
-`configuration` is a relative TOML file path inside the import root. Empty strings, absolute paths, `..` that escapes the import root, globs, and extensions other than `.toml` are rejected. The result must be an existing regular file inside the import root. Root Configuration discovery is not performed for imports.
+`configuration` is a relative TOML file path from the import root using `/` separators. Empty strings, backslashes, absolute paths, `.` or `..` components, escapes outside the import root, globs, and extensions other than `.toml` are rejected. The resolved path must be an existing regular file inside the import root. Root Configuration discovery is not performed for imports.
 
 ### Linear chain and cycles
 
@@ -74,6 +85,8 @@ During resolution, normalized real paths of Configuration files are tracked as t
 ### Definition resolution
 
 The deepest Configuration provides the initial definitions, then each outer layer is applied in turn to construct the Effective Configuration.
+
+For `[about].description`, resolution searches from the outermost layer inward and uses the first defined value as the effective description. If no layer defines it, the effective description is absent. The `about` table is not treated as a whole-definition shadowing unit; at present this optional value is resolved independently.
 
 - **Target:** an outer Target shadows the entire inner Target.
 - **Companion:** an outer Companion shadows an inner Companion with the same name; differently named Companions remain.
@@ -86,13 +99,13 @@ Shared-pattern references are resolved against the effective namespace after the
 
 ### Import-root Companion overlay
 
-`[import.<name>.companion.<companion-name>]` defines a Companion whose path is anchored at the immediate import root. It uses the ordinary Companion selection schema and permits `path = "."`. Other absolute paths, `..`, and globs are rejected.
+`[import.<name>.companion.<companion-name>]` defines a Companion whose relative `path` is based at the immediate import root. It uses the ordinary Companion selection schema and filesystem-location path notation. A relative `path` may use `.` and `..`; an absolute `path` may name any concrete directory on the host filesystem. Globs are rejected.
 
 The overlay participates in definition resolution as Companion `<companion-name>` from the outer layer and may shadow a same-named Companion from the immediately imported Configuration. A single Configuration layer cannot define both `[companion.x]` and `[import.<name>.companion.x]`.
 
 Each Configuration's `[output]` is schema-validated but is not composed. Only the outermost Root Configuration's output is used by the run.
 
-## 5. Runtime sources and Case
+## 6. Runtime sources and Case
 
 When the Effective Configuration contains a Target, one or more CLI `DIRECTORY` arguments are required regardless of the layer where the Target definition originated. The same Target selection is applied independently to each directory. Every `DIRECTORY` is resolved inside the Root Configuration execution root, which is the process working directory.
 
@@ -100,7 +113,7 @@ The origin Configuration of the Target selection affects definition composition 
 
 When the Effective Configuration has no Target, positional `DIRECTORY` arguments are rejected.
 
-An ordinary Companion `path` is relative to the execution root of the Configuration layer that owns the definition. An import-root overlay Companion is relative to the immediate import root. An inner Companion that survives shadowing retains its inner execution root; a Companion replaced by an outer definition uses the root associated with the outer definition.
+An ordinary Companion relative `path` is resolved from the execution root of the Configuration layer that owns the definition. An import-root overlay Companion relative `path` is resolved from the immediate import root. Both may use `.` and `..`; an absolute `path` refers directly to a directory on the host filesystem without depending on either base. The resolved path must be an existing directory, and the filesystem root itself is rejected as a Companion source. An inner Companion that survives shadowing retains the path base of its inner layer; a Companion replaced by an outer definition uses the base associated with the outer definition.
 
 Zero or one Case is active for the Effective Configuration and is selected through CLI `--case`. There is no field for selecting a different Case per layer.
 
@@ -110,7 +123,7 @@ With a Case selected and a Target present, a same-named `[target.case.<name>]` i
 
 A Case selection is complete rather than a delta from base. It does not inherit include patterns, exclude patterns, or Shared-pattern references from the base selection.
 
-## 6. Selection and Shared patterns
+## 7. Selection and Shared patterns
 
 Every Target or Companion base selection and every Case selection requires a non-empty `description` and at least one include or include-if-exists candidate, whether written directly or supplied through Shared-pattern references.
 
@@ -122,7 +135,7 @@ Shared references are expanded in reference-array order, then direct patterns of
 
 ### Include pattern grammar
 
-An include pattern is a POSIX-form relative path from the source directory. Absolute paths, a pattern consisting of `.`, and traversal through `..` are rejected. Backslashes are normalized to `/` before validation.
+An include pattern is a relative path from the source directory using `/` separators. Absolute paths, `.` or `..` traversal, and backslashes are rejected.
 
 Each path element may contain at most one `*`. The `*` matches zero or more characters within one filesystem entry name and does not cross a path separator, so the number of path levels written in the Configuration is fixed.
 
@@ -152,23 +165,29 @@ name*     prefix
 
 A bare `*`, `*/`, internal wildcards such as `foo*bar`, `**`, `?`, character classes, `!`, backslashes, and path separators are rejected.
 
-## 7. Filesystem boundaries and symbolic links
+## 8. Filesystem boundaries and symbolic links
 
-The execution root and filesystem boundary of the Root Configuration is the process working directory. The execution root of each imported layer is the resolved `[import.<name>].root` that loaded that layer.
+The Root Configuration execution root is the process working directory. The execution root of each imported layer is the resolved `[import.<name>].root` that loaded that layer. An execution root is a resolution base for relative paths, not a universal boundary that constrains every source below it.
 
-An import root is the only path that may establish a new boundary outside the current one. Once a root is established, the imported `configuration`, ordinary Companions owned by that layer, and files selected from those Companions are constrained to the corresponding execution root. Target directories are always resolved from CLI input inside the Root Configuration execution root.
+A Target directory is always resolved from CLI input inside the Root Configuration execution root, and that Target directory becomes its selection boundary. Imported `configuration` remains constrained to the import root. A Companion may resolve any existing directory from a relative or absolute `path`, and the resolved Companion source directory itself becomes its selection boundary. Output locations do not participate in source boundaries.
 
-A source path or selected file that escapes its boundary through a symbolic link is rejected. Directory recursion does not follow directory symlinks. A symlink resolving outside the boundary is an error; a symlink resolving inside it is ignored to prevent cycles and duplicate traversal.
+Include resolution and selected files for each source are constrained to that source directory. A file or directory that escapes the source boundary through a symbolic link is rejected. Directory recursion does not follow directory symlinks. A symlink resolving outside the boundary is an error; a symlink resolving inside it is ignored to prevent cycles and duplicate traversal.
 
-## 8. Archive planning
+## 9. Archive planning
 
-Selected Target files retain their filesystem-relative paths from the Root Configuration execution root inside the ZIP, regardless of the layer where the Target definition originated. Selected Companion files retain paths relative to the execution root associated with their effective Companion definition.
+Selected Target files retain their filesystem-relative paths from the Root Configuration execution root inside the ZIP, regardless of the layer where the Target definition originated.
 
-When the same physical file resolves to the same archive path more than once, it is written once. When different physical files collide on the same archive path, or the same physical file resolves to different archive paths through different execution roots, planning fails with an ambiguity error.
+When a Companion source directory lies inside the resolution base for that Companion's relative path, selected files retain their paths relative to that base as before. When an absolute path or `..` resolves the source directory outside that base, the final directory name of the resolved source becomes the archive root, and selected files are placed below it using paths relative to the source directory. The filesystem root itself is not accepted as a Companion source because it has no portable archive root. The host absolute path, drive, or UNC share name is never embedded in the archive path.
 
-An Archive README is generated as `README.md` at the archive root. It records facts from the resolved plan, including the Configuration chain, execution roots, effective definitions, selected Case, participating sources, descriptions, and selection counts.
+When the same physical file resolves to the same archive path more than once, it is written once. When different physical files collide on the same archive path, or the same physical file resolves to different archive paths through different source mappings, planning fails with an ambiguity error.
 
-## 9. Output
+An Archive README is generated as `README.md` at the archive root. It is a content index, not a dirpluck resolution report. If an effective `[about].description` exists, its text appears immediately below `# Archive contents`, before the index table. If no effective description exists, this overall description is omitted.
+
+By default the table has three columns: `Path`, `Description`, and `Files`. Each resolved source contributes one row containing its archive root, the selected selection `description`, and the number of files selected from that source. If multiple sources share the same archive root, their descriptions remain as separate rows.
+
+By default the index does not record source filesystem paths, Configuration paths or tables, the Configuration chain, execution roots, Target or Companion names, the selected Case, or other dirpluck-specific resolution details. When CLI `--paths` is specified, a `Source` column is added containing each resolved source directory as a filesystem path using `/` separators. `--paths` does not change archive paths or file selection.
+
+## 10. Output
 
 Each Configuration defines either fixed output or generated output. Filesystem resolution, collision checks, directory creation, and writing are performed only for the Root Configuration's output.
 
@@ -180,7 +199,7 @@ path = "artifacts/context.zip"
 if_exists = "error"
 ```
 
-Both `path` and `if_exists` are required. The Root Configuration `path` must be a concrete path below the current working directory. Absolute paths, `..`, and globs are rejected. Missing parent directories are created. An output destination that resolves outside the current working directory through a symbolic link is rejected.
+Both `path` and `if_exists` are required. The Root Configuration `path` must be a concrete file path. A relative path is resolved from the current working directory; an absolute path names a destination directly on the host filesystem. A relative path may use `..`. `.`, globs, and destinations that resolve to directories are rejected. Missing parent directories are created. Output locations have no current-working-directory boundary.
 
 `if_exists` accepts only:
 
@@ -201,7 +220,7 @@ suffix = "review"
 
 `directory` and `timestamp = true` are required. `prefix` and `suffix` are optional. `path` and `if_exists` are not accepted in this form.
 
-The Root Configuration `directory` must be a concrete directory inside the current working directory; `.` may represent the current working directory itself. Absolute paths, `..`, and globs are rejected. Missing directories are created, and symbolic-link escapes outside the current working directory are rejected.
+The Root Configuration `directory` must be a concrete directory path. A relative path is resolved from the current working directory; an absolute path names a directory directly on the host filesystem. A relative path may use `.` and `..`. Globs are rejected. Missing directories are created. Output locations have no current-working-directory boundary.
 
 `prefix` and `suffix` must each be one non-empty portable filename fragment. `.`, `..`, path separators, control characters, and `< > : " | ? *` are rejected.
 
@@ -223,15 +242,15 @@ If the generated filename already exists when checked, the run fails. Generated 
 
 With either output form, the final output file itself cannot be selected as an archive input.
 
-## 10. Dry run
+## 11. Dry run
 
 `--dry-run` uses the same import-chain resolution, cycle detection, definition composition, Target-directory resolution, Case selection, file selection, and archive-planning logic as a normal run, but it does not create or modify output.
 
 A missing required `include` is shown as `[missing]`. A missing optional pattern is shown as `[optional missing]`. A final zero-file selection is shown as `empty, allowed` or `empty, would error` according to policy.
 
-Multiple imports in one Configuration, import cycles, invalid root or configuration paths, unresolved Shared-pattern references, invalid source paths, Case inconsistencies, and comparable validation failures are errors during dry-run as well. Import depth by itself is neither an error nor a warning.
+Multiple imports in one Configuration, import cycles, invalid root or configuration paths, invalid host absolute paths, unresolved Shared-pattern references, invalid source paths, Case inconsistencies, and comparable validation failures are errors during dry-run as well. Import depth by itself is neither an error nor a warning.
 
-## 11. CLI contract
+## 12. CLI contract
 
 The principal accepted forms are:
 
@@ -241,12 +260,13 @@ dirpluck --config NAME
 dirpluck DIRECTORY [DIRECTORY ...] --case NAME
 dirpluck --config NAME --case NAME
 dirpluck ... --dry-run
+dirpluck ... --paths
 dirpluck ... --sequence N
 dirpluck --configs
 dirpluck --version
 ```
 
-`--case` and `--sequence` may each be specified at most once. `--sequence` accepts an integer greater than or equal to 1. `--configs` cannot be combined with `DIRECTORY`, `--case`, `--sequence`, `--config`, or `--dry-run`.
+`--case` and `--sequence` may each be specified at most once. `--sequence` accepts an integer greater than or equal to 1. `--paths` adds the `Source` column to the Archive README produced by a normal build. When combined with `--dry-run`, no Archive is created, so it does not change the displayed tree. `--configs` cannot be combined with `DIRECTORY`, `--case`, `--sequence`, `--config`, `--dry-run`, or `--paths`.
 
 Argument parsing errors and `dirpluck` Configuration or build errors exit with status 2. Successful builds and informational commands exit with status 0. A successful normal build prints the final output path to standard output.
 

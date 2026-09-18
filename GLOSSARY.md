@@ -40,7 +40,7 @@ Configuration describing where the Archive is written and how it is named.
 
 ## Archive README
 
-An index document generated at the root of an Archive that describes the resolved extraction plan and participating sources.
+An index document generated at the root of an Archive that describes its contents.
 
 ## Shared pattern
 

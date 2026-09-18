@@ -64,6 +64,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print the ZIP contents as a tree without creating an archive",
     )
+    parser.add_argument(
+        "--paths",
+        action="store_true",
+        help="include resolved source filesystem paths in the generated archive README",
+    )
     return parser
 
 
@@ -102,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             or args.sequence is not None
             or args.config is not None
             or args.dry_run
+            or args.paths
         ):
             parser.error("--configs cannot be combined with a target or build options")
         print(_render_configs())
@@ -117,7 +123,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config_path = resolve_config_path(args.config)
         config = load_config(config_path)
-        request = BuildRequest.create(*args.directories, case=selected_case, sequence=selected_sequence)
+        request = BuildRequest.create(
+            *args.directories,
+            case=selected_case,
+            sequence=selected_sequence,
+            paths=args.paths,
+        )
         if args.dry_run:
             print(render_archive_tree(plan_archive(config, request, allow_missing=True)))
             return 0

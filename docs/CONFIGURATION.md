@@ -19,6 +19,36 @@ if_exists = "overwrite"
 
 Use a Target for a source that changes from run to run, and a Companion for a source whose path is fixed in the Configuration. Add Shared patterns, Cases, and Configuration imports when they are useful.
 
+## About
+
+Use `[about]` when the Configuration should describe its overall purpose or what the generated Archive represents. The table is optional; when present, it contains one non-empty `description`.
+
+```toml
+[about]
+description = "Materials prepared for reviewing the authentication redesign."
+```
+
+This description appears below the heading in the generated Archive README, above the per-source index. Across an import chain, dirpluck searches from the outermost Configuration inward and uses the first `[about].description` it finds. If none is defined, the README has no overall description. See [SPECIFICATION.md](SPECIFICATION.md) for the exact resolution rule.
+
+## Path notation
+
+Filesystem locations in a Configuration use `/` as the path separator regardless of the host OS. Backslash is not a path separator.
+
+Relative paths are resolved from the base defined for each field. Absolute paths use an absolute-root form recognized by the host OS, written with `/` separators.
+
+```text
+# POSIX host
+/opt/company/references
+
+# Windows host
+C:/Users/name/references
+//server/share/references
+```
+
+An absolute path refers directly to that location, so a Configuration that uses one is less portable. `dirpluck` does not translate absolute-root notation from another OS, expand `~`, or interpolate environment variables.
+
+This notation applies to filesystem-location fields such as Companion `path`, import `root`, and output `path` / `directory`. Fields intentionally defined as relative, such as include patterns and imported `configuration`, retain their own restrictions. See [SPECIFICATION.md](SPECIFICATION.md) for exact validation.
+
 ## Target
 
 Use a Target when the same selection rules should be applied to source directories supplied through the CLI.
@@ -41,16 +71,23 @@ Do not supply positional `DIRECTORY` arguments for a Configuration with no Targe
 
 ## Companion
 
-Use a Companion when the Configuration should fix a source directory.
+Use a Companion when the Configuration should fix a source directory. `path` may be relative or absolute.
 
 ```toml
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
 include = ["*.md"]
+
+[companion.company_reference]
+path = "/srv/company/reference"
+description = "Reference material maintained outside this project."
+include = ["*.md"]
 ```
 
-Define multiple Companions under different names. A Configuration may consist entirely of Companions.
+A relative `path` is resolved from the Configuration execution root associated with that Companion definition. It may use `..` to refer outside that root. An absolute `path` refers directly to a location on the host filesystem. In either case, the resolved Companion source directory itself becomes the selection boundary, so includes and symbolic links cannot escape it.
+
+Define multiple Companions under different names. A Configuration may consist entirely of Companions. See [SPECIFICATION.md](SPECIFICATION.md) for exact archive-path and symbolic-link behavior.
 
 ## Selection
 
@@ -58,7 +95,7 @@ Targets, Companions, and Cases each carry an independent selection. A selection 
 
 ### `description`
 
-Describe the role of the source in the extraction intent. The generated Archive README also uses this text, so describe meaning rather than merely repeating a directory name.
+Describe the role of the source in the extraction intent. The generated Archive README uses this description to explain the meaning of the archive path. Because the index does not add dirpluck-specific role labels such as Target or Companion, write a description that remains understandable to a recipient on its own rather than merely repeating a directory name.
 
 ```toml
 description = "Reference material used to evaluate the submission."
@@ -164,7 +201,7 @@ root = ".."
 configuration = "shikumi/dirpluck.toml"
 ```
 
-`root` is relative to the directory containing the Configuration that declares the import. `configuration` names a TOML file inside the resolved import root.
+`root` may be relative or absolute. A relative `root` is resolved from the directory containing the Configuration that declares the import; an absolute `root` refers directly to a location on the host filesystem. `configuration` remains a relative TOML file path inside the resolved import root.
 
 The imported definitions and the current Configuration are composed into the Effective Configuration. Exact shadowing, chain, cycle, and Shared-pattern resolution rules are in [SPECIFICATION.md](SPECIFICATION.md).
 
@@ -192,7 +229,7 @@ path = "artifacts/review.zip"
 if_exists = "overwrite"
 ```
 
-`if_exists` is either `"error"` or `"overwrite"`. Fixed output suits a workflow that intentionally maintains one known artifact.
+`path` may be relative to the current working directory or absolute. `if_exists` is either `"error"` or `"overwrite"`. Fixed output suits a workflow that intentionally maintains one known artifact.
 
 ### Generated output
 
@@ -204,13 +241,16 @@ timestamp = true
 suffix = "snapshot"
 ```
 
-Generated output suits recurring snapshots and other workflows where each run should accumulate as a separate artifact. If the caller deliberately starts multiple runs in the same second, it may supply CLI `--sequence N`.
+`directory` may be relative to the current working directory or absolute. Generated output suits recurring snapshots and other workflows where each run should accumulate as a separate artifact. If the caller deliberately starts multiple runs in the same second, it may supply CLI `--sequence N`.
 
 For exact filename layout, collision behavior, concurrent-write rules, and the handling of outputs in imported Configurations, see [SPECIFICATION.md](SPECIFICATION.md).
 
 ## Complete example
 
 ```toml
+[about]
+description = "Materials prepared for reviewing the current project."
+
 [shared.exclude_patterns]
 python-dev = [
     ".git/",

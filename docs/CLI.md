@@ -5,7 +5,7 @@ This document explains how to use the `dirpluck` CLI. For TOML authoring, see [C
 ## Basic forms
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run]
+dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
@@ -74,6 +74,18 @@ dirpluck projects/example --dry-run
 
 It is useful after changing a Configuration or workspace and before writing an archive. The major planning steps are shared with a normal run; only the write is omitted. Exact dry-run semantics are in [SPECIFICATION.md](SPECIFICATION.md).
 
+## Source paths in the archive index
+
+The generated Archive README is a compact content index. By default it records only the archive path, the selected `description`, and the number of selected files. It does not record dirpluck-specific details such as Target or Companion roles, Configuration details, the selected Case, or source filesystem paths.
+
+Use `--paths` only when the resolved source directories should also be included in the index.
+
+```console
+dirpluck projects/example --paths
+```
+
+`--paths` adds the resolved source directory to each index row. This can preserve local filesystem information, including absolute paths, in the Archive. Check whether that information is appropriate before using the option for an Archive that will be distributed externally.
+
 ## Sequence for generated output
 
 For a Configuration using generated output, use a positive integer `--sequence N` when the caller deliberately needs to distinguish multiple runs started in the same second.
@@ -101,4 +113,4 @@ A successful normal build prints the final output path to standard output.
 
 - To create or modify a Configuration, read [CONFIGURATION.md](CONFIGURATION.md).
 - To check terminology, read [../GLOSSARY.md](../GLOSSARY.md).
-- For exact import resolution, matching, filesystem boundaries, output collisions, and validation, read [SPECIFICATION.md](SPECIFICATION.md).
+- For exact import resolution, matching, filesystem boundaries, Archive README behavior, output collisions, and validation, read [SPECIFICATION.md](SPECIFICATION.md).

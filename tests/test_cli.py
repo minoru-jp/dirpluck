@@ -165,7 +165,26 @@ class CliTests(unittest.TestCase):
             self.assertIn("app/tests/test_app.py", names)
             self.assertNotIn("app/src/app.py", names)
             self.assertIn("framework/src/core.py", names)
-            self.assertIn("Case: `review`", readme)
+            self.assertIn("| app/ | Review target. | 1 |", readme)
+            self.assertNotIn("Case:", readme)
+
+    def test_paths_adds_source_column_to_archive_readme(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app", "--paths"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertEqual(readme.splitlines()[2], "| Path | Description | Files | Source |")
+            self.assertIn((root / "app").resolve().as_posix(), readme)
+            self.assertIn((root / "framework").resolve().as_posix(), readme)
 
     def test_unknown_case_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -314,8 +333,9 @@ class CliTests(unittest.TestCase):
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("documents/archive/old.md", names)
             self.assertIn("assets/figure.txt", names)
-            self.assertIn("[companion.documents.case.archive]", readme)
-            self.assertIn("[companion.assets]", readme)
+            self.assertIn("| documents/ | Archived documents. | 2 |", readme)
+            self.assertIn("| assets/ | Assets. | 1 |", readme)
+            self.assertNotIn("companion", readme.lower())
 
     def test_case_option_cannot_be_repeated(self):
         stderr = StringIO()
@@ -412,6 +432,23 @@ class CliTests(unittest.TestCase):
                     "        └── core.py",
                 ]),
             )
+
+    def test_paths_can_be_combined_with_dry_run_without_changing_tree_output(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            stdout = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["app", "--dry-run", "--paths"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertFalse((root / "result.zip").exists())
+            self.assertIn("README.md", stdout.getvalue())
+            self.assertNotIn(root.as_posix(), stdout.getvalue())
 
     def test_dry_run_does_not_apply_existing_output_policy(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -548,6 +585,13 @@ class CliTests(unittest.TestCase):
             self.assertIn("snapshot.toml  ./snapshot.toml", text)
             self.assertIn("release.toml  ./dirpluck/release.toml", text)
             self.assertNotIn("pyproject.toml", text)
+
+    def test_configs_rejects_paths_option(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["--configs", "--paths"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--configs cannot be combined", stderr.getvalue())
 
     def test_configs_marks_same_filename_as_ambiguous(self):
         with tempfile.TemporaryDirectory() as temp:

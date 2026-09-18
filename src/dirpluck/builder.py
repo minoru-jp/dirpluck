@@ -27,11 +27,12 @@ from .errors import ConfigurationError, SelectionError
 
 @dataclass(frozen=True)
 class BuildRequest:
-    """One build request with zero or more runtime Targets, one Case, and output sequence."""
+    """One build request with runtime directories, one Case, output sequence, and README options."""
 
     directories: tuple[Path, ...] = ()
     case: str | None = None
     sequence: int | None = None
+    paths: bool = False
 
     @classmethod
     def create(
@@ -39,11 +40,13 @@ class BuildRequest:
         *directories: str | Path,
         case: str | None = None,
         sequence: int | None = None,
+        paths: bool = False,
     ) -> "BuildRequest":
         return cls(
             directories=tuple(Path(directory) for directory in directories),
             case=case,
             sequence=sequence,
+            paths=paths,
         )
 
 
@@ -58,10 +61,6 @@ class ResolvedSource:
     directory: Path
     archive_root: str
     selection: Selection
-    source: str
-    config_location: str
-    config_manifest: Path
-    import_name: str | None
 
     @property
     def label(self) -> str:
@@ -134,6 +133,7 @@ class _EffectiveConfiguration:
 
     root: Config
     layers: tuple[_ConfigurationLayer, ...]
+    about_description: str | None
     shared: SharedPatterns
     target: _TargetBinding | None
     companions: Mapping[str, _CompanionBinding]
@@ -147,12 +147,11 @@ def _is_within(path: Path, root: Path) -> bool:
         return False
 
 
-def _resolve_directory(
+def _resolve_target_directory(
     path: str | Path,
     cwd: Path,
     *,
     label: str,
-    allow_cwd: bool,
 ) -> tuple[Path, str]:
     candidate = Path(path).expanduser()
     if not candidate.is_absolute():
@@ -171,10 +170,6 @@ def _resolve_directory(
         ) from exc
 
     if relative == Path("."):
-        if not allow_cwd:
-            raise SelectionError(
-                f"{label} must name a directory below the Configuration execution root"
-            )
         archive_root = resolved.name
         if not archive_root:
             raise SelectionError(
@@ -184,8 +179,38 @@ def _resolve_directory(
     return resolved, relative.as_posix()
 
 
+def _resolve_companion_directory(
+    path: str | Path,
+    base: Path,
+    *,
+    label: str,
+) -> tuple[Path, str]:
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise SelectionError(f"{label} does not exist: {candidate}") from exc
+    if not resolved.is_dir():
+        raise SelectionError(f"{label} is not a directory: {candidate}")
+    if resolved.parent == resolved:
+        raise SelectionError(f"{label} cannot use the filesystem root as a source directory")
+
+    try:
+        relative = resolved.relative_to(base.resolve())
+    except ValueError:
+        return resolved, resolved.name
+
+    if relative == Path("."):
+        return resolved, resolved.name
+    return resolved, relative.as_posix()
+
+
 def _resolve_import_root(spec: ConfigurationImport, manifest: Path) -> Path:
-    candidate = manifest.parent / Path(spec.root)
+    candidate = Path(spec.root)
+    if not candidate.is_absolute():
+        candidate = manifest.parent / candidate
     try:
         resolved = candidate.resolve(strict=True)
     except FileNotFoundError as exc:
@@ -286,6 +311,10 @@ def _compose_effective_configuration(
     cwd: Path,
 ) -> _EffectiveConfiguration:
     layers = _configuration_chain(config, cwd)
+    about_description = next(
+        (layer.config.about_description for layer in layers if layer.config.about_description is not None),
+        None,
+    )
     shared = _compose_shared(layers)
     target: _TargetBinding | None = None
     companions: dict[str, _CompanionBinding] = {}
@@ -326,6 +355,7 @@ def _compose_effective_configuration(
     effective = _EffectiveConfiguration(
         root=config,
         layers=layers,
+        about_description=about_description,
         shared=shared,
         target=target,
         companions=MappingProxyType(dict(companions)),
@@ -472,11 +502,10 @@ def _resolve_effective_sources(
         target_root = effective.layers[0].execution_root
         seen: set[Path] = set()
         for index, requested in enumerate(request.directories, start=1):
-            directory, archive_root = _resolve_directory(
+            directory, archive_root = _resolve_target_directory(
                 requested,
                 target_root,
                 label=f"target {index}" if target_count > 1 else "target",
-                allow_cwd=True,
             )
             if directory in seen:
                 raise SelectionError(
@@ -485,7 +514,6 @@ def _resolve_effective_sources(
             seen.add(directory)
             key = "target" if target_count == 1 else f"target:{index}"
             name = None if target_count == 1 else archive_root
-            source = f"CLI input #{index}" if target_count > 1 else "CLI input"
             resolved.append(
                 ResolvedSource(
                     key=key,
@@ -495,10 +523,6 @@ def _resolve_effective_sources(
                     directory=directory,
                     archive_root=archive_root,
                     selection=selection,
-                    source=source,
-                    config_location=location,
-                    config_manifest=effective.target.layer.config.manifest,
-                    import_name=effective.target.layer.import_name,
                 )
             )
 
@@ -508,11 +532,10 @@ def _resolve_effective_sources(
             request.case,
             shared=effective.shared,
         )
-        directory, archive_root = _resolve_directory(
+        directory, archive_root = _resolve_companion_directory(
             binding.companion.path,
             binding.execution_root,
             label=f"companion {name!r}",
-            allow_cwd=binding.config_location_prefix.startswith("import."),
         )
         resolved.append(
             ResolvedSource(
@@ -523,10 +546,6 @@ def _resolve_effective_sources(
                 directory=directory,
                 archive_root=archive_root,
                 selection=selection,
-                source=f"fixed path `{binding.companion.path}`",
-                config_location=location,
-                config_manifest=binding.layer.config.manifest,
-                import_name=binding.layer.import_name,
             )
         )
 
@@ -757,80 +776,45 @@ def collect_files(source: ResolvedSource) -> tuple[Path, ...]:
     return select_files(source).files
 
 
-def _display_chain_path(path: Path, root: Path) -> str:
-    try:
-        return path.resolve().relative_to(root.resolve()).as_posix() or "."
-    except ValueError:
-        return str(path.resolve())
+def _archive_index_cell(value: str) -> str:
+    """Escape one value for the generated Markdown index table."""
+
+    return value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>").replace("|", "\\|")
 
 
 def _render_archive_readme(
-    effective: _EffectiveConfiguration,
     request: BuildRequest,
+    about_description: str | None,
     sources: tuple[ResolvedSource, ...],
     selection_counts: Mapping[str, int],
 ) -> str:
-    """Render the archive-root README from the resolved Configuration chain."""
+    """Render the archive-root README as a content index."""
 
-    grouped: dict[str, list[ResolvedSource]] = {}
-    for source in sources:
-        grouped.setdefault(source.archive_root, []).append(source)
+    headers = ["Path", "Description", "Files"]
+    alignments = ["---", "---", "---:"]
+    if request.paths:
+        headers.append("Source")
+        alignments.append("---")
 
-    selected_case = request.case if request.case is not None else "default"
-    root_execution = effective.layers[0].execution_root
-    lines = [
-        "# Archive contents",
-        "",
-        "## Configuration chain",
-        "",
-        f"- Case: `{selected_case}`",
-        "",
-    ]
+    lines = ["# Archive contents", ""]
+    if about_description is not None:
+        lines.extend([about_description, ""])
+    lines.extend([
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(alignments) + " |",
+    ])
 
-    for index, layer in enumerate(effective.layers):
-        label = "Root" if index == 0 else f"Import `{layer.import_name}`"
-        lines.extend([
-            f"### {label}",
-            "",
-            f"- Configuration: `{_display_chain_path(layer.config.manifest, root_execution)}`",
-            f"- Execution root: `{_display_chain_path(layer.execution_root, root_execution)}`",
-            "",
-        ])
+    for source in sorted(sources, key=lambda item: (item.archive_root, item.key)):
+        row = [
+            _archive_index_cell(f"{source.archive_root.rstrip('/')}/"),
+            _archive_index_cell(source.description),
+            str(selection_counts[source.key]),
+        ]
+        if request.paths:
+            row.append(_archive_index_cell(source.directory.as_posix()))
+        lines.append("| " + " | ".join(row) + " |")
 
-    lines.extend(["## Effective definitions", ""])
-    if effective.target is not None:
-        lines.append(
-            "- Target: "
-            f"`{_display_chain_path(effective.target.layer.config.manifest, root_execution)}`"
-        )
-    else:
-        lines.append("- Target: `(none)`")
-    for name in sorted(effective.companions):
-        binding = effective.companions[name]
-        lines.append(
-            f"- Companion `{name}`: "
-            f"`{_display_chain_path(binding.layer.config.manifest, root_execution)}`"
-        )
-    lines.extend(["", "## Included directories", ""])
-
-    for archive_root in sorted(grouped):
-        lines.extend([f"### `{archive_root}/`", ""])
-        source_group = sorted(grouped[archive_root], key=lambda item: item.key)
-        for source in source_group:
-            count = selection_counts[source.key]
-            heading = "#### Target" if source.kind == "target" else f"#### Companion `{source.name}`"
-            lines.extend([heading, "", source.description, ""])
-            lines.extend([
-                f"- Configuration file: `{_display_chain_path(source.config_manifest, root_execution)}`",
-                f"- Configuration table: `{source.config_location}`",
-                f"- Directory source: {source.source}",
-                f"- Selected files: {count}",
-            ])
-            if count == 0:
-                lines.append(f"- Empty result policy: `{source.selection.if_empty}`")
-            lines.append("")
-
-    return "\n".join(lines).rstrip() + "\n"
+    return "\n".join(lines) + "\n"
 
 def plan_archive(
     config: Config,
@@ -899,7 +883,12 @@ def plan_archive(
         and not any(arcname.startswith(f"{status.archive_root}/") for arcname in archive_entries)
     })
 
-    readme = _render_archive_readme(effective, request, sources, selection_counts)
+    readme = _render_archive_readme(
+        request,
+        effective.about_description,
+        sources,
+        selection_counts,
+    )
     return ArchivePlan(
         entries=MappingProxyType(dict(sorted(archive_entries.items()))),
         readme=readme,
@@ -992,21 +981,22 @@ def _resolve_output_path(
             parts.append(str(request.sequence))
         if output.suffix is not None:
             parts.append(output.suffix)
-        candidate = cwd / Path(output.directory) / ("-".join(parts) + ".zip")
+        directory = Path(output.directory)
+        if not directory.is_absolute():
+            directory = cwd / directory
+        candidate = directory / ("-".join(parts) + ".zip")
         if_exists = "error"
     else:
         assert output.path is not None
         assert output.if_exists is not None
-        candidate = cwd / Path(output.path)
+        candidate = Path(output.path)
+        if not candidate.is_absolute():
+            candidate = cwd / candidate
         if_exists = output.if_exists
 
     if candidate.is_symlink():
         raise SelectionError(f"output path must not be a symbolic link: {candidate}")
-    resolved = candidate.resolve(strict=False)
-    if not _is_within(resolved, cwd):
-        raise SelectionError(
-            f"output path must stay below the current working directory: {resolved}"
-        )
+    candidate = candidate.resolve(strict=False)
     if candidate.exists() and candidate.is_dir():
         raise SelectionError(f"output path is a directory: {candidate}")
     return candidate, if_exists
@@ -1041,11 +1031,6 @@ def build_archive(
         output_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise SelectionError(f"cannot create output directory: {output_path.parent}") from exc
-    parent_resolved = output_path.parent.resolve(strict=True)
-    if not _is_within(parent_resolved, cwd_path):
-        raise SelectionError(
-            f"output directory must stay below the current working directory: {parent_resolved}"
-        )
 
     temporary: Path | None = None
     try:

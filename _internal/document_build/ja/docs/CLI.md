@@ -35,7 +35,7 @@
 ## 基本形
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run]
+dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
@@ -104,6 +104,18 @@ dirpluck projects/example --dry-run
 
 Configuration や workspace を変更した後、実際に archive を書き込む前の確認に使えます。通常実行との差分は書き込みだけで、planning に使う主要な解決処理は共通です。正確な dry-run semantics は `SPECIFICATION.md` を参照してください。
 
+## Archive index の source path
+
+生成されるアーカイブREADMEは、既定では archive path、`description`、選択 file 数だけを示す簡潔な索引です。Target / Companion、Configuration、Case など dirpluck 固有の内部情報や、source filesystem path は記録しません。
+
+Source filesystem path も索引へ含めたい場合だけ `--paths` を指定します。
+
+```console
+dirpluck projects/example --paths
+```
+
+`--paths` は各索引行に解決済み source directory を追加します。Absolute path を含むローカル filesystem 情報を archive に残し得るため、外部へ配布する archive では必要性を確認して使用してください。
+
 ## Generated output の sequence
 
 Generated output を使う Configuration で、同じ秒に複数 run を意図的に区別したい場合は正の整数 `--sequence N` を指定できます。
@@ -131,4 +143,4 @@ Archive を生成する通常実行では、成功すると出力 path を標準
 
 - Configuration を新しく書く、または変更する: `CONFIGURATION.md`
 - 用語の意味を確認する: `../GLOSSARY.md`
-- import resolution、matching、filesystem boundary、output collision などを正確に確認する: `SPECIFICATION.md`
+- import resolution、matching、filesystem boundary、Archive README、output collision などを正確に確認する: `SPECIFICATION.md`

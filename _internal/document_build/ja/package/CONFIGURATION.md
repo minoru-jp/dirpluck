@@ -33,6 +33,9 @@
 wheel に同梱する最小 TOML reference です。
 
 ```toml
+[about]
+description = "Materials prepared for reviewing the current project."
+
 [target]
 description = "The project currently under review."
 include_if_exists = ["README.md", "src", "tests"]
@@ -49,11 +52,13 @@ path = "artifacts/review.zip"
 if_exists = "overwrite"
 ```
 
-Target の実 directory は CLI `DIRECTORY` から与えます。Companion は `path` を Configuration に固定します。
+`[about].description` は Archive 全体の任意説明です。Import chain に複数ある場合は outermost から最初に定義された値を使い、生成される Archive README の索引表より前に表示します。
+
+Target の実 directory は CLI `DIRECTORY` から与えます。Companion は `path` を Configuration に固定します。Configuration の filesystem location は `/` を separator として書き、Companion `path` は relative / absolute のどちらでも指定できます。Relative Companion path は対応する Configuration execution root を基準に解決します。
 
 Selection では次を使えます。
 
-- `description`: source / selection の役割。
+- `description`: archive index で内容を説明する source / selection の役割。
 - `include`: 存在を必要とする候補。
 - `include_if_exists`: 不在を許容する候補。
 - `exclude`: 選択済み範囲から除外する名前。
@@ -62,7 +67,7 @@ Selection では次を使えます。
 
 Reusable pattern は `[shared.include_patterns]` / `[shared.exclude_patterns]` に定義します。Named variation は `[target.case.<name>]` / `[companion.<name>.case.<name>]` に完全な selection として定義します。
 
-別の Configuration は次の形で import できます。
+別の Configuration は次の形で import できます。`root` は relative / absolute のどちらでも指定でき、`configuration` は import root 内の relative TOML path です。
 
 ```toml
 [import.base]
@@ -70,7 +75,7 @@ root = ".."
 configuration = "base/dirpluck.toml"
 ```
 
-Output は fixed form のほか、`directory`, `timestamp = true`, optional `prefix` / `suffix` を使う generated form があります。
+Output の `path` / `directory` も relative / absolute のどちらでも指定できます。Fixed form のほか、`directory`, `timestamp = true`, optional `prefix` / `suffix` を使う generated form があります。
 
 ```toml
 [output]

@@ -32,6 +32,20 @@
 
 dirpluck のリリースごとの変更履歴。
 
+## 0.6.0
+
+Filesystem location の表現力を拡張し、Archive README を配布向けの単純な索引へ整理するとともに、Configuration 全体の説明を記述できるようにする。
+
+### Changed
+
+- Configuration の filesystem location は OS にかかわらず `/` separator で記述する。Companion `path`、import `root`、Root output の `path` / `directory` は host OS が認識する absolute path を受理し、relative path では field ごとの基準に従って `.` / `..` を扱う。別 OS の absolute-root notation への変換、`~` expansion、environment-variable interpolation は行わない。Include pattern と imported `configuration` は引き続き relative path に限定し、backslash を拒否する。
+- Companion が Configuration execution root の外側を含む任意の実在 source directory を relative `..` または absolute `path` で直接参照できるようにする。解決済み Companion source directory 自体を selection boundary とし、include や symbolic link からその外へ逸脱することは引き続き拒否する。Resolution base 外の Companion は解決済み source directory の最終 directory name を archive root とし、host の absolute path、drive、UNC share 名を archive path へ埋め込まない。
+- Archive root の `README.md` を dirpluck の resolution report から単純な contents index へ変更する。通常は `Path`、`Description`、`Files` だけを記録し、Target / Companion、Case、Configuration chain、execution root などの dirpluck 固有情報や source filesystem path を含めない。CLI `--paths` を指定した場合だけ `Source` 列を追加して解決済み source directory を記録する。
+
+### Added
+
+- 任意の `[about].description` を追加する。Configuration chain では outermost layer から inward に探索して最初に定義された値を effective description とし、存在する場合は Archive README の見出し直下、contents index の前へ表示する。Chain 全体に定義がない場合は全体説明を省略する。
+
 ## 0.5.2
 
 公開文書体系を用途ごとに再構成し、語彙を概念上の基盤として分離するとともに、wheel には実行時に必要な最小限の参照文書だけを収録する。
