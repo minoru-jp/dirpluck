@@ -76,11 +76,6 @@ jobs:
       - name: Install build tools
         run: python -m pip install build twine
 
-      - name: Verify packaged documents are synchronized
-        shell: bash
-        run: |
-          cmp USAGE.md src/dirpluck/docs/USAGE.md
-
       - name: Build wheel and sdist
         run: python -m build
 

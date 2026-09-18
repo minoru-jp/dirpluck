@@ -2,6 +2,16 @@
 
 Release history for dirpluck.
 
+## 0.5.2
+
+Reorganize the public documentation by purpose, make the glossary the conceptual foundation of the documentation set, and keep only the minimal runtime references in the wheel.
+
+### Changed
+
+- Organize the public documentation as `README.md`, `GLOSSARY.md`, and `CHANGELOG.md` at the repository root, with `docs/CLI.md`, `docs/CONFIGURATION.md`, and `docs/SPECIFICATION.md` for detailed reference. Remove the former `USAGE.md` and split CLI operation from TOML Configuration authoring. README now focuses on use cases and adoption, the Glossary on concepts, and the `docs/` documents on details read as needed.
+- Remove specification details such as cardinality constraints, shadowing rules, path rules, and validation behavior from `GLOSSARY.md`, leaving it as the shared conceptual vocabulary for the documentation set. Exact behavior is concentrated in `docs/SPECIFICATION.md`; the CLI and Configuration guides explain only what is needed for their tasks and point to the specification when more detail is required.
+- Replace the wheel's single `dirpluck/docs/USAGE.md` with two compact references: `dirpluck/docs/CLI.md` and `dirpluck/docs/CONFIGURATION.md`. The full Glossary, detailed guides, Specification, canonical documentation sources, and Japanese intermediate documents remain available from the sdist, separating lightweight runtime reference from deeper investigation.
+
 ## 0.5.1
 
 Fix Target binding in the 0.5.0 effective-Configuration model so runtime directories always come from CLI input, independent of the layer that defined the Target.

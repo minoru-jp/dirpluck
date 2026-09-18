@@ -12,25 +12,30 @@ ROOT = Path(__file__).resolve().parents[1]
 JA_BUILD = ROOT / "_internal" / "document_build" / "ja"
 EXPECTED_DOCUMENTS = {
     "README.md",
-    "USAGE.md",
-    "CONFIGURATION.md",
     "GLOSSARY.md",
-    "SPECIFICATION.md",
     "CHANGELOG.md",
+    "docs/CLI.md",
+    "docs/CONFIGURATION.md",
+    "docs/SPECIFICATION.md",
+    "package/CLI.md",
+    "package/CONFIGURATION.md",
 }
 CANONICAL_SOURCE = re.compile(r"正本は `([^`]+)` です。")
 
 
 class DocumentBuildTests(unittest.TestCase):
-    def test_japanese_intermediate_document_names_are_canonical(self):
-        actual = {path.name for path in JA_BUILD.glob("*.md")}
+    def test_japanese_intermediate_document_paths_are_canonical(self):
+        actual = {
+            path.relative_to(JA_BUILD).as_posix()
+            for path in JA_BUILD.rglob("*.md")
+        }
         self.assertEqual(actual, EXPECTED_DOCUMENTS)
-        self.assertNotIn("glossary.md", actual)
+        self.assertNotIn("USAGE.md", actual)
 
     def test_japanese_intermediate_notices_use_portable_canonical_paths(self):
-        for name in sorted(EXPECTED_DOCUMENTS):
-            with self.subTest(document=name):
-                text = (JA_BUILD / name).read_text(encoding="utf-8")
+        for relative in sorted(EXPECTED_DOCUMENTS):
+            with self.subTest(document=relative):
+                text = (JA_BUILD / relative).read_text(encoding="utf-8")
                 match = CANONICAL_SOURCE.search(text)
                 self.assertIsNotNone(match)
                 canonical = match.group(1)

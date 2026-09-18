@@ -10,6 +10,22 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.5.2")
+    class RELEASE_8:
+        r'''公開文書体系を用途ごとに再構成し、語彙を概念上の基盤として分離するとともに、wheel には実行時に必要な最小限の参照文書だけを収録する。'''
+
+        @change(CHANGED)
+        class CHANGE_1:
+            r'''公開文書を `README.md`、`GLOSSARY.md`、`CHANGELOG.md` と `docs/CLI.md`、`docs/CONFIGURATION.md`、`docs/SPECIFICATION.md` に整理する。従来の `USAGE.md` は廃止し、CLI 操作と TOML Configuration の記述方法をそれぞれ専用文書へ分離する。README は用途と導入判断、Glossary は概念、各 `docs/` 文書は必要時に読む詳細という役割を明確にする。'''
+
+        @change(CHANGED)
+        class CHANGE_2:
+            r'''`GLOSSARY.md` から個数制約、shadowing、path 規則、validation などの仕様詳細を外し、文書体系で共有する概念定義に限定する。厳密な挙動は `docs/SPECIFICATION.md` に集約し、CLI と Configuration のガイドでは作業に必要な範囲だけを説明して、より詳細な意味論へは参照を設ける。'''
+
+        @change(CHANGED)
+        class CHANGE_3:
+            r'''wheel の同梱文書を、簡潔な `dirpluck/docs/CLI.md` と `dirpluck/docs/CONFIGURATION.md` の2つへ変更する。完全な Glossary、詳細ガイド、Specification、文書正本、日本語中間文書は sdist から参照できる構成を維持し、実行時の軽量な参照と詳細調査の導線を分離する。'''
+
     @release("0.5.1")
     class RELEASE_7:
         r'''0.5.0 の実効 Target binding を修正し、Target 定義の origin layer に依存せず runtime directory を CLI から受け取る一貫したモデルへ戻す。'''

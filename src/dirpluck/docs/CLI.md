@@ -1,0 +1,24 @@
+# dirpluck CLI Quick Reference
+
+This is the compact CLI reference included in the wheel.
+
+```text
+dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run]
+dirpluck --configs
+dirpluck --version
+```
+
+- Supply one or more `DIRECTORY` arguments when the Effective Configuration has a Target. Supply none when it has no Target.
+- `--config NAME` selects a Configuration filename from the current working directory or `./dirpluck/`; `.toml` may be omitted.
+- `--case NAME` selects one named Case.
+- `--dry-run` prints the planned ZIP contents without writing an archive.
+- `--sequence N` supplies an explicit positive sequence number for a generated output name. It is not automatic numbering.
+- `--configs` lists Configurations discoverable from the current working directory and exits.
+
+```console
+dirpluck projects/example --dry-run
+dirpluck projects/example --case audit
+dirpluck --config snapshot
+```
+
+For the compact TOML reference, see the bundled `CONFIGURATION.md`. For detailed CLI semantics, the Configuration guide, the Glossary, and the Specification, see `docs/CLI.md`, `docs/CONFIGURATION.md`, `GLOSSARY.md`, and `docs/SPECIFICATION.md` in the source distribution for the same release.

@@ -23,10 +23,11 @@ def one(pattern: str) -> Path:
 def check_wheel(path: Path) -> None:
     with ZipFile(path) as archive:
         names = set(archive.namelist())
-        required = {
-            "dirpluck/__init__.py",
-            "dirpluck/docs/USAGE.md",
+        expected_docs = {
+            "dirpluck/docs/CLI.md": ROOT / "src" / "dirpluck" / "docs" / "CLI.md",
+            "dirpluck/docs/CONFIGURATION.md": ROOT / "src" / "dirpluck" / "docs" / "CONFIGURATION.md",
         }
+        required = {"dirpluck/__init__.py", *expected_docs}
         missing = sorted(required - names)
         if missing:
             fail(f"wheel is missing required files: {missing}")
@@ -38,9 +39,6 @@ def check_wheel(path: Path) -> None:
         if forbidden:
             fail(f"wheel contains repository-only files: {forbidden[:10]}")
 
-        expected_docs = {
-            "dirpluck/docs/USAGE.md": ROOT / "USAGE.md",
-        }
         for archive_name, source in expected_docs.items():
             if archive.read(archive_name) != source.read_bytes():
                 fail(f"wheel document differs from repository source: {archive_name}")
@@ -49,7 +47,10 @@ def check_wheel(path: Path) -> None:
             name for name in names if name.startswith("dirpluck/docs/") and name.endswith(".md")
         }
         if wheel_docs != set(expected_docs):
-            fail(f"wheel contains unexpected packaged documents: {sorted(wheel_docs - set(expected_docs))}")
+            fail(
+                "wheel contains unexpected packaged documents: "
+                f"{sorted(wheel_docs - set(expected_docs))}"
+            )
 
 
 def strip_sdist_root(name: str) -> str:
@@ -73,20 +74,24 @@ def check_sdist(path: Path) -> None:
     with tarfile.open(path, "r:gz") as archive:
         members = {strip_sdist_root(member.name): member for member in archive.getmembers()}
         names = set(members)
+        public_documents = {
+            "README.md",
+            "GLOSSARY.md",
+            "CHANGELOG.md",
+            "docs/CLI.md",
+            "docs/CONFIGURATION.md",
+            "docs/SPECIFICATION.md",
+        }
         required = {
             "src/dirpluck/__init__.py",
-            "README.md",
-            "USAGE.md",
-            "CONFIGURATION.md",
-            "GLOSSARY.md",
-            "SPECIFICATION.md",
-            "CHANGELOG.md",
             "pyproject.toml",
             "LICENSE",
+            *public_documents,
         }
         required |= repository_files_under("tests")
         required |= repository_files_under("tools")
         required |= repository_files_under("_internal")
+        required |= repository_files_under("docs")
         missing = sorted(required - names)
         if missing:
             fail(f"sdist is missing required files: {missing}")
@@ -100,7 +105,7 @@ def check_sdist(path: Path) -> None:
         if ".gitignore" in names:
             fail("sdist contains repository-only file: .gitignore")
 
-        for document in ("README.md", "USAGE.md", "CONFIGURATION.md", "GLOSSARY.md", "SPECIFICATION.md", "CHANGELOG.md"):
+        for document in sorted(public_documents):
             extracted = archive.extractfile(members[document])
             if extracted is None or extracted.read() != (ROOT / document).read_bytes():
                 fail(f"sdist document differs from repository source: {document}")

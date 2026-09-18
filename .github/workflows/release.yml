@@ -40,11 +40,6 @@ jobs:
       - name: Run tests
         run: PYTHONPATH=src python -m unittest discover -s tests -v
 
-      - name: Verify packaged documents are synchronized
-        shell: bash
-        run: |
-          cmp USAGE.md src/dirpluck/docs/USAGE.md
-
       - name: Build wheel and sdist
         run: python -m build
 

@@ -1,59 +1,59 @@
 # dirpluck Glossary
 
-Terms used consistently across dirpluck design, implementation, and operation.
+This glossary defines the concepts used consistently across the `dirpluck` documentation and implementation. It defines what the terms mean, not specification details such as cardinality, resolution order, or error conditions.
 
 ## dirpluck
 
-The library itself. dirpluck resolves an optional single Configuration-import chain, composes definitions from the inner layer outward into one effective Configuration, then selects files from the effective Target and Companions and packages them into a ZIP Archive.
+A CLI tool that selects files from sources according to a declared extraction intent and produces a ZIP archive.
 
 ## Configuration file
 
-A TOML file that describes a dirpluck extraction intent. Each file may define zero or one Target, named Companions, named Shared patterns, zero or one Configuration import, and one Output definition. When an import exists, the imported Configuration is resolved first and outer same-named definitions shadow inner definitions. Import depth is unlimited; cycles are rejected.
+A TOML document that describes a `dirpluck` extraction intent.
 
 ## Target
 
-The main source definition, with at most one Target per Configuration. A Target has a base selection and optional named Cases but no fixed path. Across a Configuration chain, an outer Target shadows the inner Target as a whole. Whenever an effective Target exists, one or more CLI `DIRECTORY` values bind its runtime source regardless of which Configuration layer defined it.
+A source definition whose common selection rules are applied to source directories supplied at runtime.
 
 ## Case
 
-A single flat named selection variation applied to the effective Configuration. Cases are complete selections, not deltas from base. Shadowing a Target or Companion replaces that source together with all of its Cases. One CLI `--case` is applied after Configuration layering.
+A named selection definition representing an extraction variation distinct from the base selection.
 
 ## Companion
 
-A fixed source associated with the extraction intent. An ordinary `[companion.<name>]` uses a path relative to the execution root of the layer that defines it. Across a Configuration chain, an outer same-named Companion shadows the inner definition as a whole. `[import.<name>.companion.<name>]` defines a Companion overlay anchored to the immediate import root and participates in the same name resolution.
+A source definition that fixes a source directory in the Configuration and associates it with the same extraction intent.
 
 ## Source directory
 
-The actual directory from which files are extracted. Whenever an effective Target exists, one or more CLI directories are resolved inside the Root Configuration execution root regardless of the Target definition's origin layer. Companion directories come from the fixed path and execution-root context associated with their effective definition. Every source directory must stay inside its corresponding filesystem boundary.
+The actual directory from which files are extracted for a Target or Companion.
 
 ## Extraction
 
-The process of resolving files from the effective Target and Companions. `include` defines required candidates, `include_if_exists` optional candidates, and `exclude` filters names inside selected ranges. Shared-pattern references resolve against the effective include/exclude namespaces after the whole Configuration chain has been layered.
+The process of determining which files from a source directory belong in the Archive according to selection rules.
 
 ## Archive
 
-The ZIP artifact produced by dirpluck. Target-selected files retain paths relative to the Root Configuration execution root; Companion-selected files retain paths relative to the execution root associated with the effective Companion definition. Identical physical files at the same Archive path are written once; path collisions between different files and ambiguous multiple Archive paths for the same physical file are rejected.
+The ZIP artifact produced by `dirpluck` from an extraction result.
 
 ## Output definition
 
-The `[output]` configuration. Only the outermost Root Configuration's Output is used in a run; inner Output definitions are not executed. Fixed output uses a cwd-relative `path` and `if_exists`; generated output uses `directory`, `timestamp = true`, and optional `prefix` / `suffix`.
+Configuration describing where the Archive is written and how it is named.
 
 ## Archive README
 
-The neutral index document generated as `README.md` at the Archive root. It records the resolved Configuration chain, execution roots, effective source definitions, selected Case, descriptions, and selection counts.
+An index document generated at the root of an Archive that describes the resolved extraction plan and participating sources.
 
 ## Shared pattern
 
-A named reusable pattern array. Include patterns live under `[shared.include_patterns]`; exclude patterns under `[shared.exclude_patterns]`. The two namespaces resolve independently from inner to outer, with an outer same-named pattern shadowing the inner one. Selections reference ordinary names, and those references are resolved against the final effective namespace.
+A named reusable set of include or exclude patterns referenced by selection definitions.
 
 ## Configuration import
 
-The mechanism for loading one other dirpluck Configuration as the next inner layer. Each Configuration may declare zero or one `[import.<name>]`. `root` is relative to the Configuration file that declares the import, and `configuration` is a relative TOML path inside that root. Imported Configurations may import again without a depth limit; re-entering a Configuration already on the active chain is a cycle error.
+A mechanism for bringing another Configuration in as an inner layer and composing definitions with it.
 
 ## Root Configuration
 
-The outermost Configuration that starts one dirpluck run. It is selected by normal CLI discovery or `--config NAME`, uses the process cwd as its execution root, may import zero or one inner Configuration, owns the final Output, and resolves CLI `DIRECTORY` values inside its execution root whenever the effective Configuration contains a Target.
+The outermost Configuration that starts one `dirpluck` run.
 
 ## Effective Configuration
 
-The one-run Configuration produced by resolving the import chain from the deepest layer outward and shadowing same-named definitions with outer definitions. It contains at most one Target, at most one Companion per name, and at most one Shared include/exclude pattern per name in their respective namespaces. Output is not layered; the Root Configuration's Output is used.
+The Configuration used for one run after resolving the Root Configuration and its Configuration imports.

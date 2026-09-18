@@ -1,11 +1,9 @@
 include README.md
-include USAGE.md
-include CONFIGURATION.md
 include GLOSSARY.md
-include SPECIFICATION.md
 include CHANGELOG.md
 include LICENSE
 include pyproject.toml
+recursive-include docs *.md
 recursive-include src *.py *.md
 recursive-include tests *.py
 recursive-include tools *.py
