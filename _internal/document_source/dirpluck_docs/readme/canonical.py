@@ -105,28 +105,29 @@ if_exists = "overwrite"
 
 各対象は cwd から見た自身のディレクトリ path をアーカイブ内で保持し、同じ対象選択を使います。ひとつの対象でも複数の対象でも TOML の対象定義を増やす必要はありません。
 
-### 別の設定ファイルが持つコンパニオン定義を取り込む
+### 別の設定ファイルを layer として取り込む
 
-関連プロジェクトが別ディレクトリにあり、そのプロジェクト側ですでに Companion や共有パターンを dirpluck Configuration として管理している場合、その path や pattern 配列を親側へ複製する必要はありません。{{TERM_14}}から{{TERM_13}}として明示的に取り込み、import 先設定の Companion、共有パターン、必要な Companion Case を再利用できます。さらに親側は `[import.<name>.companion.<name>]` で import root 内の追加 source を Companion として定義できます。import 先の Target は使用しません。
+関連プロジェクト側にすでに dirpluck Configuration がある場合、その Target、Companion、共有パターンを親側へ複製せず Configuration layer として取り込めます。
 
 ```toml
-[import.shikumi-stack]
+[import.shikumi]
 root = ".."
 configuration = "shikumi/dirpluck.toml"
-case = "distribution"
-
-[import.shikumi-stack.companion.project]
-path = "shikumi"
-description = "The shikumi project itself."
-include_if_exists = ["*"]
-if_empty = "allow"
 ```
 
-import 配下の Companion は import 先設定由来か親側追加かにかかわらず `<import>.<companion>` の論理名を持ちます。同じ import 内で同名を二重定義することはできません。論理名は Archive path prefix ではありません。
+各 Configuration が持てる import は最大1個です。import 先もさらに1個だけ import できるため、`A -> B -> C` のような linear chain を構成できます。chain の長さには上限を設けず、同じ Configuration file が現在の chain に再登場する循環だけを拒否します。
 
-`root` だけが親の cwd 境界を越えることを明示的に許されます。`root` は{{TERM_14}}自身の所在ディレクトリからの相対 path として解決されるため、実行 cwd が同じでも設定ファイルを `./dirpluck/` に置いた場合はその位置を基準にします。絶対 path は使用しません。import 先ではその root が新しい filesystem boundary になり、利用する Companion と選択ファイルは再びその中に限定されます。親の CLI `--case` や `DIRECTORY` は import 先へ暗黙に伝播せず、import 先の Target と `[output]` も使いません。
+名前解決は最深部から外側へ進みます。Target は各 Configuration で最大1個、Companion と共有パターンは名前付きです。外側に同名定義があれば内側の定義全体を shadow し、異なる名前は共存します。この結果を{{TERM_15}}として実行します。
 
-これにより、別プロジェクトの Companion path と選択規則を親 Configuration へコピーせず再利用しつつ、親固有の追加 source も Target に昇格させず import 名前空間の Companion として明示できます。import 先の共有パターンは `<import>.<pattern>` の修飾名で Root 側の Target、Root Companion、Root 側追加 Companion から参照できます。一方、import 先設定由来 Companion は自身の Configuration の共有パターンをローカル名で使い続け、Root 側の参照によって意味を書き換えません。import は1階層だけで、import 先からさらに別の Configuration を import することはありません。
+たとえば import 先が Target を定義し、親側が Target を定義しなければ import 先 Target が実効 Target になります。親側にも `[target]` があれば親の Target が内側 Target とその Case をまとめて置き換えます。同じ考え方で、同名 Companion や同名共有パターンも外側が置き換えます。
+
+Import 由来 Target が実効 Target になった場合、Target を定義した Configuration が `<project>/dirpluck.toml` または `<project>/dirpluck/<name>.toml` にあれば、その `<project>` を対象ディレクトリとして使えます。これにより、親 Configuration は最小限 `import + output` だけでも構成できます。
+
+`root` は、その import を記述した Configuration file 自身の所在ディレクトリからの相対 path です。絶対 path は使わず、解決した root が直下 layer の filesystem boundary になります。Import chain の各段で同じ規則を繰り返します。
+
+必要なら `[import.<name>.companion.<name>]` で直下 import root を基準にする Companion overlay も定義できます。この定義も最終的には通常の Companion 名で名前解決へ参加します。
+
+Case は layer ごとに別指定せず、Configuration chain を解決した後の{{TERM_15}}へ CLI `--case` から1個だけ適用します。最終出力は親となる{{TERM_14}}の `[output]` だけを使用します。
 
 ### LLM と扱う作業コンテキストを再現可能にする
 
@@ -140,7 +141,7 @@ LLM を使う作業も同じ問題のひとつです。継続的な作業では�
 
 アーカイブを共有したり外部へ渡したりする場合は、広い選択を確認し、そのワークスペースに必要な除外を明示してください。`.git/`、`.env*`、`*.pem`、`*.key` などは典型例ですが、どの名前が秘密情報かを網羅的に判断できる一覧ではありません。{{TERM_1}} 自身が秘密情報を推論して自動除外することはありません。
 
-同じ除外一覧を base と複数ケース、または複数 source から使う場合は、{{TERM_12}}として一度だけ定義できます。共有するのは完全な選択ではなくパターン配列だけで、利用する各選択が名前を明示的に参照します。import した Configuration の共有パターンも `<import>.<pattern>` の修飾名で Root 側から再利用できます。たとえば通常の開発範囲と「ほぼ全部」を含めるケースで同じ除外を使えます。
+同じ除外一覧を base と複数ケース、または複数 source から使う場合は、{{TERM_12}}として一度だけ定義できます。Configuration chain では同じ pattern 名を最深部から外側へ解決し、外側の同名定義が内側を shadow します。利用する Selection は通常の pattern 名を参照し、最終的な{{TERM_15}}で参照先が解決できれば有効です。
 
 ```toml
 [shared.exclude_patterns]
@@ -171,7 +172,7 @@ if_empty = "allow"
 
 ## なぜモデルを意図的に狭くするのか
 
-ここまでの例はすべて、**ひとつの{{TERM_14}}はひとつの最終アーカイブ意図を表す**という同じ主張の別の使い方です。{{TERM_1}} は設定を汎用検索言語や profile 継承の階層へ広げず、抽出判断を局所的で明示的なまま保ちます。同じ設定内では名前付き include / exclude パターン配列を再利用でき、別の設定が持つ Companion と共有パターンは{{TERM_13}}として名前空間付きで明示的に取り込めます。どちらも暗黙の継承や merge ではありません。
+ここまでの例はすべて、**ひとつの{{TERM_14}}はひとつの最終アーカイブ意図を表す**という同じ主張の別の使い方です。{{TERM_1}} は複数 import を持つ graph や profile merge へ広げず、1本の Configuration chain と明示的な shadow 規則だけを使います。
 
 そのため {{TERM_1}} は、どのファイルが重要かを推論したり、最新成果物を選んだり、任意深度を探索したり、source 間の関係を自動で発明したりしません。それらの判断は設定ファイル上に残ります。別の設定を利用する場合も、個々の path を無差別に cwd 外へ開放するのではなく、`[import.<name>]` で利用する Configuration と実行 root を明示します。
 
@@ -181,11 +182,11 @@ if_empty = "allow"
 
 ## モデルの要点
 
-{{TERM_14}}には、自身の source または{{TERM_13}}の少なくとも1個と、ちょうど1個の出力定義があります。**対象**は省略可能な runtime-bound source 定義で、{{TERM_14}}として実行されたときだけ CLI から1個以上のディレクトリを受け取り、同じ対象選択をそれぞれへ適用します。import 先設定の Target は使用しません。TOML に記述する `[target]` 定義は各設定で最大1個です。**コンパニオン**はその設定に割り当てられた実行 root 相対の固定 source で、設定インポートから再利用できます。
+各 Configuration は Target を最大1個、Companion と共有パターンを名前付きで持てます。各 Configuration の import は最大1個で、深さ制限のない linear chain を作れます。dirpluck は chain の内側から外側へ同名定義を shadow し、{{TERM_15}}を作ります。Target は最終的に最大1個、Companion と共有パターンは名前ごとに最大1個です。
 
 **ケース**は設定ファイル全体で共有する1個の平坦な選択 variation です。対象がある場合は対象が選択ケースを定義し、各コンパニオンは同名ケースがあれば使い、なければ base へフォールバックします。対象がない場合は少なくとも1個のコンパニオンがそのケースを定義します。
 
-各 source の選択では必須項目と任意項目を記述します。同じパターン集合を繰り返す場合は{{TERM_12}}として名前を付け、必要な選択から明示的に参照できます。別の Configuration の Companion や共有パターンを再利用する場合は{{TERM_13}}として実行 root、設定 file、必要なら Companion Case を明示します。import 先共有パターンは `<import>.<pattern>` で Root 側から参照します。最終出力は{{TERM_14}}だけが所有し、import 先の Target と `[output]` は使用しません。
+各 source の選択では必須項目と任意項目を記述します。同じ pattern 集合は{{TERM_12}}として名前を付け、Selection から参照します。参照名も Configuration chain 全体で解決されるため、外側 layer は内側 source が使う共有 pattern を提供または override できます。Case は{{TERM_15}}全体へ1個だけ適用し、最終出力は{{TERM_14}}だけが所有します。
 
 TOML の完全な書き方、対象とコンパニオンの形、ケース、選択フィールド、完全な例は `CONFIGURATION.md` を参照してください。matching、設定探索、ファイルシステム境界、アーカイブ、出力、dry-run、エラーの厳密な意味論は `SPECIFICATION.md` に定義します。
 
@@ -193,7 +194,7 @@ TOML の完全な書き方、対象とコンパニオンの形、ケース、選
 
 サポート対象の公開インターフェースは CLI です。
 
-対象を定義する設定では1個以上の `DIRECTORY` を指定します。同じ `[target]` 選択がすべてへ適用されます。
+{{TERM_14}}自身の Target が{{TERM_15}}へ残る場合は1個以上の `DIRECTORY` を指定します。Import 由来 Target が実効 Targetの場合は位置引数を指定しません。
 
 ```console
 {{TERM_1}} DIRECTORY [DIRECTORY ...]
@@ -273,4 +274,4 @@ pip install {{TERM_1}}
 
 wheel にはインストール後の利用時に必要な `USAGE.md` だけを `{{TERM_1}}/docs/` 配下へ収録します。README、CONFIGURATION、SPECIFICATION、GLOSSARY、CHANGELOG、および文書生成設備は sdist またはリポジトリから参照します。
 '''
-    vocabulary_refs @= (terms.TERM_1, terms.TERM_12, terms.TERM_13, terms.TERM_14,)
+    vocabulary_refs @= (terms.TERM_1, terms.TERM_12, terms.TERM_14, terms.TERM_15,)

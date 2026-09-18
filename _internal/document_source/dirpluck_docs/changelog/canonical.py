@@ -1,4 +1,4 @@
-from shikumi_devdoc.norms.changelog import ADDED, canonical, change, changelog, release, vocabulary, vocabulary_refs
+from shikumi_devdoc.norms.changelog import ADDED, CHANGED, canonical, change, changelog, release, vocabulary, vocabulary_refs
 
 from dirpluck_docs.vocabulary import terms
 
@@ -10,11 +10,39 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.5.0")
+    class RELEASE_6:
+        r'''Configuration import を1本の linear layering として一般化し、Target、Companion、共有パターンを import 先から import 元へ同じ名前解決規則で構成できるようにする。'''
+
+        @change(CHANGED)
+        class CHANGE_1:
+            r'''各 Configuration が持てる `[import.<name>]` を最大1個に限定する一方、import 先からさらに1個の Configuration を import する linear chain を許可する。chain の深さには上限を設けず、同じ解決済み Configuration file が現在の chain に再登場した場合だけ循環参照として拒否する。'''
+
+        @change(CHANGED)
+        class CHANGE_2:
+            r'''Configuration chain を最深部から最外側へ解決して{{TERM_15}}を作る。Target は singleton 名 `target`、Companion と{{TERM_12}}は各自の名前で解決し、外側の同名定義が内側の定義全体を shadow する。共有パターン参照は最終的な実効名前空間で解決し、0.4.x の `<import>.<pattern>` 修飾名前空間を名前解決の必須モデルとして扱わない。'''
+            vocabulary_refs @= (terms.TERM_12, terms.TERM_15)
+
+        @change(CHANGED)
+        class CHANGE_3:
+            r'''import chain で最終的に残った Target を実行対象として使用できるようにする。{{TERM_14}}自身の Target が残る場合は従来どおり CLI `DIRECTORY` を束縛し、import 由来 Target が残る場合はその Target を定義した Configuration の project directory を `dirpluck.toml` または `dirpluck/<name>.toml` の配置から解決する。外側 Target が存在する場合は内側 Target とその Case をまとめて shadow する。'''
+            vocabulary_refs @= (terms.TERM_14,)
+
+        @change(CHANGED)
+        class CHANGE_4:
+            r'''Case 選択を import ごとの独立指定から{{TERM_15}}全体への1個の選択へ整理し、`[import.<name>].case` を使用しない。最終的な Target / Companion 定義に対して CLI `--case` を適用し、source が shadow された場合はその source の Case 定義も一緒に置き換える。'''
+            vocabulary_refs @= (terms.TERM_15,)
+
+        @change(CHANGED)
+        class CHANGE_5:
+            r'''最終出力は引き続き{{TERM_14}}自身の `[output]` だけを使用し、import chain 内側の output は実行しない。0.4.x の再帰 import 禁止に伴うバージョン固定エラー文言を廃止し、循環参照は解決 chain を示す version-independent な Configuration error として扱う。'''
+            vocabulary_refs @= (terms.TERM_14,)
+
     @release("0.4.1")
     class RELEASE_5:
         r'''現在のパッケージバージョンを `dirpluck.__version__` に一本化し、文書生成ではそこから生成した外部 JSON context を利用する。'''
 
-        @change(ADDED)
+        @change(CHANGED)
         class CHANGE_1:
             r'''現在のリリース番号を用語集の語彙として保持する方式を廃止する。文書生成用の外部 context JSON は `dirpluck.__version__` から生成し、README など現在バージョンを必要とする文書は `version` context 値を参照する。CHANGELOG の各リリース番号は履歴情報として canonical source に直接記述する。'''
 

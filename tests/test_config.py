@@ -4,14 +4,7 @@ import textwrap
 from types import MappingProxyType
 import unittest
 
-from dirpluck.config import (
-    ExclusionPattern,
-    SharedPatterns,
-    _locally_resolvable_refs,
-    _looks_like_import_qualified_ref,
-    _merge_root_visible_shared,
-    load_config,
-)
+from dirpluck.config import load_config
 from dirpluck.errors import ConfigurationError
 
 
@@ -20,115 +13,6 @@ OUTPUT = '''
 path = "out.zip"
 if_exists = "error"
 '''
-
-
-class SharedNamespaceHelperTests(unittest.TestCase):
-    def test_import_qualified_ref_requires_an_import_namespace_prefix(self):
-        import_names = frozenset({"external", "tooling"})
-        cases = (
-            ("external.python-dev", True),
-            ("tooling.core", True),
-            ("external", False),
-            ("externality.python-dev", False),
-            ("python-dev", False),
-        )
-        for name, expected in cases:
-            with self.subTest(name=name):
-                self.assertEqual(
-                    _looks_like_import_qualified_ref(name, import_names), expected
-                )
-
-    def test_root_visible_shared_qualifies_imported_names_and_keeps_kinds_separate(self):
-        local = SharedPatterns(
-            include=MappingProxyType({"local": ("src",)}),
-            exclude=MappingProxyType({
-                "local": (
-                    ExclusionPattern(
-                        raw="*.tmp", value=".tmp", match="suffix", directory=False
-                    ),
-                )
-            }),
-        )
-        imported = SharedPatterns(
-            include=MappingProxyType({"common": ("docs",)}),
-            exclude=MappingProxyType({
-                "common": (
-                    ExclusionPattern(
-                        raw="*.pyc", value=".pyc", match="suffix", directory=False
-                    ),
-                )
-            }),
-        )
-
-        merged = _merge_root_visible_shared(
-            local, {"external": imported}, where="root [shared]"
-        )
-
-        self.assertEqual(merged.include["local"], ("src",))
-        self.assertEqual(merged.include["external.common"], ("docs",))
-        self.assertEqual(merged.exclude["local"][0].raw, "*.tmp")
-        self.assertEqual(merged.exclude["external.common"][0].raw, "*.pyc")
-
-    def test_root_visible_shared_rejects_local_name_that_collides_with_qualified_import(self):
-        imported_include = SharedPatterns(
-            include=MappingProxyType({"common": ("docs",)}),
-            exclude=MappingProxyType({}),
-        )
-        imported_exclude = SharedPatterns(
-            include=MappingProxyType({}),
-            exclude=MappingProxyType({
-                "common": (
-                    ExclusionPattern(
-                        raw="*.pyc", value=".pyc", match="suffix", directory=False
-                    ),
-                )
-            }),
-        )
-        cases = (
-            (
-                SharedPatterns(
-                    include=MappingProxyType({"external.common": ("src",)}),
-                    exclude=MappingProxyType({}),
-                ),
-                imported_include,
-                "include",
-            ),
-            (
-                SharedPatterns(
-                    include=MappingProxyType({}),
-                    exclude=MappingProxyType({
-                        "external.common": (
-                            ExclusionPattern(
-                                raw="*.tmp",
-                                value=".tmp",
-                                match="suffix",
-                                directory=False,
-                            ),
-                        )
-                    }),
-                ),
-                imported_exclude,
-                "exclude",
-            ),
-        )
-        for local, imported, kind in cases:
-            with self.subTest(kind=kind):
-                with self.assertRaisesRegex(
-                    ConfigurationError, rf"ambiguous shared {kind} pattern name"
-                ):
-                    _merge_root_visible_shared(
-                        local, {"external": imported}, where="root [shared]"
-                    )
-
-    def test_import_qualified_local_name_is_not_resolved_before_import_merge(self):
-        refs = ("plain", "external.common")
-        local = {"plain": object(), "external.common": object()}
-
-        self.assertEqual(
-            _locally_resolvable_refs(refs, local, frozenset({"external"})),
-            ("plain",),
-        )
-
 
 
 class ConfigTests(unittest.TestCase):
@@ -287,23 +171,19 @@ class ConfigTests(unittest.TestCase):
             )
             self.assertEqual(config.target.cases["review"].exclude, ())
 
-    def test_unknown_shared_pattern_reference_is_rejected(self):
-        for field in (
-            "include_pattern_refs",
-            "include_if_exists_pattern_refs",
-            "exclude_pattern_refs",
-        ):
-            with self.subTest(field=field), tempfile.TemporaryDirectory() as temp:
-                root = Path(temp)
-                suffix = '\nif_empty = "allow"' if field == "include_if_exists_pattern_refs" else ""
-                manifest = self._write(root, f'''
-                    [target]
-                    description = "Default."
-                    {field} = ["missing"]
-                    {suffix}
-                ''')
-                with self.assertRaises(ConfigurationError):
-                    load_config(manifest)
+    def test_shared_pattern_reference_may_be_resolved_by_an_outer_layer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, """
+                [target]
+                description = "Default."
+                include_pattern_refs = ["provided-later"]
+            """))
+            self.assertEqual(
+                config.target.default.include_pattern_refs,
+                ("provided-later",),
+            )
+            self.assertEqual(config.target.default.include, ())
 
     def test_shared_include_and_exclude_patterns_use_their_own_grammars(self):
         invalid = (
@@ -339,17 +219,17 @@ class ConfigTests(unittest.TestCase):
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
 
-    def test_duplicate_effective_patterns_from_shared_and_local_are_rejected(self):
+    def test_shared_and_direct_duplicate_checks_are_deferred_to_effective_resolution(self):
         cases = (
-            '''
+            """
                 [shared.include_patterns]
                 common = ["src"]
                 [target]
                 description = "Default."
                 include_pattern_refs = ["common"]
                 include = ["src"]
-            ''',
-            '''
+            """,
+            """
                 [shared.exclude_patterns]
                 common = ["*.pyc"]
                 [target]
@@ -357,13 +237,13 @@ class ConfigTests(unittest.TestCase):
                 include = ["src"]
                 exclude_pattern_refs = ["common"]
                 exclude = ["*.pyc"]
-            ''',
+            """,
         )
         for body in cases:
             with self.subTest(body=body), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
-                with self.assertRaises(ConfigurationError):
-                    load_config(self._write(root, body))
+                config = load_config(self._write(root, body))
+                self.assertIsNotNone(config.target)
 
     def test_if_empty_allow_rejects_required_shared_include_patterns(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -443,11 +323,12 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.target.cases["review"].include, ("tests",))
             self.assertEqual(config.target.cases["review"].exclude, ())
 
-    def test_configuration_requires_at_least_one_source(self):
+    def test_source_less_configuration_parses_for_chain_resolution(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            with self.assertRaises(ConfigurationError):
-                load_config(self._write(root, "", add_output=True))
+            config = load_config(self._write(root, "", add_output=True))
+            self.assertIsNone(config.target)
+            self.assertEqual(dict(config.companions), {})
 
     def test_companion_only_configuration_is_valid(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -798,10 +679,10 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(companion.selection.include, ("src",))
             self.assertEqual(companion.cases["review"].include, ("src", "tests"))
 
-    def test_companion_case_not_defined_by_existing_target_is_rejected(self):
+    def test_companion_case_compatibility_is_deferred_to_effective_configuration(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            manifest = self._write(root, '''
+            config = load_config(self._write(root, """
                 [target]
                 description = "Default."
                 include = ["src"]
@@ -818,9 +699,8 @@ class ConfigTests(unittest.TestCase):
                 [companion.framework.case.release]
                 description = "Release framework."
                 include = ["dist"]
-            ''')
-            with self.assertRaises(ConfigurationError):
-                load_config(manifest)
+            """))
+            self.assertIn("release", config.companions["framework"].cases)
 
     def test_companion_only_configuration_may_define_its_own_cases(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1064,21 +944,46 @@ class ConfigTests(unittest.TestCase):
                     load_config(manifest)
 
 
-    def test_root_configuration_may_contain_only_imports(self):
+    def test_root_configuration_may_contain_only_one_import(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root, '''
+            config = load_config(self._write(root, """
                 [import.shikumi-stack]
                 root = ".."
                 configuration = "shikumi/dirpluck.toml"
-                case = "distribution"
-            '''))
+            """))
             self.assertIsNone(config.target)
             self.assertEqual(dict(config.companions), {})
             imported = config.imports["shikumi-stack"]
             self.assertEqual(imported.root, "..")
             self.assertEqual(imported.configuration, "shikumi/dirpluck.toml")
-            self.assertEqual(imported.case, "distribution")
+
+    def test_configuration_may_not_declare_multiple_imports(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, """
+                [import.first]
+                root = "../first"
+                configuration = "dirpluck.toml"
+
+                [import.second]
+                root = "../second"
+                configuration = "dirpluck.toml"
+            """)
+            with self.assertRaisesRegex(ConfigurationError, "at most one"):
+                load_config(manifest)
+
+    def test_import_case_field_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, """
+                [import.other]
+                root = ".."
+                configuration = "other/dirpluck.toml"
+                case = "release"
+            """)
+            with self.assertRaises(ConfigurationError):
+                load_config(manifest)
 
     def test_import_fields_are_strictly_validated(self):
         invalid = (

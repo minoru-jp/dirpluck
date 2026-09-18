@@ -98,28 +98,29 @@ dirpluck submissions/acme submissions/contoso submissions/globex
 
 Each Root Target keeps its directory path relative to cwd in the Archive and uses the same Target selection. The same Configuration can therefore be reused for one subject or a batch without duplicating the TOML definition.
 
-### Import Companion definitions from another Configuration
+### Layer another Configuration
 
-When a related project lives in another directory and already manages its Companions in a dirpluck Configuration, you do not need to duplicate those paths and patterns in the parent Configuration. A Root Configuration can import that Configuration explicitly and reuse its Companion definitions and, when needed, a Companion Case. The imported Target is not used.
+When a related project already has its own dirpluck Configuration, you can layer that Configuration instead of copying its Target, Companion paths, or Shared patterns into the parent.
 
 ```toml
-[import.shikumi-stack]
+[import.shikumi]
 root = ".."
 configuration = "shikumi/dirpluck.toml"
-case = "distribution"
-
-[import.shikumi-stack.companion.project]
-path = "shikumi"
-description = "The shikumi project itself."
-include_if_exists = ["*"]
-if_empty = "allow"
 ```
 
-Companions under an import use logical names of the form `<import>.<companion>` regardless of whether they come from the imported Configuration or are added by the Root Configuration. The same Companion name cannot be defined twice within one import. Logical names are not Archive-path prefixes.
+Each Configuration may declare at most one import. The imported Configuration may itself import one more, so `A -> B -> C` forms a linear chain. There is no depth limit; only a cycle that re-enters a Configuration file already on the active chain is rejected.
 
-Only `root` is allowed to cross the parent cwd boundary explicitly. It is resolved as a relative path from the directory containing the Root Configuration file itself, so if the Configuration is stored under `./dirpluck/`, that location is the reference point even when the process cwd is unchanged. Absolute paths are not accepted. Once the import root is resolved, it becomes the imported Configuration's filesystem boundary, and the Companions used by the import and their selected files are confined to it again. The parent CLI `--case` and `DIRECTORY` values do not propagate implicitly, and the imported Configuration's Target and `[output]` are not used.
+Name resolution proceeds from the deepest layer outward. Each Configuration may define at most one Target, while Companions and Shared patterns are named. An outer definition with the same name shadows the inner definition as a whole; different names coexist. The result is one effective Configuration.
 
-This lets a parent reuse Companion definitions already declared for another project without copying that project's Companion paths and selection rules into a second Configuration, while still allowing parent-specific extra sources to remain Companions instead of becoming Targets. Shared patterns from an imported Configuration are available to Root-owned selections under qualified names such as `<import>.<pattern>`. Imported-Configuration Companions continue to resolve their own local Shared-pattern names inside the imported Configuration; importing them does not rewrite those references. Imports remain one level deep: an imported Configuration cannot import another Configuration.
+If the imported Configuration defines a Target and the outer layer does not, that Target becomes effective. If the outer layer also defines `[target]`, the outer Target shadows the inner Target together with all of its Cases. The same rule applies to same-named Companions and Shared patterns.
+
+When an imported Target survives resolution, its source directory is inferred from the Configuration location if the file is `<project>/dirpluck.toml` or `<project>/dirpluck/<name>.toml`. This allows a composition Configuration to contain only `import + output`.
+
+`root` is relative to the Configuration file that declares the import, not to the process cwd. Absolute paths are rejected. The resolved root becomes the filesystem boundary of the directly imported layer, and the same rule repeats at every hop in the chain.
+
+If needed, `[import.<name>.companion.<name>]` can still define a Companion whose path is anchored to the immediate import root. That definition participates in the same Companion-name resolution as ordinary Companions.
+
+Cases are not selected independently per layer. After the Configuration chain has been resolved, a single CLI `--case` is applied to the effective Configuration. Only the outermost Root Configuration's `[output]` is used.
 
 ### Keep LLM-assisted work reproducible
 
@@ -133,7 +134,7 @@ When `include` or `include_if_exists` selects a directory, files below that dire
 
 Before sharing an Archive or sending it outside the workspace, review broad selections and add exclusions appropriate to that workspace. `.git/`, `.env*`, `*.pem`, and `*.key` are common examples, but no example list can identify every sensitive file. dirpluck deliberately does not infer which files are secrets or exclude them automatically.
 
-When the same exclusion list is needed by the base selection and several Cases, or by several sources, define it once as a **Shared pattern**. What is shared is only the pattern array, not a complete selection; every selection that uses it names the shared set explicitly. Shared patterns from an imported Configuration can also be reused by the Root Configuration through qualified names such as `<import>.<pattern>`. For example, a normal development selection and an “almost everything” Case can reuse the same exclusions.
+When the same exclusion list is needed by the base selection and several Cases, or by several sources, define it once as a **Shared pattern**. Across a Configuration chain, names are resolved from the deepest layer outward and an outer same-named pattern shadows the inner one. Selections use the ordinary pattern name, and the reference is valid as long as it resolves in the final effective Configuration.
 
 ```toml
 [shared.exclude_patterns]
@@ -164,7 +165,7 @@ Cases do not inherit from the base selection, so `exclude_pattern_refs` must be 
 
 ## Why the model is intentionally narrow
 
-The examples above are different uses of the same claim: **one Root Configuration represents one final Archive intent**. dirpluck keeps extraction decisions local and explicit instead of turning Configuration into a general-purpose search language or a hierarchy of inherited profiles. Within one Configuration, named include/exclude pattern arrays can be reused. Companion definitions owned by another Configuration can be reused explicitly through a Configuration import. Neither mechanism provides implicit inheritance or merging.
+The examples above are different uses of the same claim: **one Root Configuration represents one final Archive intent**. dirpluck does not expand into a graph with multiple imports or a profile-merging system. Instead, it uses one linear Configuration chain and explicit shadowing rules.
 
 dirpluck therefore does not infer which files are important, select the newest artifact, search arbitrary directory depth, or invent relationships between sources. Those decisions stay visible in Configuration. When another Configuration is used, dirpluck does not open arbitrary paths outside cwd for individual sources; `[import.<name>]` explicitly names both the Configuration and the execution root being reused.
 
@@ -174,11 +175,11 @@ Required and optional material are also kept separate. `include` means a match i
 
 ## The model in brief
 
-A **Root Configuration** contains at least one local source or Configuration import and exactly one Output definition. A **Target** is an optional runtime-bound source definition that receives one or more directories from the CLI only when the Configuration is run as the Root Configuration. The same Target selection is applied to every supplied directory. An imported Configuration's Target is not used. Each Configuration still contains at most one `[target]` definition. A **Companion** is a fixed source whose path is relative to the execution root assigned to that Configuration, and its definition can be reused through a Configuration import.
+Each Configuration may define at most one Target and may define named Companions and Shared patterns. Each Configuration may also import at most one other Configuration, forming a linear chain with no depth limit. dirpluck resolves same-named definitions from the deepest layer outward, with outer definitions shadowing inner ones, and produces one effective Configuration. The effective Configuration contains at most one Target and at most one Companion or Shared pattern for each name.
 
-A **Case** is one flat selection variation within a Configuration. When a Target exists, it must define the selected Case; each Companion may define the same Case and otherwise falls back to its base selection. Without a Target, a Case is valid when at least one Companion defines it. Cases do not propagate between the Root Configuration and imports.
+A **Case** is one flat selection variation shared by the effective Configuration. When a Target exists, it must define the selected Case; each Companion uses the same-named Case when present and otherwise falls back to its base selection. Without a Target, at least one Companion must define the selected Case.
 
-Selections describe required and optional entries inside each source. Repeated pattern sets may be given Shared pattern names and referenced explicitly from the selections that need them. To reuse Companions or Shared patterns from another Configuration, use a **Configuration import** and explicitly declare its execution root, Configuration file, and, when needed, a Companion Case. Imported Shared patterns are referenced from Root-owned selections as `<import>.<pattern>`. Only the Root Configuration owns the final Output; an imported Configuration's Target and `[output]` are not used.
+Selections describe required and optional entries inside each source. Repeated pattern sets may be given Shared pattern names and referenced explicitly from the selections that need them. Shared-pattern references are resolved across the Configuration chain, so an outer layer may provide or override a pattern used by an inner source. One Case is selected for the effective Configuration, and only the Root Configuration owns the final Output.
 
 For the complete TOML authoring guide, including Target and Companion forms, Cases, selection fields, and full examples, see [CONFIGURATION.md](CONFIGURATION.md). For exact matching, discovery, filesystem-boundary, Archive, Output, dry-run, and error semantics, see [SPECIFICATION.md](SPECIFICATION.md).
 
@@ -186,7 +187,7 @@ For the complete TOML authoring guide, including Target and Companion forms, Cas
 
 The supported public interface is the CLI.
 
-When the selected Configuration defines a Target, supply one or more directories. Every directory uses the same `[target]` selection:
+When the Root Configuration's own Target survives into the effective Configuration, supply one or more `DIRECTORY` values. When an imported Target is effective, do not supply a positional directory.
 
 ```console
 dirpluck DIRECTORY [DIRECTORY ...]
@@ -238,7 +239,7 @@ There are intentionally no CLI options that temporarily replace selection rules 
 
 ## Installation
 
-Python 3.11 or later is required. Current release: `0.4.1`.
+Python 3.11 or later is required. Current release: `0.5.0`.
 
 ```console
 pip install dirpluck

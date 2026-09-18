@@ -18,8 +18,8 @@ from .config import (
     ExclusionPattern,
     Selection,
     SharedPatterns,
+    Target,
     _materialize_selection,
-    _merge_root_visible_shared,
     load_config,
 )
 from .errors import ConfigurationError, SelectionError
@@ -60,6 +60,7 @@ class ResolvedSource:
     selection: Selection
     source: str
     config_location: str
+    config_manifest: Path
     import_name: str | None
 
     @property
@@ -98,6 +99,44 @@ class ArchivePlan:
     optional_missing: tuple[str, ...] = ()
     empty_directories: tuple[str, ...] = ()
     empty_selections: tuple[EmptySelectionStatus, ...] = ()
+
+
+@dataclass(frozen=True)
+class _ConfigurationLayer:
+    """One loaded Configuration and the execution root established for it."""
+
+    config: Config
+    execution_root: Path
+    import_name: str | None
+
+
+@dataclass(frozen=True)
+class _TargetBinding:
+    """The effective Target together with the layer that owns it."""
+
+    target: Target
+    layer: _ConfigurationLayer
+
+
+@dataclass(frozen=True)
+class _CompanionBinding:
+    """One effective Companion plus the root against which its path is resolved."""
+
+    companion: Companion
+    layer: _ConfigurationLayer
+    execution_root: Path
+    config_location_prefix: str
+
+
+@dataclass(frozen=True)
+class _EffectiveConfiguration:
+    """Definitions remaining after one linear Configuration chain is layered."""
+
+    root: Config
+    layers: tuple[_ConfigurationLayer, ...]
+    shared: SharedPatterns
+    target: _TargetBinding | None
+    companions: Mapping[str, _CompanionBinding]
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -145,228 +184,6 @@ def _resolve_directory(
     return resolved, relative.as_posix()
 
 
-def _available_cases(config: Config) -> tuple[str, ...]:
-    if config.target is not None:
-        return tuple(sorted(config.target.cases))
-    return tuple(sorted({
-        case
-        for companion in config.companions.values()
-        for case in companion.cases
-    }))
-
-
-def _validate_request(config: Config, request: BuildRequest) -> None:
-    if request.sequence is not None:
-        if isinstance(request.sequence, bool) or not isinstance(request.sequence, int) or request.sequence < 1:
-            raise SelectionError("output sequence must be an integer greater than or equal to 1")
-        if not config.output.generated:
-            raise SelectionError("output sequence can only be used with generated output")
-
-    if config.target is None:
-        if request.directories:
-            raise SelectionError(
-                "the configuration does not define [target]; DIRECTORY must not be specified"
-            )
-    elif not request.directories:
-        raise SelectionError(
-            "the configuration defines [target]; DIRECTORY is required (one or more may be specified)"
-        )
-
-    if request.case is None:
-        return
-
-    available = _available_cases(config)
-    if request.case not in available:
-        listed = ", ".join(available) or "(none)"
-        raise SelectionError(
-            f"case {request.case!r} is not defined; available cases: {listed}"
-        )
-
-
-def _selected_target(
-    config: Config,
-    case: str | None,
-    *,
-    shared: SharedPatterns,
-) -> tuple[Selection, str] | None:
-    target = config.target
-    if target is None:
-        return None
-
-    if case is None:
-        if target.default is None:
-            available = ", ".join(sorted(target.cases)) or "(none)"
-            raise SelectionError(
-                "the configuration has no default [target]; "
-                f"specify --case NAME (available: {available})"
-            )
-        return _materialize_selection(target.default, shared, "[target]"), "[target]"
-
-    try:
-        selection = target.cases[case]
-    except KeyError as exc:
-        available = ", ".join(sorted(target.cases)) or "(none)"
-        raise SelectionError(
-            f"case {case!r} is not defined for target; available cases: {available}"
-        ) from exc
-    location = f"[target.case.{case}]"
-    return _materialize_selection(selection, shared, location), location
-
-
-def _selected_companion(
-    companion: Companion,
-    case: str | None,
-    *,
-    shared: SharedPatterns,
-    config_location_prefix: str = "companion",
-) -> tuple[Selection, str]:
-    if case is not None and case in companion.cases:
-        location = f"[{config_location_prefix}.{companion.name}.case.{case}]"
-        return _materialize_selection(companion.cases[case], shared, location), location
-    location = f"[{config_location_prefix}.{companion.name}]"
-    return _materialize_selection(companion.selection, shared, location), location
-
-
-def _available_companion_cases(
-    companions: Mapping[str, Companion],
-) -> tuple[str, ...]:
-    return tuple(sorted({
-        case
-        for companion in companions.values()
-        for case in companion.cases
-    }))
-
-
-def _validate_import_companion_case(
-    imported: Mapping[str, Companion],
-    added: Mapping[str, Companion],
-    case: str | None,
-) -> None:
-    if case is None:
-        return
-    available = tuple(sorted(set(_available_companion_cases(imported)) | set(_available_companion_cases(added))))
-    if case not in available:
-        listed = ", ".join(available) or "(none)"
-        raise SelectionError(
-            f"case {case!r} is not defined for any companion in the import namespace; "
-            f"available companion cases: {listed}"
-        )
-
-
-def _resolve_companion_sources(
-    companions: Mapping[str, Companion],
-    case: str | None,
-    *,
-    execution_root: Path,
-    shared: SharedPatterns,
-    key_prefix: str = "",
-    import_name: str | None = None,
-    config_location_prefix: str = "companion",
-    allow_execution_root: bool = False,
-) -> tuple[ResolvedSource, ...]:
-    resolved_sources: list[ResolvedSource] = []
-    for name, companion in companions.items():
-        selection, config_location = _selected_companion(
-            companion,
-            case,
-            shared=shared,
-            config_location_prefix=config_location_prefix,
-        )
-        logical_name = name if import_name is None else f"{import_name}.{name}"
-        directory, archive_root = _resolve_directory(
-            companion.path,
-            execution_root,
-            label=f"companion {logical_name!r}",
-            allow_cwd=allow_execution_root,
-        )
-        resolved_sources.append(
-            ResolvedSource(
-                key=f"{key_prefix}companion:{name}",
-                kind="companion",
-                name=logical_name,
-                description=selection.description,
-                directory=directory,
-                archive_root=archive_root,
-                selection=selection,
-                source=f"fixed path `{companion.path}`",
-                config_location=config_location,
-                import_name=import_name,
-            )
-        )
-    return tuple(resolved_sources)
-
-
-def _resolve_configuration_sources(
-    config: Config,
-    request: BuildRequest,
-    *,
-    execution_root: Path,
-    shared: SharedPatterns,
-    key_prefix: str = "",
-    import_name: str | None = None,
-) -> tuple[ResolvedSource, ...]:
-    """Resolve Target and Companion sources for one Configuration execution root."""
-
-    _validate_request(config, request)
-    resolved_sources: list[ResolvedSource] = []
-
-    selected_target = _selected_target(config, request.case, shared=shared)
-    if selected_target is not None:
-        target_selection, target_location = selected_target
-        target_count = len(request.directories)
-        seen_target_directories: set[Path] = set()
-        for index, requested_directory in enumerate(request.directories, start=1):
-            target_directory, target_archive_root = _resolve_directory(
-                requested_directory,
-                execution_root,
-                label=f"target {index}" if target_count > 1 else "target",
-                allow_cwd=True,
-            )
-            if target_directory in seen_target_directories:
-                raise SelectionError(
-                    f"target directories must resolve to distinct directories: {target_directory}"
-                )
-            seen_target_directories.add(target_directory)
-            local_key = "target" if target_count == 1 else f"target:{index}"
-            if import_name is None:
-                source_text = f"CLI input #{index}" if target_count > 1 else "CLI input"
-                source_name = None if target_count == 1 else target_archive_root
-            else:
-                source_text = (
-                    f"import `{import_name}` target #{index}"
-                    if target_count > 1
-                    else f"import `{import_name}` target"
-                )
-                source_name = None if target_count == 1 else target_archive_root
-            resolved_sources.append(
-                ResolvedSource(
-                    key=f"{key_prefix}{local_key}",
-                    kind="target",
-                    name=source_name,
-                    description=target_selection.description,
-                    directory=target_directory,
-                    archive_root=target_archive_root,
-                    selection=target_selection,
-                    source=source_text,
-                    config_location=target_location,
-                    import_name=import_name,
-                )
-            )
-
-    resolved_sources.extend(
-        _resolve_companion_sources(
-            config.companions,
-            request.case,
-            execution_root=execution_root,
-            shared=shared,
-            key_prefix=key_prefix,
-            import_name=import_name,
-        )
-    )
-
-    return tuple(resolved_sources)
-
-
 def _resolve_import_root(spec: ConfigurationImport, manifest: Path) -> Path:
     candidate = manifest.parent / Path(spec.root)
     try:
@@ -398,16 +215,379 @@ def _load_imported_config(spec: ConfigurationImport, import_root: Path) -> Confi
         )
 
     try:
-        imported = load_config(resolved)
+        return load_config(resolved)
     except ConfigurationError as exc:
         raise ConfigurationError(
             f"import {spec.name!r} configuration is invalid: {exc}"
         ) from exc
-    if imported.imports:
+
+
+def _single_import(config: Config) -> ConfigurationImport | None:
+    if not config.imports:
+        return None
+    if len(config.imports) != 1:
+        # load_config already rejects this; keep the invariant explicit here.
         raise ConfigurationError(
-            f"import {spec.name!r} configuration must not declare [import.<name>] in 0.4.0"
+            f"{config.manifest}: each Configuration may define at most one import"
         )
-    return imported
+    return next(iter(config.imports.values()))
+
+
+def _configuration_chain(config: Config, cwd: Path) -> tuple[_ConfigurationLayer, ...]:
+    """Load one unbounded linear import chain and reject cycles by real path."""
+
+    layers: list[_ConfigurationLayer] = []
+    active_paths: list[Path] = []
+    current = config
+    execution_root = cwd
+    import_name: str | None = None
+
+    while True:
+        manifest = current.manifest.resolve()
+        if manifest in active_paths:
+            start = active_paths.index(manifest)
+            cycle = [*active_paths[start:], manifest]
+            rendered = " -> ".join(str(path) for path in cycle)
+            raise ConfigurationError(f"configuration import cycle detected: {rendered}")
+
+        active_paths.append(manifest)
+        layers.append(
+            _ConfigurationLayer(
+                config=current,
+                execution_root=execution_root,
+                import_name=import_name,
+            )
+        )
+
+        spec = _single_import(current)
+        if spec is None:
+            break
+        execution_root = _resolve_import_root(spec, current.manifest)
+        current = _load_imported_config(spec, execution_root)
+        import_name = spec.name
+
+    return tuple(layers)
+
+
+def _compose_shared(layers: tuple[_ConfigurationLayer, ...]) -> SharedPatterns:
+    include: dict[str, tuple[str, ...]] = {}
+    exclude: dict[str, tuple[ExclusionPattern, ...]] = {}
+    for layer in reversed(layers):
+        include.update(layer.config.shared.include)
+        exclude.update(layer.config.shared.exclude)
+    return SharedPatterns(
+        include=MappingProxyType(include),
+        exclude=MappingProxyType(exclude),
+    )
+
+
+def _compose_effective_configuration(
+    config: Config,
+    cwd: Path,
+) -> _EffectiveConfiguration:
+    layers = _configuration_chain(config, cwd)
+    shared = _compose_shared(layers)
+    target: _TargetBinding | None = None
+    companions: dict[str, _CompanionBinding] = {}
+
+    # Start at the deepest layer; each outer definition then shadows by name.
+    for index in range(len(layers) - 1, -1, -1):
+        layer = layers[index]
+        current = layer.config
+        if current.target is not None:
+            target = _TargetBinding(current.target, layer)
+
+        for name, companion in current.companions.items():
+            companions[name] = _CompanionBinding(
+                companion=companion,
+                layer=layer,
+                execution_root=layer.execution_root,
+                config_location_prefix="companion",
+            )
+
+        spec = _single_import(current)
+        if spec is not None:
+            if index + 1 >= len(layers):
+                raise AssertionError("import link has no loaded child layer")
+            import_root = layers[index + 1].execution_root
+            for name, companion in spec.companions.items():
+                companions[name] = _CompanionBinding(
+                    companion=companion,
+                    layer=layer,
+                    execution_root=import_root,
+                    config_location_prefix=f"import.{spec.name}.companion",
+                )
+
+    if target is None and not companions:
+        raise ConfigurationError(
+            f"{config.manifest}: the resolved Configuration chain defines no Target or Companion"
+        )
+
+    effective = _EffectiveConfiguration(
+        root=config,
+        layers=layers,
+        shared=shared,
+        target=target,
+        companions=MappingProxyType(dict(companions)),
+    )
+    _validate_effective_configuration(effective)
+    return effective
+
+
+def _validate_target_selections(binding: _TargetBinding, shared: SharedPatterns) -> None:
+    target = binding.target
+    if target.default is not None:
+        _materialize_selection(target.default, shared, "[target]")
+    for name, selection in target.cases.items():
+        _materialize_selection(selection, shared, f"[target.case.{name}]")
+
+
+def _validate_companion_selections(
+    binding: _CompanionBinding,
+    shared: SharedPatterns,
+) -> None:
+    companion = binding.companion
+    prefix = binding.config_location_prefix
+    _materialize_selection(companion.selection, shared, f"[{prefix}.{companion.name}]")
+    for name, selection in companion.cases.items():
+        _materialize_selection(
+            selection,
+            shared,
+            f"[{prefix}.{companion.name}.case.{name}]",
+        )
+
+
+def _validate_effective_configuration(effective: _EffectiveConfiguration) -> None:
+    if effective.target is not None:
+        _validate_target_selections(effective.target, effective.shared)
+        target_cases = set(effective.target.target.cases)
+        for name, binding in effective.companions.items():
+            unreachable = sorted(set(binding.companion.cases) - target_cases)
+            if unreachable:
+                listed = ", ".join(repr(case) for case in unreachable)
+                raise ConfigurationError(
+                    f"effective [companion.{name}.case]: case(s) not defined by target: {listed}"
+                )
+    for binding in effective.companions.values():
+        _validate_companion_selections(binding, effective.shared)
+
+
+def _available_cases(effective: _EffectiveConfiguration) -> tuple[str, ...]:
+    if effective.target is not None:
+        return tuple(sorted(effective.target.target.cases))
+    return tuple(sorted({
+        case
+        for binding in effective.companions.values()
+        for case in binding.companion.cases
+    }))
+
+
+def _validate_request(
+    effective: _EffectiveConfiguration,
+    request: BuildRequest,
+) -> None:
+    output = effective.root.output
+    if request.sequence is not None:
+        if isinstance(request.sequence, bool) or not isinstance(request.sequence, int) or request.sequence < 1:
+            raise SelectionError("output sequence must be an integer greater than or equal to 1")
+        if not output.generated:
+            raise SelectionError("output sequence can only be used with generated output")
+
+    if effective.target is None:
+        if request.directories:
+            raise SelectionError(
+                "the effective Configuration does not define a Target; DIRECTORY must not be specified"
+            )
+    elif effective.target.layer is effective.layers[0]:
+        if not request.directories:
+            raise SelectionError(
+                "DIRECTORY is required when the Root Configuration's Target is effective (one or more may be specified)"
+            )
+    elif request.directories:
+        raise SelectionError(
+            "the effective Target comes from an imported Configuration; DIRECTORY must not be specified"
+        )
+
+    if request.case is None:
+        return
+    available = _available_cases(effective)
+    if request.case not in available:
+        listed = ", ".join(available) or "(none)"
+        raise SelectionError(
+            f"case {request.case!r} is not defined; available cases: {listed}"
+        )
+
+
+def _selected_target(
+    binding: _TargetBinding,
+    case: str | None,
+    *,
+    shared: SharedPatterns,
+) -> tuple[Selection, str]:
+    target = binding.target
+    if case is None:
+        if target.default is None:
+            available = ", ".join(sorted(target.cases)) or "(none)"
+            raise SelectionError(
+                "the effective Target has no default [target]; "
+                f"specify --case NAME (available: {available})"
+            )
+        return _materialize_selection(target.default, shared, "[target]"), "[target]"
+
+    try:
+        selection = target.cases[case]
+    except KeyError as exc:
+        available = ", ".join(sorted(target.cases)) or "(none)"
+        raise SelectionError(
+            f"case {case!r} is not defined for target; available cases: {available}"
+        ) from exc
+    location = f"[target.case.{case}]"
+    return _materialize_selection(selection, shared, location), location
+
+
+def _selected_companion(
+    binding: _CompanionBinding,
+    case: str | None,
+    *,
+    shared: SharedPatterns,
+) -> tuple[Selection, str]:
+    companion = binding.companion
+    prefix = binding.config_location_prefix
+    if case is not None and case in companion.cases:
+        location = f"[{prefix}.{companion.name}.case.{case}]"
+        return _materialize_selection(companion.cases[case], shared, location), location
+    location = f"[{prefix}.{companion.name}]"
+    return _materialize_selection(companion.selection, shared, location), location
+
+
+def _infer_imported_target_project(binding: _TargetBinding) -> tuple[Path, str]:
+    manifest = binding.layer.config.manifest.resolve()
+    execution_root = binding.layer.execution_root.resolve()
+    if manifest.name == "dirpluck.toml":
+        project = manifest.parent
+    elif manifest.suffix == ".toml" and manifest.parent.name == "dirpluck":
+        project = manifest.parent.parent
+    else:
+        raise ConfigurationError(
+            "effective imported Target project cannot be inferred from Configuration path: "
+            f"{manifest}; expected <project>/dirpluck.toml or <project>/dirpluck/<name>.toml"
+        )
+    if not project.is_dir() or not _is_within(project, execution_root):
+        raise ConfigurationError(
+            f"effective imported Target project must stay inside its execution root: {project}"
+        )
+    directory, archive_root = _resolve_directory(
+        project,
+        execution_root,
+        label="effective imported target",
+        allow_cwd=True,
+    )
+    return directory, archive_root
+
+
+def _resolve_effective_sources(
+    effective: _EffectiveConfiguration,
+    request: BuildRequest,
+) -> tuple[ResolvedSource, ...]:
+    _validate_request(effective, request)
+    resolved: list[ResolvedSource] = []
+
+    if effective.target is not None:
+        selection, location = _selected_target(
+            effective.target,
+            request.case,
+            shared=effective.shared,
+        )
+        if effective.target.layer is effective.layers[0]:
+            target_count = len(request.directories)
+            seen: set[Path] = set()
+            for index, requested in enumerate(request.directories, start=1):
+                directory, archive_root = _resolve_directory(
+                    requested,
+                    effective.target.layer.execution_root,
+                    label=f"target {index}" if target_count > 1 else "target",
+                    allow_cwd=True,
+                )
+                if directory in seen:
+                    raise SelectionError(
+                        f"target directories must resolve to distinct directories: {directory}"
+                    )
+                seen.add(directory)
+                key = "target" if target_count == 1 else f"target:{index}"
+                name = None if target_count == 1 else archive_root
+                source = f"CLI input #{index}" if target_count > 1 else "CLI input"
+                resolved.append(
+                    ResolvedSource(
+                        key=key,
+                        kind="target",
+                        name=name,
+                        description=selection.description,
+                        directory=directory,
+                        archive_root=archive_root,
+                        selection=selection,
+                        source=source,
+                        config_location=location,
+                        config_manifest=effective.target.layer.config.manifest,
+                        import_name=None,
+                    )
+                )
+        else:
+            directory, archive_root = _infer_imported_target_project(effective.target)
+            resolved.append(
+                ResolvedSource(
+                    key="target",
+                    kind="target",
+                    name=None,
+                    description=selection.description,
+                    directory=directory,
+                    archive_root=archive_root,
+                    selection=selection,
+                    source=f"Configuration project `{effective.target.layer.config.manifest}`",
+                    config_location=location,
+                    config_manifest=effective.target.layer.config.manifest,
+                    import_name=effective.target.layer.import_name,
+                )
+            )
+
+    for name, binding in effective.companions.items():
+        selection, location = _selected_companion(
+            binding,
+            request.case,
+            shared=effective.shared,
+        )
+        directory, archive_root = _resolve_directory(
+            binding.companion.path,
+            binding.execution_root,
+            label=f"companion {name!r}",
+            allow_cwd=binding.config_location_prefix.startswith("import."),
+        )
+        resolved.append(
+            ResolvedSource(
+                key=f"companion:{name}",
+                kind="companion",
+                name=name,
+                description=selection.description,
+                directory=directory,
+                archive_root=archive_root,
+                selection=selection,
+                source=f"fixed path `{binding.companion.path}`",
+                config_location=location,
+                config_manifest=binding.layer.config.manifest,
+                import_name=binding.layer.import_name,
+            )
+        )
+
+    return tuple(resolved)
+
+
+def _resolve_execution(
+    config: Config,
+    request: BuildRequest,
+    *,
+    cwd: Path,
+) -> tuple[_EffectiveConfiguration, tuple[ResolvedSource, ...]]:
+    effective = _compose_effective_configuration(config, cwd)
+    return effective, _resolve_effective_sources(effective, request)
 
 
 def resolve_sources(
@@ -416,79 +596,13 @@ def resolve_sources(
     *,
     cwd: str | Path | None = None,
 ) -> tuple[ResolvedSource, ...]:
-    """Resolve Root-local sources plus every explicitly imported Configuration."""
+    """Resolve sources from one layered Effective Configuration."""
 
     cwd_path = Path.cwd().resolve() if cwd is None else Path(cwd).expanduser().resolve(strict=True)
     if not cwd_path.is_dir():
         raise SelectionError(f"current working directory is not a directory: {cwd_path}")
-
-    _validate_request(config, request)
-
-    loaded_imports: dict[str, tuple[ConfigurationImport, Path, Config]] = {}
-    imported_shared: dict[str, SharedPatterns] = {}
-    for name in sorted(config.imports):
-        spec = config.imports[name]
-        import_root = _resolve_import_root(spec, config.manifest)
-        imported = _load_imported_config(spec, import_root)
-        loaded_imports[name] = (spec, import_root, imported)
-        imported_shared[name] = imported.shared
-
-    root_visible_shared = _merge_root_visible_shared(
-        config.shared,
-        imported_shared,
-        where=f"{config.manifest} [shared]",
-    )
-
-    resolved_sources = list(
-        _resolve_configuration_sources(
-            config,
-            request,
-            execution_root=cwd_path,
-            shared=root_visible_shared,
-        )
-    )
-
-    for name in sorted(loaded_imports):
-        spec, import_root, imported = loaded_imports[name]
-        duplicate_names = sorted(set(imported.companions) & set(spec.companions))
-        if duplicate_names:
-            listed = ", ".join(f"{name}.{companion}" for companion in duplicate_names)
-            raise ConfigurationError(
-                f"import {name!r} defines duplicate companion logical name(s): {listed}"
-            )
-        if not imported.companions and not spec.companions:
-            raise ConfigurationError(
-                f"import {name!r} must provide at least one companion either from "
-                "the imported Configuration or [import.<name>.companion.<name>]"
-            )
-        try:
-            _validate_import_companion_case(
-                imported.companions, spec.companions, spec.case
-            )
-            imported_sources = _resolve_companion_sources(
-                imported.companions,
-                spec.case,
-                execution_root=import_root,
-                shared=imported.shared,
-                key_prefix=f"import:{name}:imported:",
-                import_name=name,
-            )
-            added_sources = _resolve_companion_sources(
-                spec.companions,
-                spec.case,
-                execution_root=import_root,
-                shared=root_visible_shared,
-                key_prefix=f"import:{name}:added:",
-                import_name=name,
-                config_location_prefix=f"import.{name}.companion",
-                allow_execution_root=True,
-            )
-        except SelectionError as exc:
-            raise SelectionError(f"import {name!r}: {exc}") from exc
-        resolved_sources.extend(imported_sources)
-        resolved_sources.extend(added_sources)
-
-    return tuple(resolved_sources)
+    _, sources = _resolve_execution(config, request, cwd=cwd_path)
+    return sources
 
 def _name_matches(name: str, pattern: ExclusionPattern) -> bool:
     if pattern.match == "exact":
@@ -690,59 +804,72 @@ def collect_files(source: ResolvedSource) -> tuple[Path, ...]:
     return select_files(source).files
 
 
+def _display_chain_path(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix() or "."
+    except ValueError:
+        return str(path.resolve())
+
+
 def _render_archive_readme(
-    config: Config,
+    effective: _EffectiveConfiguration,
     request: BuildRequest,
     sources: tuple[ResolvedSource, ...],
     selection_counts: Mapping[str, int],
 ) -> str:
-    """Render the archive-root README from declared descriptions and resolved facts."""
+    """Render the archive-root README from the resolved Configuration chain."""
 
     grouped: dict[str, list[ResolvedSource]] = {}
     for source in sources:
         grouped.setdefault(source.archive_root, []).append(source)
 
     selected_case = request.case if request.case is not None else "default"
+    root_execution = effective.layers[0].execution_root
     lines = [
         "# Archive contents",
         "",
-        "## Root Configuration",
+        "## Configuration chain",
         "",
-        "- Execution root: `.`",
         f"- Case: `{selected_case}`",
         "",
     ]
 
-    if config.imports:
-        lines.extend(["## Configuration imports", ""])
-        for name in sorted(config.imports):
-            spec = config.imports[name]
-            imported_case = spec.case if spec.case is not None else "default"
-            lines.extend([
-                f"### `{name}`",
-                "",
-                f"- Execution root: `{spec.root}`",
-                f"- Configuration: `{spec.configuration}`",
-                f"- Case: `{imported_case}`",
-            ])
-            lines.append("")
+    for index, layer in enumerate(effective.layers):
+        label = "Root" if index == 0 else f"Import `{layer.import_name}`"
+        lines.extend([
+            f"### {label}",
+            "",
+            f"- Configuration: `{_display_chain_path(layer.config.manifest, root_execution)}`",
+            f"- Execution root: `{_display_chain_path(layer.execution_root, root_execution)}`",
+            "",
+        ])
 
-    lines.extend(["## Included directories", ""])
+    lines.extend(["## Effective definitions", ""])
+    if effective.target is not None:
+        lines.append(
+            "- Target: "
+            f"`{_display_chain_path(effective.target.layer.config.manifest, root_execution)}`"
+        )
+    else:
+        lines.append("- Target: `(none)`")
+    for name in sorted(effective.companions):
+        binding = effective.companions[name]
+        lines.append(
+            f"- Companion `{name}`: "
+            f"`{_display_chain_path(binding.layer.config.manifest, root_execution)}`"
+        )
+    lines.extend(["", "## Included directories", ""])
 
     for archive_root in sorted(grouped):
         lines.extend([f"### `{archive_root}/`", ""])
         source_group = sorted(grouped[archive_root], key=lambda item: item.key)
         for source in source_group:
             count = selection_counts[source.key]
-            if source.kind == "target":
-                heading = "#### Target"
-            else:
-                heading = f"#### Companion `{source.name}`"
+            heading = "#### Target" if source.kind == "target" else f"#### Companion `{source.name}`"
             lines.extend([heading, "", source.description, ""])
-            if source.import_name is not None:
-                lines.append(f"- Import: `{source.import_name}`")
             lines.extend([
-                f"- Configuration: `{source.config_location}`",
+                f"- Configuration file: `{_display_chain_path(source.config_manifest, root_execution)}`",
+                f"- Configuration table: `{source.config_location}`",
                 f"- Directory source: {source.source}",
                 f"- Selected files: {count}",
             ])
@@ -762,7 +889,9 @@ def plan_archive(
     """Resolve archive entries without writing an archive."""
 
     cwd_path = Path.cwd().resolve() if cwd is None else Path(cwd).expanduser().resolve(strict=True)
-    sources = resolve_sources(config, request, cwd=cwd_path)
+    if not cwd_path.is_dir():
+        raise SelectionError(f"current working directory is not a directory: {cwd_path}")
+    effective, sources = _resolve_execution(config, request, cwd=cwd_path)
 
     archive_entries: dict[str, Path] = {}
     physical_entries: dict[Path, str] = {}
@@ -817,7 +946,7 @@ def plan_archive(
         and not any(arcname.startswith(f"{status.archive_root}/") for arcname in archive_entries)
     })
 
-    readme = _render_archive_readme(config, request, sources, selection_counts)
+    readme = _render_archive_readme(effective, request, sources, selection_counts)
     return ArchivePlan(
         entries=MappingProxyType(dict(sorted(archive_entries.items()))),
         readme=readme,
@@ -939,7 +1068,11 @@ def build_archive(
     """Build one ZIP archive using the output policy declared by the configuration."""
 
     cwd_path = Path.cwd().resolve() if cwd is None else Path(cwd).expanduser().resolve(strict=True)
-    _validate_request(config, request)
+    if request.sequence is not None:
+        if isinstance(request.sequence, bool) or not isinstance(request.sequence, int) or request.sequence < 1:
+            raise SelectionError("output sequence must be an integer greater than or equal to 1")
+        if not config.output.generated:
+            raise SelectionError("output sequence can only be used with generated output")
     output_path, if_exists = _resolve_output_path(config, request, cwd_path)
 
     if output_path.exists() and if_exists == "error":

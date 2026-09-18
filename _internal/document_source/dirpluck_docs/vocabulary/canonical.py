@@ -8,66 +8,71 @@ class VOCABULARY:
 
     @term("dirpluck")
     class TERM_1:
-        r'''本ライブラリの名称。ルート設定ファイルに記述された抽出意図に従い、省略可能な CLI 束縛の対象定義を1個以上の実行時ディレクトリへ適用し、設定に固定されたコンパニオン、明示的にインポートした別の設定ファイルが宣言するコンパニオン、および import root 内でルート設定ファイルが追加定義するコンパニオンからファイルを選択して ZIP アーカイブを作成する。対象を持たずコンパニオンや設定インポートだけで構成することもできる。'''
+        r'''本ライブラリの名称。ルート設定ファイルから必要に応じて1本の設定インポート chain を解決し、各層の定義を内側から外側へ名前解決して得た実効設定に従って、対象またはコンパニオンからファイルを選択し ZIP アーカイブを作成する。'''
         glossary @= True
         preserve_spelling @= True
 
     @term("設定ファイル")
     class TERM_2:
-        r'''dirpluck の抽出意図を記述する TOML ファイル。0個または1個の対象定義、0個以上のコンパニオン、0個以上の名前付き共有パターン、0個以上の設定インポート、および出力定義から成る。CLI から直接選択された設定ファイルはルート設定ファイルとなり、process cwd を自身の source 用実行 root として最終出力を所有する。設定インポートの `root` はルート設定ファイル自身の所在ディレクトリからの相対 path として解決する。設定インポートから読み込まれた設定ファイルは解決された import `root` を実行 root とし、その設定が宣言するコンパニオンを再利用できるほか、ルート設定ファイルは `[import.<name>.companion.<name>]` で同じ import root 内に追加コンパニオンを定義できる。さらに import 先の共有パターンは `<import>.<pattern>` の修飾名でルート設定ファイル側の選択から明示的に参照できる。import 先の対象と出力定義は使用しない。設定内では1個の平坦なケース名だけを選択でき、ルート設定ファイルでは対象とコンパニオン、import 先ではコンパニオンの抽出選択を切り替えられる。共有パターンは明示参照で再利用し、ケース継承や暗黙の merge には用いない。ルート設定ファイルの探索は cwd と `./dirpluck/` の直下だけで行い、同じファイル名が複数見つかった場合は曖昧としてエラーにする。'''
+        r'''dirpluck の抽出意図を記述する TOML ファイル。各ファイルは0個または1個の対象、0個以上のコンパニオン、0個以上の名前付き共有パターン、0個または1個の設定インポート、および出力定義を持てる。設定インポートがある場合は import 先を先に解決し、外側の同名定義で内側を shadow して実効設定を構成する。各設定ファイルで対象定義は最大1個のままで、設定インポートの深さに上限は設けず、循環参照だけを拒否する。'''
         glossary @= True
 
     @term("対象")
     class TERM_3:
-        r'''設定ファイルが必要とするときだけ存在する runtime-bound source 定義。`[target]` に既定の抽出設定を直接記述でき、必要な場合だけ `[target.case.<name>]` に独立した名前付きケースを追加できる。対象には固定 `path` を設定せず、TOML に書く対象定義は最大1個のままにする。ルート設定ファイルとして実行された場合だけ CLI の `DIRECTORY` から1個以上のディレクトリを受け取り、同じ選択済み対象規則をすべてへ適用する。別の設定ファイルからインポートされた場合、その設定の対象定義は使用しない。対象を定義しないルート設定ファイルに対象ディレクトリを束縛することはできない。'''
+        r'''設定ファイルごとに最大1個だけ定義できる主 source。`[target]` に base 選択、必要に応じて `[target.case.<name>]` に独立した Case 選択を記述する。設定 chain では外側の Target 定義が内側の Target 定義全体を shadow し、最終的に1個以下の Target が実効設定へ残る。ルート設定ファイル自身の Target が残る場合は CLI の `DIRECTORY` を束縛し、import 由来 Target が残る場合はその Target を所有する Configuration の project directory を対象ディレクトリとして解決する。'''
         glossary @= True
 
     @term("ケース")
     class TERM_4:
-        r'''設定ファイル全体で0個または1個だけ選択する平坦な名前付き抽出 variation。ルート設定ファイルで対象がある場合は `[target.case.<name>]` がそのケースを定義し、各コンパニオンは同名の `[companion.<name>.case.<name>]` があれば使い、なければ base 選択へフォールバックする。対象がないルート設定ファイル、または設定インポートで Case を指定する場合は、少なくとも1個の対象となるコンパニオンがそのケースを定義する必要がある。import 先の Target Case は使用しない。ケース定義は base との差分や継承ではなく完全な選択定義で、source の追加・削除、コンパニオン path、出力定義は変更しない。ケースの組み合わせや多階層化は行わない。'''
+        r'''実効設定全体で0個または1個だけ選択する平坦な名前付き抽出 variation。Case 定義は base との差分や継承ではなく完全な選択定義である。設定 chain の名前解決では Target や Companion が外側で shadow された場合、その source に属する Case 定義もまとめて置き換わる。最終的な実効設定に対して CLI の `--case` を1個だけ適用し、対象が同名 Case を持つ場合はそれを必須とし、各コンパニオンは同名 Case があれば使い、なければ base へフォールバックする。'''
         glossary @= True
 
     @term("コンパニオン")
     class TERM_5:
-        r'''設定ファイルの抽出意図に付随する固定 source。対象がある場合は対象に同伴し、対象がない場合はその目的自体に付随する。通常は `[companion.<name>]` に、その設定ファイルへ割り当てられた実行 root 相対の固定 `path`、目的説明、および base の選択定義を直接記述する。ルート設定ファイルは `[import.<import-name>.companion.<name>]` によって import root 内へ追加コンパニオンを定義でき、その場合も source は Target ではなく Companion のままである。必要なら対応する `.case.<case-name>` に完全な代替選択を追加でき、選択されたケースが存在しないコンパニオンは base へフォールバックする。'''
+        r'''設定ファイルの抽出意図に付随する固定 source。通常は `[companion.<name>]` に、その定義を所有する設定層の execution root 相対 `path`、説明、base 選択を記述する。設定 chain では同名 Companion を外側で定義すると内側の Companion 定義全体を shadow し、異なる名前は共存する。`[import.<name>.companion.<name>]` は直下の import root を基準にする Companion overlay で、同じ名前解決規則へ参加する。'''
         glossary @= True
 
     @term("対象ディレクトリ")
     class TERM_6:
-        r'''抽出を行う実際のディレクトリ。ルート設定ファイルの対象は存在する場合に CLI から1個以上与えられ、すべて同じ対象定義を使う。コンパニオンはルート設定ファイル、import 先設定、または `[import.<name>.companion.<name>]` の固定 `path` から決定される。使用される source ディレクトリはいずれも、その source を解決する設定ファイルへ割り当てられた実行 root 内に存在しなければならず、シンボリックリンクを利用した外部への逸脱も拒否する。ルート設定ファイルの対象には process cwd 自体を `.` として指定でき、その場合もアーカイブでは cwd の実ディレクトリ名を保持する。'''
+        r'''抽出を行う実際のディレクトリ。実効 Target がルート設定ファイル自身に由来する場合は CLI から1個以上与えられる。実効 Target が import chain の内側に由来する場合は、その Target を定義した Configuration の project directory から1個の対象ディレクトリを決定する。コンパニオンは定義を所有する設定層または import root overlay の固定 `path` から決定する。いずれも対応する filesystem boundary 内へ解決されなければならない。'''
         glossary @= True
 
     @term("抽出")
     class TERM_7:
-        r'''対象またはコンパニオンからアーカイブへ含めるファイルを確定し、ルート設定ファイル自身の対象・コンパニオンと、各設定インポート名前空間に属する import 先設定由来またはルート追加のコンパニオン結果をひとつのアーカイブ計画へ統合する処理。`include` は存在を必須とする相対パス、`include_if_exists` は存在する場合だけ追加する任意候補、`exclude` は選択済み範囲に適用する限定的な名前フィルタである。これらは選択定義へ直接記述できるほか、include 用または exclude 用の共有パターンを明示的に参照して追加できる。ルート設定ファイルが所有する選択は自身の共有パターンをローカル名で、import 先の共有パターンを `<import>.<pattern>` の修飾名で参照できる。import 先設定自身が宣言するコンパニオンは、自身の共有パターンだけを従来どおりローカル名で参照する。include 用の共有パターンは `include_pattern_refs` または `include_if_exists_pattern_refs`、exclude 用は `exclude_pattern_refs` から参照し、include 用を必須候補または任意候補のどちらとして扱うかは選択側で決める。少なくとも直接記述または共有パターン参照による `include` / `include_if_exists` 相当の候補の一方が必要で、`if_empty = "allow"` は必須候補を持たない場合だけ指定できる。'''
+        r'''実効設定の対象またはコンパニオンからアーカイブへ含めるファイルを確定する処理。`include` は存在必須の候補、`include_if_exists` は任意候補、`exclude` は選択済み範囲への限定的な名前フィルタである。共有パターン参照は実効設定の include / exclude 名前空間から解決し、設定 chain の外側に同名共有パターンがあれば内側の定義を shadow する。最終的に参照名が解決できない場合は設定エラーとする。'''
         glossary @= True
 
     @term("アーカイブ")
     class TERM_8:
-        r'''dirpluck が生成する ZIP 成果物。選択されたファイルは、そのファイルを選択した設定ファイルへ割り当てられた実行 root から見た実際の相対パスを保持し、ルートには dirpluck が生成する `README.md` を置く。複数の source または設定インポートが同じアーカイブ path へ同じ実ファイルを選んだ場合は1回だけ書き込み、同じアーカイブ path が異なる実ファイルへ解決される場合や、同じ実ファイルが異なるアーカイブ path へ解決される場合は曖昧として拒否する。'''
+        r'''dirpluck が生成する ZIP 成果物。選択されたファイルは、その source 定義に対応する execution root から見た実際の相対 path を保持し、ルートには dirpluck が生成する `README.md` を置く。同じ archive path に同じ実ファイルが重なる場合は1回だけ書き込み、異なる実ファイルの path 衝突や、同じ実ファイルが異なる archive path へ解決される曖昧さは拒否する。'''
         glossary @= True
 
     @term("出力定義")
     class TERM_9:
-        r'''`[output]` に記述する必須設定。ルート設定ファイルの出力定義だけが一回の実行の最終出力として使用され、インポートされた設定ファイル自身の出力定義は使用しない。固定出力ではルート設定ファイルの実行 root である cwd 相対 `path` と `if_exists = "error" | "overwrite"`、動的命名出力では `directory` と `timestamp = true`、任意の `prefix` / `suffix` を記述する。動的命名は実行ごとに時刻を含む ZIP 名を作り、確認時点で同名出力があればエラーとする。必要なら CLI の `--sequence N` で timestamp 直後へ明示的な番号を加えられるが、自動採番、同じ出力 path への並行書き込みの調停、出力形式の一時 override は行わない。'''
+        r'''`[output]` に記述する設定。1回の実行で使用するのは最外側のルート設定ファイルの出力定義だけで、import chain 内側の出力定義は実行しない。固定出力では cwd 相対 `path` と `if_exists = "error" | "overwrite"`、動的命名出力では `directory`、`timestamp = true`、任意の `prefix` / `suffix` を記述する。'''
         glossary @= True
 
     @term("アーカイブREADME")
     class TERM_10:
-        r'''アーカイブのルート `README.md` として生成する用途中立の索引文書。ルート設定ファイル、設定インポート、選択されたケース、各設定に割り当てられた実行 root、実際に含まれたディレクトリ、対象または論理名で識別したコンパニオンの description、選択された設定位置、ディレクトリ決定方法、選択ファイル数、必要に応じて空結果方針を機械的に記録する。固定文言では生成ツール名や下流用途を示さず、具体的な用途は設定された description に委ねる。同じ実ディレクトリに複数の役割が重なった場合は、そのディレクトリを一度だけ索引し各役割を個別に記録する。'''
+        r'''アーカイブのルート `README.md` として生成する用途中立の索引文書。解決した Configuration chain、各 execution root、実効 Target / Companion、選択された Case、description、選択件数など、解決済み計画の事実を記録する。具体的な用途は設定された description に委ねる。'''
         glossary @= True
 
     @term("共有パターン")
     class TERM_12:
-        r'''設定ファイル内で名前を付けて定義し、選択定義から明示的に再利用するパターン集合。include 用は `[shared.include_patterns]`、exclude 用は `[shared.exclude_patterns]` に `name = [...]` の形で定義し、それぞれ対応するパターン文法で検証する。同じ設定ファイルが所有する選択ではローカル名を使い、ルート設定ファイルが import 先の共有パターンを参照する場合は `<import>.<pattern>` の修飾名を使う。選択定義は `include_pattern_refs`、`include_if_exists_pattern_refs`、`exclude_pattern_refs` から共有パターン名を参照して自身の直接記述へ追加し、参照していない共有パターンは適用されない。import 先設定自身が宣言するコンパニオンの参照先は import によって置換せず、その設定自身のローカル共有パターンとして解決する。共有パターンはケース継承、暗黙の merge、source 間の自動適用を行わない。'''
+        r'''設定ファイル内で名前を付けて定義し、選択定義から明示的に参照する再利用可能なパターン集合。include 用は `[shared.include_patterns]`、exclude 用は `[shared.exclude_patterns]` に `name = [...]` として定義する。設定 chain では include / exclude を別々の名前空間として内側から外側へ解決し、外側の同名定義が内側を shadow する。Selection の参照名は最終的な実効名前空間で解決し、参照していない共有パターンは適用しない。'''
         glossary @= True
 
     @term("設定インポート")
     class TERM_13:
-        r'''ルート設定ファイルから別の dirpluck 設定ファイルを名前付きで明示的に読み込み、その設定が宣言するコンパニオンと共有パターン、およびルート側が同じ import root 内へ追加定義するコンパニオンを再利用する仕組み。`[import.<name>]` に、ルート設定ファイル自身の所在ディレクトリからの相対 path で import 用の実行 `root` を指定し、その root 内の `configuration`、必要に応じて `case`、0個以上の `[import.<name>.companion.<companion-name>]` を記述する。import 名は名前空間となり、配下のコンパニオン論理名は `<import>.<companion>`、ルート側から見える共有パターン名は `<import>.<pattern>` とする。import 先設定由来とルート追加で同じ Companion 論理名を定義することはできず、ルートローカル共有パターンと import 由来の修飾共有パターンが同じ参照名になる場合も曖昧として拒否する。`root` は絶対 path を受け付けず、Configuration 群の相対的な位置関係として保持する。import 先設定自身が宣言するコンパニオンは import 先の共有パターンをローカル名で使い、ルート設定ファイルが所有する Target、Root Companion、Root 側追加 Companion はルートローカルまたは import 由来の修飾共有パターンを明示参照できる。共有パターン定義そのものを merge、再束縛、暗黙適用しない。import 先の Target と `[output]` は使用しない。各 import 名前空間には少なくとも1個のコンパニオンが必要であり、共有パターンだけでは source の代わりにならない。設定インポートを記述できるのはルート設定ファイルだけで、インポートされた設定ファイルからさらに設定をインポートする再帰構成は許可しない。'''
+        r'''別の dirpluck 設定ファイルを1段内側の設定層として読み込む仕組み。各設定ファイルは `[import.<name>]` を0個または1個だけ持てる。`root` はその設定ファイル自身の所在ディレクトリからの相対 path、`configuration` は解決した import root 内の相対 TOML path とする。import 先もさらに1個だけ import でき、chain の長さに上限は設けない。解決済み Configuration file が現在の chain に再登場した場合は循環参照として拒否する。import 名は link の識別と診断に使い、複数 import を同じ層で構成する namespace graph は作らない。'''
         glossary @= True
 
     @term("ルート設定ファイル")
     class TERM_14:
-        r'''一回の dirpluck 実行を開始する設定ファイル。CLI の通常の設定探索または `--config NAME` で選択され、process cwd を自身の source 用実行 root とし、CLI の `DIRECTORY` と `--case` を自身の対象・コンパニオンへ束縛する。設定インポートの `root` は process cwd ではなく、この設定ファイル自身の所在ディレクトリからの相対 path として解決する。0個以上の設定インポートを宣言し、別設定のコンパニオンを再利用したり import root 内へ追加コンパニオンを定義したり、import 先の共有パターンを修飾名で自身の選択から参照したりできる。一回の実行で有効になる最終 `[output]` を所有し、インポートされた設定ファイルの Target、出力定義、Case、共有パターン参照を暗黙に継承・置換しない。'''
+        r'''1回の dirpluck 実行を開始する最外側の設定ファイル。CLI の通常探索または `--config NAME` で選択され、process cwd を自身の execution root とする。0個または1個の設定インポートを持ち、import chain を解決して実効設定を作る。最終 `[output]` を所有し、実効 Target が自身の定義である場合だけ CLI の `DIRECTORY` を束縛する。'''
+        glossary @= True
+
+    @term("実効設定")
+    class TERM_15:
+        r'''設定インポート chain を最深部から最外側へ順に重ね、同名定義を外側で shadow して得る1回の実行用 Configuration。Target は最終的に最大1個、Companion は名前ごとに最大1個、共有 include / exclude パターンは各名前空間で名前ごとに最大1個へ解決される。Source 定義は shadow された場合に base と Case を含む定義全体が置き換わり、共有パターン参照はこの実効名前空間で最終解決する。出力だけは layering の対象にせず、ルート設定ファイルの定義を使用する。'''
         glossary @= True

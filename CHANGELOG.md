@@ -1,14 +1,26 @@
 # dirpluck CHANGELOG
 
-Release-by-release changes for dirpluck.
+Release history for dirpluck.
+
+## 0.5.0
+
+Configuration import is generalized into one linear layering model so that Target, Companion, and Shared-pattern definitions can be composed under the same name-resolution rules from imported Configuration to importing Configuration.
+
+### Changed
+
+- Each Configuration may define at most one `[import.<name>]`, while an imported Configuration may itself import one more. Import-chain depth is unlimited; a repeated Configuration file on the active chain is rejected as a cycle.
+- The Configuration chain is resolved from the deepest layer outward into one effective Configuration. Target uses the singleton name `target`; Companions and Shared patterns resolve by their own names. An outer same-named definition shadows the inner definition as a whole. Shared-pattern references are resolved against the final effective namespace, and 0.5.0 no longer requires `<import>.<pattern>` qualification as the name-resolution model.
+- A Target that survives from an imported Configuration may now be executed. A Root-owned effective Target still receives CLI `DIRECTORY` values. An imported effective Target is bound to the project directory inferred from `<project>/dirpluck.toml` or `<project>/dirpluck/<name>.toml`. An outer Target shadows the inner Target and all of its Cases.
+- Case selection is moved from per-import settings to one Case applied to the effective Configuration. `[import.<name>].case` is no longer used. Shadowing a source also replaces its Case definitions.
+- Only the Root Configuration's `[output]` is still executed. Recursive-import version-specific wording is removed; cycles are reported with version-independent Configuration errors that identify the import chain.
 
 ## 0.4.1
 
-Use `dirpluck.__version__` as the single source of truth for the current package version, and provide that value to documentation generation through an external JSON context generated from the package version.
+The current package version is centralized in `dirpluck.__version__`, and document generation uses an external JSON context generated from it.
 
-### Added
+### Changed
 
-- Remove the current release number from the project vocabulary. Generate the external documentation context JSON from `dirpluck.__version__`, and let documents such as README reference the `version` context value when they need the current release. Release numbers in CHANGELOG remain historical data written directly in the canonical source.
+- Stop storing the current release number as glossary vocabulary. Generate the external document-context JSON from `dirpluck.__version__`, and use its `version` value in documents that need the current version. CHANGELOG release labels remain literal historical data in the canonical source.
 
 ## 0.4.0
 

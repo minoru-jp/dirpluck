@@ -13,105 +13,131 @@ class TITLE_1:
 
 ## ひとつの抽出意図から始める
 
-再現したいひとつのパッケージに対して、ひとつの{{TERM_14}}を使います。実行ごとに変わる対象、固定された資料、別の設定ファイルが既に宣言しているコンパニオン、またはそれらの組み合わせを表現できます。
-
-ケースはひとつの設定ファイル内で選択を協調して切り替えるためのもので、profile の積み重ねには使いません。別の設定ファイルが持つコンパニオン定義を再利用したい場合は、source path を複製するのではなく{{TERM_13}}として明示的に取り込みます。
+再現したいひとつのパッケージに対して、ひとつの{{TERM_14}}を使います。必要なら別の Configuration を1個だけ import でき、その import 先もさらに1個だけ import できます。dirpluck はこの linear chain を最深部から外側へ解決して{{TERM_15}}を作ります。
 
 設定ファイルには次を記述できます。
 
 ```text
 Configuration
 ├── shared                 optional, named reusable pattern sets
-├── import.<name>          zero or more, root configuration only
-│   └── companion.<name>  zero or more, root-owned companions inside import root
-├── target                 optional, runtime-bound
-├── companion.<name>       zero or more, configuration-bound
+├── import.<name>          zero or one
+│   └── companion.<name>  zero or more, overlays anchored to import root
+├── target                 optional, at most one per Configuration
+├── companion.<name>       zero or more
 └── output                 exactly one
 ```
 
-{{TERM_14}}は、自身の対象・コンパニオン、または設定インポートの少なくとも1つを持つ必要があります。各 import では、import 先設定が宣言する Companion と {{TERM_14}} 側の `[import.<name>.companion.<name>]` を合わせて少なくとも1個の Companion が必要です。設定インポートは1階層だけで、import 先設定からさらに別の設定をインポートできません。import 先に Target が定義されていても import 実行では使用しません。
+各 Configuration が持てる `[import.<name>]` は最大1個です。複数 import を同じ層に並べません。import の深さには上限を設けず、同じ Configuration file が現在の chain に再登場した場合だけ循環参照としてエラーにします。
+
+Target、Companion、共有パターンは import 先から import 元へ名前解決します。外側に同名定義があれば内側の定義全体を shadow します。Target は各 Configuration で最大1個なので、最終的な{{TERM_15}}でも最大1個です。Companion と共有パターンは異なる名前を蓄積し、同名だけを外側が置き換えます。`[output]` は layering の対象にせず、最外側の{{TERM_14}}だけを使用します。
 
 ## {{TERM_13}}
 
-別のディレクトリにあるコンパニオン定義を再利用したい場合は、{{TERM_14}}からその設定ファイルを明示的にインポートします。個々のコンパニオンへ `../` を許して境界を広げるのではなく、import ごとに別の実行 root を宣言し、その root 内では既存の境界規則をそのまま適用します。
+別の Configuration を再利用する場合は `[import.<name>]` を1個まで宣言します。import は「Companion だけを取り込む」機能ではなく、Configuration を1段内側へ重ねる仕組みです。Target、Companion、共有パターン、Case 定義は名前解決の対象になり、import 先の `[output]` だけは実行しません。
 
-たとえば次の配置で、`dirpluck/` を cwd として実行しながら、workspace 全体を root とする `shikumi` 用設定を取り込めます。
+たとえば次の配置で、`context/dirpluck.toml` から `shikumi/dirpluck.toml` を取り込めます。
 
 ```text
-workspace/
-├── dirpluck/
+projects/
 ├── shikumi/
 │   └── dirpluck.toml
-└── shikumi-devdoc/
+└── context/
+    └── dirpluck.toml
 ```
 
 ```toml
-[import.shikumi-stack]
+[import.shikumi]
 root = ".."
 configuration = "shikumi/dirpluck.toml"
-case = "distribution"
+
+[output]
+path = "context.zip"
+if_exists = "overwrite"
 ```
 
-各 import は名前付きです。上の `shikumi-stack` はエラー表示とアーカイブ索引で import を識別するだけでなく、その配下の Companion の論理名前空間になります。import 先設定の `[companion.devdoc]` も、{{TERM_14}}側の `[import.shikumi-stack.companion.project]` も、最終的には `shikumi-stack.devdoc` / `shikumi-stack.project` という論理名で識別します。import 名はアーカイブ path prefix ではありません。
+この Root Configuration 自身に Target や Companion がなくても、import chain の解決後に Target または Companion が残れば有効です。
 
 ### `root`
 
-`root` は必須です。{{TERM_14}}自身が置かれているディレクトリから見た相対ディレクトリとして指定します。import の目的は別の境界を明示することなので、`root` では `..` を使用できます。絶対 path と glob は使用しません。path separator は `/` を正規形とし、Windows 形式を含む絶対 path は OS にかかわらず拒否します。解決結果は実在するディレクトリでなければなりません。
+`root` は必須です。**その `[import.<name>]` を記述した Configuration file 自身の所在ディレクトリ**から見た相対ディレクトリとして指定します。`..` は使用できます。絶対 path と glob は使用しません。path separator は `/` を正規形とし、Windows drive path や UNC path を含む絶対指定は OS にかかわらず拒否します。
 
-この `root` が import 先設定の filesystem boundary になります。import 先から使用するコンパニオンと選択ファイルは、シンボリックリンクを含めてこの root の外へ解決できません。
+解決された `root` は直下の import 先 Configuration の execution root / filesystem boundary になります。chain が続く場合、次の import の `root` も同じ規則で、その Configuration file 自身の所在ディレクトリから解決します。
 
 ### `configuration`
 
-`configuration` は必須で、import の `root` から見た相対 TOML file path を指定します。
+`configuration` は import root から見た相対 TOML file path です。
 
 ```toml
 configuration = "shikumi/dirpluck.toml"
 ```
 
-この path は import root 内に留まる必要があり、絶対 path、`..`、glob は使用できません。import では cwd / `./dirpluck/` の設定探索を行わず、ここへ書いた1個のファイルを直接読み込みます。
+絶対 path、import root 外へ出る `..`、glob は使用できません。通常の cwd / `./dirpluck/` 探索は行わず、この1 file を直接読み込みます。
 
-読み込んだ設定ファイルは通常の設定形式として完全に検証されます。`[shared.*]`、Target、Companion、Case、`[output]` はその設定自身の定義として検証されます。ただし import 実行で使用する source は Companion だけです。import 先の Target と `[output]` は実行しません。
+### linear chain と循環参照
 
-import 先の `[shared.include_patterns]` / `[shared.exclude_patterns]` は、{{TERM_14}}側から `<import-name>.<pattern-name>` の修飾名で参照できます。たとえば `shikumi-stack` の import 先に `python-dev` という exclude 共有パターンがあれば、Root 側では `shikumi-stack.python-dev` として参照します。import 名は Companion と共有パターンの両方に対する名前空間です。
+import 先 Configuration も `[import.<name>]` を最大1個だけ持てます。
+
+```text
+A imports B
+B imports C
+C imports D
+```
+
+このような chain の長さは制限しません。解決時には Configuration file の実パスを chain として保持し、現在の chain に既に存在する file が再登場した場合だけ循環参照として拒否します。
+
+```text
+A -> B -> C -> A   error
+```
+
+エラーでは循環した Configuration chain を示します。深さそのものに warning や上限は設けません。
+
+### 名前解決と shadow
+
+名前解決は最深部から最外側へ行います。
+
+- Target は論理名 `target` の singleton として扱い、外側の Target が内側の Target を base / Case ごと置き換えます。
+- Companion は `<name>` ごとに解決し、外側の同名 Companion が内側の定義を path / description / base / Case ごと置き換えます。異なる名前は共存します。
+- include 用共有パターンと exclude 用共有パターンは別々の名前空間で `<name>` ごとに解決し、外側の同名定義が内側を置き換えます。
+- Selection の `*_pattern_refs` は、この解決後の共有パターン名前空間で評価します。参照を記述した Configuration 内に定義がなくても、chain の外側で最終的に解決できれば有効です。
+
+import 名は link を識別するために使い、0.5.0 の実効名前解決で Companion や共有パターンへ自動 prefix を付ける namespace ではありません。
 
 ### import root 内へ Companion を追加する
 
-{{TERM_14}}は、import 先設定が宣言していない source も、その import の Companion として明示できます。
+既存の `[import.<name>.companion.<companion-name>]` は、直下の import root を基準に Companion を追加または override したい場合に使用できます。
 
 ```toml
-[import.shikumi-stack.companion.project]
+[import.shikumi.companion.project]
 path = "shikumi"
 description = "The shikumi project itself."
 include_if_exists = ["*"]
-exclude_pattern_refs = ["python-dev"]
 if_empty = "allow"
 ```
 
-`path` は import root 相対です。通常の `[companion.<name>]` と同様に絶対 path や `..` は使えませんが、import root 自体を Companion として扱うため `path = "."` はこの形式に限って使用できます。
+この Companion は最終的には通常の Companion 名 `project` として名前解決へ参加します。import 先の `[companion.project]` があればこの定義が外側から shadow します。同じ Configuration で `[companion.project]` と `[import.shikumi.companion.project]` を同時に定義することはできません。
 
-この Companion は {{TERM_14}} が所有する定義なので、共有パターン参照は Root 側から見える共有パターン名前空間で解決します。Root 自身の `[shared.*]` はローカル名で、import 先の `[shared.*]` は `<import>.<pattern>` の修飾名で参照できます。import 先設定自身が宣言する Companion は import 先設定自身の `[shared.*]` をローカル名で使い、Root 側から参照可能になった修飾名によって参照先を書き換えません。
+`path` は直下の import root 相対です。`path = "."` で import root 自体を Companion として扱えます。絶対 path、`..`、glob は使用できません。
 
-import 先設定に `[companion.project]` が既にあり、{{TERM_14}}でも `[import.shikumi-stack.companion.project]` を定義した場合、どちらも論理名 `shikumi-stack.project` になるため設定エラーです。一方、Root の `[companion.project]` や別 import の `other.project` とは名前空間が異なるため共存できます。
+### Target の解決
 
-### `case`
+{{TERM_15}}に残った Target が{{TERM_14}}自身の定義なら、従来どおり CLI の `DIRECTORY` を1個以上束縛します。
 
-import 先で名前付き Case を使う場合だけ `case` を指定します。
+{{TERM_15}}に残った Target が import chain 内側の Configuration に由来する場合、外側 CLI から `DIRECTORY` は渡しません。その Target の対象ディレクトリは、Target を定義した Configuration file の配置から次の形だけを解決します。
 
-```toml
-case = "distribution"
+```text
+<project>/dirpluck.toml          -> <project>
+<project>/dirpluck/<name>.toml   -> <project>
 ```
 
-省略した場合は import 名前空間内の全 Companion の base 選択を使います。指定する場合、その Case は import 先設定由来または {{TERM_14}} 側追加の Companion の少なくとも1個が定義している必要があります。同名 Case を持つ Companion はその Case を使い、持たない Companion は base へフォールバックします。import 先の Target Case は使用しません。{{TERM_14}}に対して CLI から指定した `--case` は import 先へ伝播せず、各 `[import.<name>]` が Companion 用 Case を独立して決めます。
+import 由来 Target が最終的に残るのに Configuration file がこのどちらの配置にも当てはまらない場合は、対象ディレクトリを一意に決定できないため設定エラーです。外側の Target が shadow する場合、内側 Target の project directory を解決する必要はありません。
 
-### 再帰 import は行わない
+### Case
 
-設定インポートを宣言できるのは{{TERM_14}}だけです。import 先設定に `[import.<name>]` が存在する場合はエラーにします。これにより循環参照、深さ依存の Case 伝播、複雑な設定 graph を作りません。
-
-{{TERM_14}}は自身の Target / Root Companion を持たず、設定インポートだけで構成することもできます。その場合でも最終 `[output]` は{{TERM_14}}自身へ記述します。各 import 名前空間には、import 先設定由来または {{TERM_14}} 側追加の Companion が少なくとも1個必要です。
+`[import.<name>].case` は使用しません。Configuration chain を名前解決した後、CLI の `--case` を{{TERM_15}}全体へ1個だけ適用します。Target または Companion が外側で shadow された場合、その source に属する Case 定義も一緒に置き換わります。
 
 ## 対象
 
-実行時に同じ役割の source ディレクトリを1個以上指定したい場合は対象を使います。設定ファイルには1個の `[target]` 定義として何を選ぶかを記述し、実行時ディレクトリ path 自体は保存しません。複数ディレクトリを指定した場合は、同じ対象選択をそれぞれへ独立して適用します。
+各 Configuration は `[target]` を最大1個だけ定義できます。Target は `path` を持たず、base 選択と必要な Case 選択を記述します。
 
 ```toml
 [target]
@@ -122,25 +148,27 @@ include = [
 ]
 ```
 
-{{TERM_14}}が対象を定義する場合は CLI の `DIRECTORY` が1個以上必須です。別の設定ファイルからインポートされた Target は使用しません。
+Configuration chain では外側の Target が内側の Target を定義全体として shadow します。したがって{{TERM_15}}へ残る Target は最大1個です。
+
+{{TERM_14}}自身の Target が残る場合は CLI の `DIRECTORY` が1個以上必須で、同じ Target 選択を各 runtime directory へ適用します。
 
 ```console
-{{TERM_1}} submissions/acme
+{{TERM_1}} submissions/acme submissions/contoso
 ```
 
-同じ対象定義を1回の実行で複数ディレクトリへ適用できます。
+import 由来 Target が残る場合は CLI `DIRECTORY` を指定せず、その Target を所有する Configuration の project directory を import 節の規則で自動解決します。
 
 ```console
-{{TERM_1}} submissions/acme submissions/contoso submissions/globex
+{{TERM_1}} --config composed-context
 ```
 
-TOML には対象定義を1個だけ記述し、CLI の複数引数が別々の対象定義を作るわけではありません。各 runtime 対象ディレクトリは互いに異なる実ディレクトリへ解決される必要があります。{{TERM_14}}が対象を定義しない場合に位置引数 `DIRECTORY` を渡すとエラーです。CLI の位置引数は import 先へ割り当てません。import 先設定に `[target]` が存在しても、その定義は通常の直接実行時だけに使われます。
+Target が{{TERM_15}}に存在しない場合も `DIRECTORY` は指定できません。
 
-対象は既定選択、名前付きケース、またはその両方を持てます。ケースだけを持ち `[target]` の既定選択を持たない対象では、実行時に `--case` が必須です。
+Target は既定選択、名前付き Case、またはその両方を持てます。Case だけを持ち `[target]` の既定選択を持たない Target では、実行時に `--case` が必須です。
 
 ## コンパニオン
 
-抽出意図そのものに属し、path を TOML へ固定したい source にはコンパニオンを使います。
+固定 path の source には Companion を使います。
 
 ```toml
 [companion.guidelines]
@@ -149,38 +177,15 @@ description = "Guidelines used for every review."
 include = ["*.md"]
 ```
 
-コンパニオン名（上の `guidelines`）はその名前空間内で source を識別します。Root の `[companion.<name>]` は `<name>`、import 配下の Companion は由来に関係なく `<import>.<companion>` を論理名とします。`path` はその Companion に割り当てられた execution root 相対で、ひとつの具体的なディレクトリを指定します。{{TERM_14}}の通常 Companion では root は process cwd、import 先設定由来または `[import.<name>.companion.<name>]` では `[import.<name>].root` です。
+Companion 名は Configuration chain 全体での名前解決キーになります。内側と外側に同名 Companion があれば外側の定義が path、description、base、Case を含めて全体を shadow します。異なる名前の Companion はすべて{{TERM_15}}へ残ります。
 
-コンパニオンは対象を必要としません。固定コンパニオンだけで設定を構成できます。
+通常の `[companion.<name>]` の `path` はその定義を所有する Configuration layer の execution root 相対です。`[import.<name>.companion.<name>]` は直下 import root 相対です。shadow されずに残った Companion は、その定義に対応する execution root を保持したまま実行されます。
 
-```toml
-[companion.contracts]
-path = "records/contracts"
-description = "Contracts included in the project snapshot."
-include = ["*.pdf"]
-
-[companion.minutes]
-path = "records/meetings"
-description = "Meeting records included in the project snapshot."
-include = ["*.md"]
-
-[output]
-directory = "artifacts/snapshots"
-prefix = "project"
-timestamp = true
-```
-
-この場合は位置引数を指定せずに実行します。
-
-```console
-{{TERM_1}} --config project-snapshot
-```
+Companion だけで{{TERM_15}}を構成することもできます。この場合は位置引数を指定しません。
 
 ## {{TERM_12}}
 
-複数の選択から同じ include または exclude パターン集合を使いたい場合は、名前付きの共有パターンを定義できます。共有するのは完全な選択定義ではなくパターン配列だけです。Root が所有する選択は、Root 自身の共有パターンに加えて、明示的に import した Configuration の共有パターンも名前空間付きで参照できます。
-
-include 用は `[shared.include_patterns]` に定義します。
+複数の Selection で同じ include / exclude pattern 集合を使う場合は、名前付き共有パターンを定義します。
 
 ```toml
 [shared.include_patterns]
@@ -189,51 +194,7 @@ project-core = [
     "src",
     "README.md",
 ]
-```
 
-exclude 用は `[shared.exclude_patterns]` に定義します。
-
-```toml
-[shared.exclude_patterns]
-python-dev = [
-    ".git/",
-    ".venv/",
-    "__pycache__/",
-    ".pytest_cache/",
-    "*.egg-info/",
-    "*.pyc",
-    ".DS_Store",
-]
-```
-
-名前付き配列は、それぞれ include または exclude の通常のパターン文法で検証されます。ひとつの名前付き配列は空にできません。定義しただけではどの source にも適用されず、各選択から明示的に参照します。
-
-include 用共有パターンは、必須候補として `include_pattern_refs`、任意候補として `include_if_exists_pattern_refs` から参照します。exclude 用共有パターンは `exclude_pattern_refs` から参照します。
-
-```toml
-[target]
-description = "The current project for normal development work."
-include_pattern_refs = ["project-core"]
-exclude_pattern_refs = ["python-dev"]
-
-[target.case.all]
-description = "All project files except shared development artifacts."
-include_if_exists = ["*"]
-exclude_pattern_refs = ["python-dev"]
-if_empty = "allow"
-```
-
-共有参照と選択自身の `include` / `include_if_exists` / `exclude` は併用できます。参照した共有パターンを先に展開し、その後に選択へ直接記述したパターンを追加します。同じ実効パターンが重複した場合は設定エラーです。
-
-ケースは base 選択を継承しないため、共有パターン参照も継承しません。上の例で `python-dev` を base と `all` の両方へ適用したいので、両方が `exclude_pattern_refs = ["python-dev"]` を明示しています。これは Case 継承ではなく、同じ名前付きパターン集合を2つの独立した選択が参照しているだけです。
-
-### import した共有パターンを参照する
-
-import 先 Configuration の共有パターンは、Root 側で `<import-name>.<pattern-name>` の修飾名として参照します。
-
-たとえば import 先の `shikumi/dirpluck.toml` に次があるとします。
-
-```toml
 [shared.exclude_patterns]
 python-dev = [
     ".git/",
@@ -243,30 +204,24 @@ python-dev = [
 ]
 ```
 
-Root Configuration で次の import を宣言すると、
-
-```toml
-[import.shikumi]
-root = ".."
-configuration = "shikumi/dirpluck.toml"
-```
-
-Root が所有する Target、Root Companion、または `[import.<name>.companion.<name>]` の Selection から `shikumi.python-dev` を参照できます。
+Selection からは従来どおり名前を明示します。
 
 ```toml
 [target]
 description = "The current project."
-include_if_exists = ["*"]
-exclude_pattern_refs = ["shikumi.python-dev"]
-if_empty = "allow"
+include_pattern_refs = ["project-core"]
+exclude_pattern_refs = ["python-dev"]
 ```
 
-include 用も同じ規則で、`include_pattern_refs` / `include_if_exists_pattern_refs` に `<import>.<pattern>` を指定します。include と exclude の名前空間は従来どおり別です。
+Configuration chain では include 用と exclude 用を別々の名前空間として、最深部から最外側へ同名定義を shadow します。0.5.0では import 名を pattern 名へ prefix する必要はありません。
 
-import 先 Configuration が自身で宣言している Companion は、引き続き import 先自身の共有パターンをローカル名で解決します。Root から見える `shikumi.python-dev` に置換したり、Root の同名パターンと merge したりしません。
+たとえば内側 Configuration が `python-dev` を定義し、外側が同名 `python-dev` を定義すれば、{{TERM_15}}では外側の定義だけが有効です。内側の Target / Companion が `exclude_pattern_refs = ["python-dev"]` を持っていてその source 自体は shadow されずに残った場合も、参照は最終的な実効 `python-dev` へ解決されます。
 
-Root ローカルの共有パターン名と、import から公開された修飾名が同じ参照名になる場合は曖昧なので設定エラーです。共有パターン名そのものは自動で別名化せず、import 名を含む修飾名によって名前空間を分離します。
+逆に、内側 Selection が参照する共有名を内側で定義していなくても、外側の layer で同名が提供されて最終的に一意に解決できれば有効です。chain 全体を解決しても参照先が存在しない場合は設定エラーです。
 
+共有参照と直接記述の `include` / `include_if_exists` / `exclude` は併用できます。参照した共有パターンを展開し、その後に Selection 自身の直接パターンを追加します。実効パターンが重複した場合は設定エラーです。
+
+Case は base Selection を継承しないため、共有パターン参照も継承しません。必要な Case は参照名を自分で記述します。
 
 ## 選択フィールド
 
@@ -349,78 +304,19 @@ if_empty = "allow"
 
 ## ケース
 
-ケースは設定ファイル全体で共有する1個の平坦な名前付き選択 variation です。一回の実行で有効にできるケース名は最大1個です。
+Case は{{TERM_15}}全体で共有する1個の平坦な名前付き selection variation です。一回の実行で有効にできる Case 名は最大1個で、CLI の `--case` から指定します。
 
-ケースは source の選択全体を置き換えます。base 選択を継承したり merge したりしません。base が参照している共有パターンも暗黙には引き継がないため、必要なケースは同じ共有名を自分で参照します。
+Configuration layer ごとに別の Case を選ぶ仕組みはありません。`[import.<name>].case` は0.5.0では使用しません。
 
-### 対象ケース
+Source が outer layer で shadow された場合、その source の base とすべての Case 定義もまとめて置き換わります。shadow されずに残った source の Case は origin layer に関係なく{{TERM_15}}の一部として扱います。
 
-```toml
-[target]
-description = "The current project for normal development work."
-include = ["src", "pyproject.toml"]
+対象がある場合、選択した Case 名は `[target.case.<name>]` として存在する必要があります。各 Companion は同名 Case があれば使い、なければ base へフォールバックします。Target がない場合は少なくとも1個の Companion が同名 Case を定義する必要があります。
 
-[target.case.review]
-description = "The current project with review material included."
-include = ["src", "tests", "pyproject.toml"]
-```
-
-```console
-{{TERM_1}} project-a project-b --case review
-```
-
-対象がある場合、有効なケース名は対象が定義します。`review` を選ぶなら `[target.case.review]` が必要で、その同じケース選択を CLI から渡したすべての runtime 対象へ適用します。
-
-### コンパニオンケースとフォールバック
-
-設定全体のケースに合わせてコンパニオンの選択も変える場合は、同名ケースを定義します。
-
-```toml
-[companion.framework]
-path = "framework"
-description = "The framework used by the project."
-include = ["dist/framework-*.whl"]
-
-[companion.framework.case.review]
-description = "The framework distribution and source used during review."
-include = ["dist/framework-*.whl", "src"]
-```
-
-`--case review` が有効なら、このコンパニオンは `review` 選択を使います。同名ケースを持たないコンパニオンは削除されず、base 選択へフォールバックします。
-
-### 対象を持たないケース
-
-コンパニオンだけの設定でもケースを使えます。
-
-```toml
-[companion.documents]
-path = "documents"
-description = "Current documents in the snapshot."
-include = ["current/*.md"]
-
-[companion.documents.case.archive]
-description = "Current and historical documents in the archival snapshot."
-include = ["current/*.md", "history/*.md"]
-
-[companion.assets]
-path = "assets"
-description = "Assets included in every snapshot."
-include = ["*.png"]
-```
-
-```console
-{{TERM_1}} --config snapshot --case archive
-```
-
-この場合 `documents` は `archive` ケース、`assets` は base を使います。対象がない設定でケースを選ぶ場合は、少なくとも1個のコンパニオンがそのケースを定義している必要があります。
-
-ケース名は平坦です。ケースを組み合わせたり、`--case` を複数回指定したり、`case.review.case.security` のように多階層化したりしません。
-
-ケースが変更できるのはその設定ファイル自身の選択だけです。別のコンパニオン集合、別のコンパニオン path、別の出力方針が必要なら別の設定ファイルを使います。{{TERM_14}}の `--case` は設定インポートへ伝播せず、import 先の Case は `[import.<name>].case` から選択します。
+Case 定義は base の差分ではなく完全な Selection です。base の include / exclude や共有パターン参照を暗黙継承しません。
 
 ## 出力
 
-すべての設定ファイルは単独実行可能な通常の設定形式としてひとつの `[output]` を持ちます。ただし設定インポートとして読み込まれた場合、その `[output]` は使用しません。一回の実行で有効になる出力は{{TERM_14}}自身の `[output]` だけです。
+各 Configuration は単独利用できる形式として `[output]` を持ちます。Configuration chain を構成した場合でも出力定義は名前解決の対象にせず、一回の実行で有効になるのは最外側の{{TERM_14}}自身の `[output]` だけです。内側 Configuration の `[output]` は schema validation だけを行い、path 解決、collision check、directory 作成、書き込みには使用しません。
 
 有効な出力は、ひとつの既知 path を更新する**固定出力**か、実行ごとに時刻を含む新しい名前を作る**動的命名出力**のどちらかです。2つの形式は混在できません。
 
@@ -665,4 +561,4 @@ root configuration の Target は CLI の `.` から決まります。import 先
 
 この文書は設定をどう構成して書くかを説明します。`SPECIFICATION.md` は include / exclude の厳密なパターン文法、case-sensitive matching、シンボリックリンク境界、アーカイブ path、dry-run、validation error の最終的な規範です。
 '''
-    vocabulary_refs @= (terms.TERM_1, terms.TERM_12, terms.TERM_13, terms.TERM_14,)
+    vocabulary_refs @= (terms.TERM_1, terms.TERM_12, terms.TERM_13, terms.TERM_14, terms.TERM_15,)

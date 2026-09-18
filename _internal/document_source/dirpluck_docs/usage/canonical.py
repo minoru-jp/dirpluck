@@ -15,8 +15,8 @@ class TITLE_1:
 - 新規または変更した Configuration は、通常実行の前に `--dry-run` で確認する。
 - 既定の{{TERM_14}}は cwd または `./dirpluck/` の `dirpluck.toml`。
 - `--config NAME` は cwd または `./dirpluck/` から{{TERM_14}}を選ぶ。`.toml` は省略可能。
-- `[target]` がある Configuration では1個以上の `DIRECTORY` を渡す。
-- Companion だけの Configuration では `DIRECTORY` を渡さない。
+- {{TERM_14}}自身の `[target]` が{{TERM_15}}へ残る場合だけ1個以上の `DIRECTORY` を渡す。
+- import 由来 Target が実効 Targetになる場合、または Target がない場合は `DIRECTORY` を渡さない。
 
 ```console
 {{TERM_1}} PROJECT --dry-run
@@ -130,22 +130,24 @@ include_if_exists_pattern_refs = ["project-core"]
 
 共有パターンは定義しただけでは適用されない。使用する Selection から明示的に参照する。
 
-import 先の共有パターンを Root 側で使う場合は `<import>.<pattern>` を指定する。
+Configuration chain では共有パターン名も内側から外側へ解決する。通常の名前を参照し、外側の同名定義が内側を shadow する。
 
 ```toml
 [import.shikumi]
 root = ".."
 configuration = "shikumi/dirpluck.toml"
 
+[shared.exclude_patterns]
+python-dev = [".git/", ".venv/", "__pycache__/", "*.pyc"]
+
 [target]
 description = "The current project."
 include_if_exists = ["*"]
-exclude_pattern_refs = ["shikumi.python-dev"]
+exclude_pattern_refs = ["python-dev"]
 if_empty = "allow"
 ```
 
-Root Target、Root Companion、`[import.<name>.companion.<name>]` は import 由来の修飾共有パターンを参照できる。import 先設定由来 Companion は自身の `[shared.*]` をローカル名で使う。
-
+Selection が内側 Configuration にあっても、`python-dev` は最終的な{{TERM_15}}の shared namespace で解決される。外側 layer は同名共有パターンを提供または override できる。
 
 ## Case
 
@@ -175,30 +177,41 @@ include = ["dist/tool-*.whl"]
 別の Configuration を取り込む場合:
 
 ```toml
-[import.shikumi-stack]
+[import.shikumi]
 root = ".."
 configuration = "shikumi/dirpluck.toml"
-case = "distribution"
+```
 
-[import.shikumi-stack.companion.project]
+- 各 Configuration が持てる `[import.<name>]` は0個または1個。
+- import 先もさらに1個 import できる。chain の長さに上限はない。
+- 同じ Configuration file が現在の chain に再登場したら循環参照エラー。
+- `root` はその import を記述した Configuration file の所在ディレクトリ相対。`/` 区切りを使い、`..` は使用できる。絶対 path は使用しない。
+- `configuration` は import root 内の相対 TOML file path。探索は行わない。
+- 名前解決は最深部から最外側。外側の同名 Target / Companion / shared pattern が内側を shadow する。
+- import 名は link 識別用で、Companion や shared pattern へ自動 prefix を付ける namespace ではない。
+- `[import.<name>.case]` は使わない。CLI `--case` を{{TERM_15}}全体へ1個だけ適用する。
+- import 先の `[output]` は実行しない。最終出力は{{TERM_14}}の `[output]` だけ。
+
+直下 import root を基準に Companion を追加・overrideする場合:
+
+```toml
+[import.shikumi.companion.project]
 path = "shikumi"
 description = "The shikumi project itself."
 include_if_exists = ["*"]
 if_empty = "allow"
 ```
 
-- `root` は {{TERM_14}}自身の所在ディレクトリ相対。`/` 区切りを使い、import では `..` を使用できる。絶対 path は使用しない。
-- `configuration` は import root 内の相対 TOML file path。探索は行わない。
-- import 先から使用するのは Companion だけ。Target は使用しない。
-- 必要なら `[import.<name>.companion.<name>]` を追加し、import root 内の source を Root 側から Companion として定義する。
-- import 配下の論理名は `<import>.<companion>`。import 先設定由来と Root 側追加で同名 Companion を定義しない。
-- Root 側追加 Companion の `path` は import root 相対。`path = "."` で import root 自体を Companion にできる。絶対 path と `..` は使用しない。
-- import 先の shared pattern は Root 側から `<import>.<pattern>` で参照できる。Root Target、Root Companion、Root 側追加 Companionから利用できる。
-- import 先設定由来 Companion は import 先自身の `[shared.*]` をローカル名で使う。Root 側の参照で置換しない。
-- import 先設定由来または Root 側追加を合わせて少なくとも1個の Companion が必要。
-- `case` は import 名前空間の Companion 群だけに適用する。少なくとも1個の Companion がその Case を定義している必要がある。Root の `--case` は伝播しない。
-- import 先の `[output]` は使用しない。最終出力は{{TERM_14}}の `[output]` だけ。
-- import 先 Configuration からさらに import しない。import は1階層だけ。
+この Companion は通常の名前 `project` で名前解決へ参加する。`path = "."` で import root 自体を Companion にできる。
+
+Import 由来 Target が{{TERM_15}}へ残る場合、Target を定義した Configuration は次のどちらかに配置する。
+
+```text
+<project>/dirpluck.toml
+<project>/dirpluck/<name>.toml
+```
+
+この配置から `<project>` を対象 directory として解決する。Root 側 Target が同名 singleton `target` を定義すれば、import 由来 Target とその Case は使用されない。
 
 ## Output
 
@@ -233,8 +246,8 @@ suffix = "dev"
 - `--dry-run` で選択内容を確認してから通常実行する。
 - `[missing]` は必須 `include` の未一致として確認する。
 - `[optional missing]` は `include_if_exists` の未一致として、意図した結果か確認する。
-- {{TERM_14}}は cwd、import 先は各 import の `root` を filesystem boundary として扱う。
-- import を追加・変更した場合も `--dry-run` で root、Configuration、Companion の解決結果を確認する。
+- {{TERM_14}}は cwd、各 import layer は対応する `root` を filesystem boundary として扱う。
+- import を追加・変更した場合は `--dry-run` で chain、shadow 結果、Target directory、Companion を確認する。
 - symlink を含む構成では `--dry-run` で解決結果を確認する。
 
 ## 間違えやすい点
@@ -244,12 +257,12 @@ suffix = "dev"
 - `if_empty = "allow"` は必須 `include` を持つ Selection には使えない。
 - Case は base の selection field や共有パターン参照を継承しない。
 - 共有パターンは自動適用されない。
-- import 先の共有パターンは `<import>.<pattern>` の修飾名で参照する。
 - include 用と exclude 用の共有パターンは別々に定義する。
-- {{TERM_14}}の CLI `DIRECTORY` と `--case` は import 先へ自動伝播しない。
-- import 先の Target は使用されない。
-- import 先の `[output]` は実行されない。
-- import 先に `[import.<name>]` を持たせない。
+- 1つの Configuration に複数の `[import.<name>]` を定義しない。
+- import depth に上限はないが、循環参照は許可されない。
+- import 名を shared pattern / Companion の prefix として扱わない。
+- import 由来 Target が実効 Targetの場合は CLI `DIRECTORY` を渡さない。
+- import chain 内側の `[output]` は実行されない。
 - 通常の Target / Companion に `..` を使って boundary を広げない。別 Configuration を使う場合は `[import.<name>]` を使う。
 - Python 内部モジュールを公開 API として使用しない。
 
@@ -262,4 +275,4 @@ sdist またはリポジトリを参照できる場合に、必要に応じて�
 - `GLOSSARY.md`: 用語
 - `README.md`: ライブラリ全体の説明
 '''
-    vocabulary_refs @= (terms.TERM_1, terms.TERM_13, terms.TERM_14,)
+    vocabulary_refs @= (terms.TERM_1, terms.TERM_13, terms.TERM_14, terms.TERM_15,)
