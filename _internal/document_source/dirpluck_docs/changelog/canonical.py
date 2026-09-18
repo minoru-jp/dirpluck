@@ -10,6 +10,14 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.6.2")
+    class RELEASE_11:
+        r'''0.6.1 公開後の文書配布を微調整し、共有前の注意を入口文書へ戻すとともに、wheel だけでも trust model を参照できるようにする。実装上の挙動変更はない。'''
+
+        @change(CHANGED)
+        class CHANGE_1:
+            r'''README と wheel 同梱の Configuration quick reference に、外部へ渡す Archive の selection を確認する短い注意と `exclude = [".git/", ".env*", "*.pem", "*.key"]` の例を追加する。`docs/TRUST.md` 自体も wheel に同梱し、簡易文書から trust model へ直接到達できるようにする。'''
+
     @release("0.6.1")
     class RELEASE_10:
         r'''LLM-assisted work の位置付けと Configuration の trust boundary を文書上で明確化し、過剰な再現可能性の表現を取り除く。実装上の挙動変更はない。'''
@@ -25,10 +33,6 @@ class CHANGELOG:
         @change(CHANGED)
         class CHANGE_3:
             r'''README から `reproducibly` / 「再現可能」の売り文句を削除する。dirpluck の価値は TOML に明示した selection intent から必要な file をまとめることとして説明し、ZIP byte stream の再現性を示唆する専門的な意味を持たせない。'''
-
-        @change(CHANGED)
-        class CHANGE_4:
-            r'''README と wheel 同梱の Configuration quick reference に、外部へ渡す Archive の selection を確認する短い注意と `exclude = [".git/", ".env*", "*.pem", "*.key"]` の例を追加する。`docs/TRUST.md` 自体も wheel に同梱し、簡易文書から trust model へ直接到達できるようにする。'''
 
     @release("0.6.0")
     class RELEASE_9:

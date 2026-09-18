@@ -102,7 +102,7 @@ TOML の各 field とより大きな例は `docs/CONFIGURATION.md`、CLI option 
 
 ## インストール
 
-Python 3.11 以降を使用します。現在のリリースは `0.6.1` です。
+Python 3.11 以降を使用します。現在のリリースは `0.6.2` です。
 
 ```console
 pip install dirpluck

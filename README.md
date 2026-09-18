@@ -72,7 +72,7 @@ For all Configuration fields and a larger example, see [docs/CONFIGURATION.md](d
 
 ## Installation
 
-Python 3.11 or later is required. The current release is `0.6.1`.
+Python 3.11 or later is required. The current release is `0.6.2`.
 
 ```console
 pip install dirpluck

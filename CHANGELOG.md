@@ -2,6 +2,14 @@
 
 Release history for dirpluck.
 
+## 0.6.2
+
+Adjust documentation distribution after the 0.6.1 publication so sharing guidance is visible at the entry points and the wheel can provide the trust model directly. There are no runtime behavior changes in this release.
+
+### Changed
+
+- Add a short sharing reminder and an example `exclude = [".git/", ".env*", "*.pem", "*.key"]` to the README and the wheel's Configuration quick reference. Bundle `docs/TRUST.md` itself in the wheel so the compact references can link directly to the trust model without requiring the source distribution.
+
 ## 0.6.1
 
 Clarify the role of LLM-assisted work and the Configuration trust boundary in the documentation, and remove an unnecessarily strong reproducibility claim. There are no runtime behavior changes in this release.
@@ -14,7 +22,6 @@ Clarify the role of LLM-assisted work and the Configuration trust boundary in th
 
 - Clarify the README description of LLM-assisted work: `dirpluck` prepares an Archive for upload to a non-local conversational LLM or for placement in a local agent workspace. Remove wording that could imply that an LLM is expected to operate `dirpluck` directly, and route trust-model details to `docs/TRUST.md`.
 - Remove the README's `reproducibly` wording. The documentation now describes `dirpluck` in terms of collecting the files declared by a TOML selection intent without implying byte-for-byte reproducibility of the ZIP stream.
-- Add a short sharing reminder and an example `exclude = [".git/", ".env*", "*.pem", "*.key"]` to the README and the wheel's Configuration quick reference. Bundle `docs/TRUST.md` itself in the wheel so the compact references can link directly to the trust model without requiring the source distribution.
 
 ## 0.6.0
 
