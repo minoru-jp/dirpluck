@@ -26,6 +26,7 @@ def check_wheel(path: Path) -> None:
         expected_docs = {
             "dirpluck/docs/CLI.md": ROOT / "src" / "dirpluck" / "docs" / "CLI.md",
             "dirpluck/docs/CONFIGURATION.md": ROOT / "src" / "dirpluck" / "docs" / "CONFIGURATION.md",
+            "dirpluck/docs/TRUST.md": ROOT / "src" / "dirpluck" / "docs" / "TRUST.md",
         }
         required = {"dirpluck/__init__.py", *expected_docs}
         missing = sorted(required - names)

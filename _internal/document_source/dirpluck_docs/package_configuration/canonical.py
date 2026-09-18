@@ -31,6 +31,14 @@ if_exists = "overwrite"
 
 `[about].description` は Archive 全体の任意説明です。Import chain に複数ある場合は outermost から最初に定義された値を使い、生成される Archive README の索引表より前に表示します。
 
+外部へ渡す Archive を作る場合は selection を確認してください。dirpluck はどの file が機密かを推論しないため、含めるべきでないものは `exclude` で明示します。
+
+```toml
+exclude = [".git/", ".env*", "*.pem", "*.key"]
+```
+
+これは一例です。信頼境界と filesystem 操作の責任範囲は、同梱の `TRUST.md` を参照してください。
+
 Target の実 directory は CLI `DIRECTORY` から与えます。Companion は `path` を Configuration に固定します。Configuration の filesystem location は `/` を separator として書き、Companion `path` は relative / absolute のどちらでも指定できます。Relative Companion path は対応する Configuration execution root を基準に解決します。
 
 Selection では次を使えます。
@@ -61,6 +69,6 @@ prefix = "project"
 timestamp = true
 ```
 
-Pattern grammar、import shadowing、Case semantics、filesystem boundary、output collision などの詳細は、同じ release の source distribution にある `docs/CONFIGURATION.md`、`docs/SPECIFICATION.md`、`docs/TRUST.md` を参照してください。CLI reference は同梱の `CLI.md` にあります。
+Pattern grammar、import shadowing、Case semantics、filesystem boundary、output collision などの詳細は、同じ release の source distribution にある `docs/CONFIGURATION.md` と `docs/SPECIFICATION.md` を参照してください。Trust model は同梱の `TRUST.md`、CLI reference は同梱の `CLI.md` にあります。
 '''
     vocabulary_refs @= (terms.TERM_1,)

@@ -22,4 +22,4 @@ dirpluck projects/example --case audit
 dirpluck --config snapshot
 ```
 
-For the compact TOML reference, see the bundled `CONFIGURATION.md`. For detailed CLI semantics, the Configuration guide, the Glossary, the Specification, and the trust model, see `docs/CLI.md`, `docs/CONFIGURATION.md`, `GLOSSARY.md`, `docs/SPECIFICATION.md`, and `docs/TRUST.md` in the source distribution for the same release.
+For the compact TOML reference, see the bundled `CONFIGURATION.md`; for the trust model, see the bundled `TRUST.md`. For detailed CLI semantics, the Configuration guide, the Glossary, and the Specification, see `docs/CLI.md`, `docs/CONFIGURATION.md`, `GLOSSARY.md`, and `docs/SPECIFICATION.md` in the source distribution for the same release.

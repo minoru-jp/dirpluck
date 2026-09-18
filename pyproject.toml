@@ -38,7 +38,7 @@ where = ["src"]
 include = ["dirpluck*"]
 
 [tool.setuptools.package-data]
-dirpluck = ["docs/CLI.md", "docs/CONFIGURATION.md"]
+dirpluck = ["docs/CLI.md", "docs/CONFIGURATION.md", "docs/TRUST.md"]
 
 [tool.setuptools.dynamic]
 version = { attr = "dirpluck.__version__" }

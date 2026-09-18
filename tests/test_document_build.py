@@ -62,6 +62,11 @@ class DocumentBuildTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIsNone(re.search(r'@term\("\d+\.\d+\.\d+"\)', canonical))
 
+    def test_packaged_trust_matches_public_trust(self):
+        public = (ROOT / "docs" / "TRUST.md").read_bytes()
+        packaged = (ROOT / "src" / "dirpluck" / "docs" / "TRUST.md").read_bytes()
+        self.assertEqual(packaged, public)
+
     def test_readme_uses_external_version_context(self):
         canonical = (
             ROOT

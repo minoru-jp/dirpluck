@@ -44,6 +44,7 @@ LLM-assisted work の位置付けと Configuration の trust boundary を文書�
 
 - README の LLM-assisted work の説明を、非ローカルの対話型 LLM へ upload する Archive、またはローカル agent workspace へ配置する Archive を準備する用途として明確化する。LLM が dirpluck を直接操作することを前提とするように読める表現を削除し、trust model の詳細は `docs/TRUST.md` へ集約する。
 - README から `reproducibly` / 「再現可能」の売り文句を削除する。dirpluck の価値は TOML に明示した selection intent から必要な file をまとめることとして説明し、ZIP byte stream の再現性を示唆する専門的な意味を持たせない。
+- README と wheel 同梱の Configuration quick reference に、外部へ渡す Archive の selection を確認する短い注意と `exclude = [".git/", ".env*", "*.pem", "*.key"]` の例を追加する。`docs/TRUST.md` 自体も wheel に同梱し、簡易文書から trust model へ直接到達できるようにする。
 
 ## 0.6.0
 

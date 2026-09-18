@@ -48,9 +48,13 @@ LLM と扱う作業でも、dirpluck の役割はローカル filesystem から�
 
     @title("Configuration と filesystem の信頼境界")
     class TITLE_7:
-        r'''{{TERM_1}} は Configuration に書かれた filesystem 操作の目的や適切さを推論して補正する guard ではありません。宣言された selection と output を、仕様で定めた規則に従って実行します。
+        r'''外部へ渡す Archive を作る場合は、作成前に selection を確認してください。{{TERM_1}} はどの file が機密かを推論しないため、含めるべきでないものは `exclude` で明示します。たとえば次のように書けます。
 
-Configuration をどのような入力として扱うか、広い selection、absolute path、overwrite、外部へ渡す Archive をどう確認するかは `docs/TRUST.md` にまとめています。'''
+```toml
+exclude = [".git/", ".env*", "*.pem", "*.key"]
+```
+
+これは一例であり、project 固有の機密情報は別の名前や場所に存在し得ます。Configuration をどのような入力として扱うか、absolute path、overwrite、外部へ渡す Archive の確認責任などは `docs/TRUST.md` にまとめています。'''
         vocabulary_refs @= (terms.TERM_1,)
 
     @title("小さな例")
@@ -105,7 +109,7 @@ pip install {{TERM_1}}
 - `docs/TRUST.md`: Configuration と filesystem 操作の信頼境界、確認すべき責任範囲。
 - `CHANGELOG.md`: リリース履歴。
 
-wheel には、インストール後すぐ Configuration を書いて CLI を実行できるよう、簡潔な `dirpluck/docs/CONFIGURATION.md` と `dirpluck/docs/CLI.md` だけを同梱します。より詳しい説明が必要な場合は、sdist またはリポジトリに含まれる上記文書を参照してください。'''
+wheel には、インストール後すぐ Configuration を書いて CLI を実行できるよう、簡潔な `dirpluck/docs/CONFIGURATION.md` と `dirpluck/docs/CLI.md` に加えて、同じ trust model を説明する `dirpluck/docs/TRUST.md` を同梱します。より詳しい説明が必要な場合は、sdist またはリポジトリに含まれる上記文書を参照してください。'''
 
     @title("公開インターフェース")
     class TITLE_11:

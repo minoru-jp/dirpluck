@@ -26,6 +26,10 @@ class CHANGELOG:
         class CHANGE_3:
             r'''README から `reproducibly` / 「再現可能」の売り文句を削除する。dirpluck の価値は TOML に明示した selection intent から必要な file をまとめることとして説明し、ZIP byte stream の再現性を示唆する専門的な意味を持たせない。'''
 
+        @change(CHANGED)
+        class CHANGE_4:
+            r'''README と wheel 同梱の Configuration quick reference に、外部へ渡す Archive の selection を確認する短い注意と `exclude = [".git/", ".env*", "*.pem", "*.key"]` の例を追加する。`docs/TRUST.md` 自体も wheel に同梱し、簡易文書から trust model へ直接到達できるようにする。'''
+
     @release("0.6.0")
     class RELEASE_9:
         r'''Filesystem location の表現力を拡張し、Archive README を配布向けの単純な索引へ整理するとともに、Configuration 全体の説明を記述できるようにする。'''

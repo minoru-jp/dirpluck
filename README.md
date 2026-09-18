@@ -34,9 +34,13 @@ For LLM-assisted work, `dirpluck` prepares the material on the local filesystem 
 
 ## Configuration and filesystem trust
 
-`dirpluck` is not a guard that infers whether a filesystem operation declared in a Configuration is appropriate. It applies the declared selection and output according to its documented rules.
+When creating an Archive that will leave the local environment, review the selection before creating it. `dirpluck` does not infer which files are sensitive; explicitly exclude material that should not be collected. For example:
 
-See [docs/TRUST.md](docs/TRUST.md) for how to treat Configurations, broad selections, absolute paths, overwrite behavior, and Archives that will leave the local environment.
+```toml
+exclude = [".git/", ".env*", "*.pem", "*.key"]
+```
+
+This is only an example; project-specific sensitive material may use different names or locations. See [docs/TRUST.md](docs/TRUST.md) for how to treat Configurations, absolute paths, overwrite behavior, and Archives that will leave the local environment.
 
 ## A small example
 
@@ -88,7 +92,7 @@ The documents are separated by reading purpose:
 - [docs/TRUST.md](docs/TRUST.md): the trust boundary for Configurations and filesystem operations.
 - [CHANGELOG.md](CHANGELOG.md): release history.
 
-The wheel includes only compact `dirpluck/docs/CONFIGURATION.md` and `dirpluck/docs/CLI.md` references so an installed package contains enough information to write a Configuration and run the CLI. For more detail, use the documentation in the source distribution or repository.
+The wheel includes compact `dirpluck/docs/CONFIGURATION.md` and `dirpluck/docs/CLI.md` references together with `dirpluck/docs/TRUST.md`, so the trust model remains available in an installed package. For more detail, use the documentation in the source distribution or repository.
 
 ## Public interface
 
