@@ -2,6 +2,14 @@
 
 Release-by-release changes for dirpluck.
 
+## 0.4.1
+
+Use `dirpluck.__version__` as the single source of truth for the current package version, and provide that value to documentation generation through an external JSON context generated from the package version.
+
+### Added
+
+- Remove the current release number from the project vocabulary. Generate the external documentation context JSON from `dirpluck.__version__`, and let documents such as README reference the `version` context value when they need the current release. Release numbers in CHANGELOG remain historical data written directly in the canonical source.
+
 ## 0.4.0
 
 Allow the Root Configuration to explicitly reuse Shared include and exclude patterns from imported Configurations under the import namespace.

@@ -7,11 +7,6 @@
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_1",
       "text": "dirpluck"
-    },
-    {
-      "source": "dirpluck_docs.vocabulary.canonical",
-      "identifier": "TERM_11",
-      "text": "0.4.0"
     }
   ]
 }
@@ -36,6 +31,14 @@
 # dirpluck CHANGELOG
 
 dirpluck のリリースごとの変更履歴。
+
+## 0.4.1
+
+現在のパッケージバージョンを `dirpluck.__version__` に一本化し、文書生成ではそこから生成した外部 JSON context を利用する。
+
+### Added
+
+- 現在のリリース番号を用語集の語彙として保持する方式を廃止する。文書生成用の外部 context JSON は `dirpluck.__version__` から生成し、README など現在バージョンを必要とする文書は `version` context 値を参照する。CHANGELOG の各リリース番号は履歴情報として canonical source に直接記述する。
 
 ## 0.4.0
 

@@ -7,11 +7,6 @@
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_1",
       "text": "dirpluck"
-    },
-    {
-      "source": "dirpluck_docs.vocabulary.canonical",
-      "identifier": "TERM_11",
-      "text": "0.4.0"
     }
   ]
 }
@@ -273,7 +268,7 @@ dirpluck --config snapshot --sequence 2
 
 ## インストール
 
-Python 3.11 以降を使用します。現在のリリースは `0.4.0` です。
+Python 3.11 以降を使用します。現在のリリースは `0.4.1` です。
 
 ```console
 pip install dirpluck

@@ -245,7 +245,7 @@ TOML の完全な書き方、対象とコンパニオンの形、ケース、選
 
 ## インストール
 
-Python 3.11 以降を使用します。現在のリリースは `{{TERM_11}}` です。
+Python 3.11 以降を使用します。現在のリリースは `{{version}}` です。
 
 ```console
 pip install {{TERM_1}}
@@ -273,4 +273,4 @@ pip install {{TERM_1}}
 
 wheel にはインストール後の利用時に必要な `USAGE.md` だけを `{{TERM_1}}/docs/` 配下へ収録します。README、CONFIGURATION、SPECIFICATION、GLOSSARY、CHANGELOG、および文書生成設備は sdist またはリポジトリから参照します。
 '''
-    vocabulary_refs @= (terms.TERM_1, terms.TERM_11, terms.TERM_12, terms.TERM_13, terms.TERM_14,)
+    vocabulary_refs @= (terms.TERM_1, terms.TERM_12, terms.TERM_13, terms.TERM_14,)

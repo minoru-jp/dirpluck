@@ -9,7 +9,7 @@ include pyproject.toml
 recursive-include src *.py *.md
 recursive-include tests *.py
 recursive-include tools *.py
-recursive-include _internal *.py *.md *.toml
+recursive-include _internal *.py *.md *.toml *.json
 prune .github
 exclude .gitignore
 global-exclude __pycache__ *.py[cod] .DS_Store

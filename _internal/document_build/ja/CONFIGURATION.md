@@ -7,11 +7,6 @@
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_1",
       "text": "dirpluck"
-    },
-    {
-      "source": "dirpluck_docs.vocabulary.canonical",
-      "identifier": "TERM_11",
-      "text": "0.4.0"
     }
   ]
 }

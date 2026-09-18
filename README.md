@@ -238,7 +238,7 @@ There are intentionally no CLI options that temporarily replace selection rules 
 
 ## Installation
 
-Python 3.11 or later is required. Current release: `0.4.0`.
+Python 3.11 or later is required. Current release: `0.4.1`.
 
 ```console
 pip install dirpluck
