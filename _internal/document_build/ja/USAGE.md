@@ -11,7 +11,7 @@
     {
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_11",
-      "text": "0.2.0"
+      "text": "0.3.0"
     }
   ]
 }
@@ -19,7 +19,7 @@
 
 <!--
 この文書は自動生成された翻訳元の中間文書です。
-正本は `_internal/document_source/dirpluck_docs/usage/canonical.py` です。
+正本は `dirpluck_docs/usage/canonical.py` です。
 直接編集しないでください。
 
 公開文書作成方針
@@ -41,8 +41,8 @@
 
 - 公開インターフェースは CLI と TOML Configuration。
 - 新規または変更した Configuration は、通常実行の前に `--dry-run` で確認する。
-- 既定 Configuration は cwd または `./dirpluck/` の `dirpluck.toml`。
-- `--config NAME` は cwd または `./dirpluck/` から同名 TOML を選ぶ。`.toml` は省略可能。
+- 既定のルート設定ファイルは cwd または `./dirpluck/` の `dirpluck.toml`。
+- `--config NAME` は cwd または `./dirpluck/` からルート設定ファイルを選ぶ。`.toml` は省略可能。
 - `[target]` がある Configuration では1個以上の `DIRECTORY` を渡す。
 - Companion だけの Configuration では `DIRECTORY` を渡さない。
 
@@ -181,6 +181,35 @@ include = ["dist/tool-*.whl"]
 
 選択中の Case と同名の Companion Case があればそれを使う。なければ Companion の base Selection を使う。
 
+## 設定インポート
+
+別の Configuration を取り込む場合:
+
+```toml
+[import.shikumi-stack]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+case = "distribution"
+
+[import.shikumi-stack.companion.project]
+path = "shikumi"
+description = "The shikumi project itself."
+include_if_exists = ["*"]
+if_empty = "allow"
+```
+
+- `root` は ルート設定ファイル自身の所在ディレクトリ相対。`/` 区切りを使い、import では `..` を使用できる。絶対 path は使用しない。
+- `configuration` は import root 内の相対 TOML file path。探索は行わない。
+- import 先から使用するのは Companion だけ。Target は使用しない。
+- 必要なら `[import.<name>.companion.<name>]` を追加し、import root 内の source を Root 側から Companion として定義する。
+- import 配下の論理名は `<import>.<companion>`。import 先設定由来と Root 側追加で同名 Companion を定義しない。
+- Root 側追加 Companion の `path` は import root 相対。`path = "."` で import root 自体を Companion にできる。絶対 path と `..` は使用しない。
+- Root 側追加 Companion の shared pattern 参照は Root Configuration の `[shared.*]` を使う。import 先設定由来 Companion は import 先の `[shared.*]` を使う。
+- import 先設定由来または Root 側追加を合わせて少なくとも1個の Companion が必要。
+- `case` は import 名前空間の Companion 群だけに適用する。少なくとも1個の Companion がその Case を定義している必要がある。Root の `--case` は伝播しない。
+- import 先の `[output]` は使用しない。最終出力はルート設定ファイルの `[output]` だけ。
+- import 先 Configuration からさらに import しない。0.3.0 は1階層だけ。
+
 ## Output
 
 固定名:
@@ -214,7 +243,8 @@ dirpluck PROJECT --sequence 2
 - `--dry-run` で選択内容を確認してから通常実行する。
 - `[missing]` は必須 `include` の未一致として確認する。
 - `[optional missing]` は `include_if_exists` の未一致として、意図した結果か確認する。
-- cwd を Target、Companion、Output を含む filesystem boundary として扱う。
+- ルート設定ファイルは cwd、import 先は各 import の `root` を filesystem boundary として扱う。
+- import を追加・変更した場合も `--dry-run` で root、Configuration、Companion の解決結果を確認する。
 - symlink を含む構成では `--dry-run` で解決結果を確認する。
 
 ## 間違えやすい点
@@ -225,6 +255,11 @@ dirpluck PROJECT --sequence 2
 - Case は base の selection field や共有パターン参照を継承しない。
 - 共有パターンは自動適用されない。
 - include 用と exclude 用の共有パターンは別々に定義する。
+- ルート設定ファイルの CLI `DIRECTORY` と `--case` は import 先へ自動伝播しない。
+- import 先の Target は使用されない。
+- import 先の `[output]` は実行されない。
+- import 先に `[import.<name>]` を持たせない。
+- 通常の Target / Companion に `..` を使って boundary を広げない。別 Configuration を使う場合は `[import.<name>]` を使う。
 - Python 内部モジュールを公開 API として使用しない。
 
 ## 詳細

@@ -2,6 +2,18 @@
 
 Release-by-release changes for dirpluck.
 
+## 0.3.0
+
+Allow a Root Configuration to explicitly import Companions declared by another dirpluck Configuration from a different filesystem root while preserving a separate boundary for each Configuration.
+
+### Added
+
+- Add Configuration imports. A Root Configuration may declare `root`, `configuration`, and optional `case` under `[import.<name>]` to combine the extraction results of Companions declared by another dirpluck Configuration into the same Archive plan. A Root Configuration may also consist only of imports with no local Target or Companion.
+- Define import `root` as the only path that may explicitly cross the Root Configuration's cwd boundary. The root is restricted to a relative path from the directory containing the Root Configuration file itself; POSIX, Windows, and UNC absolute forms are rejected regardless of the host OS. After the import root is resolved, `configuration`, imported Companions, and selected files are confined inside that root again so every Configuration keeps an independent filesystem boundary.
+- Keep runtime binding explicit across Configuration boundaries: Root CLI `DIRECTORY` and `--case` values do not propagate into imports, imported Targets are not used, and import `case` applies independently only to the imported Companion group. Imported `[output]` definitions are schema-validated but not executed; the Root Configuration's `[output]` remains the only final Output. In 0.3.0, imported Configurations may not recursively import another Configuration.
+- Build Archive paths relative to the execution root of the Configuration that selected each file. The same real file selected for the same Archive path is written once; different real files colliding on one Archive path, or one real file resolving to different Archive paths, are rejected as ambiguous. The Archive README records used Configuration imports and their execution roots.
+- Allow a Root Configuration to declare `[import.<name>.companion.<companion-name>]` and add sources inside an import root as Companions rather than Targets. Companions under an import use logical names `<import>.<companion>` regardless of whether they come from the imported Configuration or the Root Configuration, and duplicate logical names within one import are rejected. Root-defined import Companions use Root Shared patterns, imported-Configuration Companions keep the imported Shared-pattern namespace, and `path = "."` may select the import root itself.
+
 ## 0.2.0
 
 Introduce Shared patterns so extraction conditions can be reused explicitly across Cases and sources.

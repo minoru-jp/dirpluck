@@ -10,6 +10,35 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.3.0")
+    class RELEASE_3:
+        r'''別ディレクトリの dirpluck Configuration が宣言する Companion を明示的に取り込み、各 Configuration の境界を保ったままひとつのアーカイブへ統合できるようにする。'''
+
+        @change(ADDED)
+        class CHANGE_1:
+            r'''{{TERM_13}}を導入する。{{TERM_14}}の `[import.<name>]` に `root`、`configuration`、必要に応じて `case` を記述し、別の dirpluck 設定ファイルが宣言する Companion の抽出結果を同じ archive plan へ統合できるようにする。Root Configuration はローカル source を持たず設定インポートだけで構成することもできる。'''
+            vocabulary_refs @= (terms.TERM_13, terms.TERM_14)
+
+        @change(ADDED)
+        class CHANGE_2:
+            r'''{{TERM_13}}の `root` を、{{TERM_14}}の cwd 境界を明示的に越えられる唯一の path として定義する。`root` は{{TERM_14}}自身の所在ディレクトリからの相対 path に限定し、POSIX / Windows / UNC の絶対指定を OS にかかわらず拒否する。import root を解決した後は、`configuration`、import 先 Companion、選択ファイルをその root 内へ再び限定し、各 Configuration が独立した filesystem boundary を持つようにする。'''
+            vocabulary_refs @= (terms.TERM_13, terms.TERM_14)
+
+        @change(ADDED)
+        class CHANGE_3:
+            r'''{{TERM_14}}の CLI `DIRECTORY` と `--case` を import 先へ暗黙に伝播させず、import 先の Target は使用しない。`case` は import 先 Companion 群だけへ独立して適用する。import 先設定の `[output]` は schema validation だけを行って実行時には使用せず、最終出力は{{TERM_14}}の `[output]` だけとする。0.3.0 では import 先からさらに設定を import する再帰構成を拒否する。'''
+            vocabulary_refs @= (terms.TERM_14,)
+
+        @change(ADDED)
+        class CHANGE_4:
+            r'''Archive path を、各ファイルを選択した Configuration の execution root から見た相対 path として統合する。同じ archive path に同じ物理ファイルが重なる場合は1回だけ格納し、異なる物理ファイルが同じ archive path へ衝突する場合、または同じ物理ファイルが異なる archive path へ解決される場合は曖昧としてエラーにする。アーカイブ README には使用した{{TERM_13}}と各 execution root を記録する。'''
+            vocabulary_refs @= (terms.TERM_13,)
+
+        @change(ADDED)
+        class CHANGE_5:
+            r'''{{TERM_13}}では{{TERM_14}}から `[import.<name>.companion.<companion-name>]` を定義し、import root 内の追加 source を Target ではなく Companion として取り込めるようにする。import 配下の Companion は import 先設定由来か Root 側追加かにかかわらず `<import>.<companion>` の論理名を持ち、同じ import 内での重複を拒否する。Root 側追加 Companion は Root の shared pattern を、import 先設定由来 Companion は import 先の shared pattern を使用し、`path = "."` によって import root 自体を Companion として選べる。'''
+            vocabulary_refs @= (terms.TERM_13, terms.TERM_14)
+
     @release("0.2.0")
     class RELEASE_2:
         r'''共有パターンを導入し、抽出条件をケース間や source 間で明示的に再利用できるようにする。'''

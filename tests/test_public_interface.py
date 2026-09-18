@@ -8,6 +8,7 @@ class PublicInterfaceTests(unittest.TestCase):
         for name in (
             "BuildRequest",
             "Companion",
+            "ConfigurationImport",
             "Config",
             "Output",
             "ResolvedSource",

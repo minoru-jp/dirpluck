@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import glob
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Mapping
 import tomllib
@@ -77,7 +77,7 @@ def _looks_like_root_config(path: Path) -> bool:
     return (
         isinstance(data, dict)
         and "output" in data
-        and ("target" in data or "companion" in data)
+        and ("target" in data or "companion" in data or "import" in data)
     )
 
 
@@ -143,6 +143,17 @@ class Companion:
 
 
 @dataclass(frozen=True)
+class ConfigurationImport:
+    """One named external Configuration plus Root-defined companions in its namespace."""
+
+    name: str
+    root: str
+    configuration: str
+    case: str | None
+    companions: Mapping[str, Companion]
+
+
+@dataclass(frozen=True)
 class Output:
     """One fixed or generated archive output policy."""
 
@@ -166,6 +177,7 @@ class Config:
     shared: SharedPatterns
     target: Target | None
     companions: Mapping[str, Companion]
+    imports: Mapping[str, ConfigurationImport]
     output: Output
 
 
@@ -510,14 +522,27 @@ def _parse_selection(
     )
 
 
-def _validate_fixed_path(path: str, where: str) -> str:
+def _validate_fixed_path(
+    path: str,
+    where: str,
+    *,
+    allow_root: bool = False,
+) -> str:
     if not path:
         raise ConfigurationError(f"{where}: path must not be empty")
     normalized = path.replace("\\", "/")
     pure = PurePosixPath(normalized)
-    if pure.is_absolute() or pure == PurePosixPath(".") or ".." in pure.parts:
+    windows = PureWindowsPath(normalized)
+    if (
+        pure.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or ".." in pure.parts
+        or (pure == PurePosixPath(".") and not allow_root)
+    ):
+        boundary = "at or below" if allow_root else "below"
         raise ConfigurationError(
-            f"{where}: fixed path must name a directory below the current working directory"
+            f"{where}: fixed path must name a directory {boundary} the Configuration execution root"
         )
     if glob.has_magic(normalized):
         raise ConfigurationError(f"{where}: fixed path must name one concrete directory")
@@ -568,6 +593,101 @@ def _validate_output_fragment(value: object, where: str) -> str | None:
             f"{where}: output filename fragment must be one portable filename fragment"
         )
     return value
+
+
+def _validate_import_root(path: str, where: str) -> str:
+    if not path:
+        raise ConfigurationError(f"{where}: root must not be empty")
+    normalized = path.replace("\\", "/")
+    pure = PurePosixPath(normalized)
+    windows = PureWindowsPath(normalized)
+    if pure.is_absolute() or windows.is_absolute() or windows.drive:
+        raise ConfigurationError(
+            f"{where}: import root must be a portable relative path"
+        )
+    if glob.has_magic(normalized):
+        raise ConfigurationError(f"{where}: import root must name one concrete directory")
+    return pure.as_posix()
+
+
+def _validate_import_configuration(path: str, where: str) -> str:
+    if not path:
+        raise ConfigurationError(f"{where}: configuration path must not be empty")
+    normalized = path.replace("\\", "/")
+    pure = PurePosixPath(normalized)
+    windows = PureWindowsPath(normalized)
+    raw_parts = tuple(part for part in normalized.split("/") if part != "")
+    if (
+        pure.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or any(part in {".", ".."} for part in raw_parts)
+    ):
+        raise ConfigurationError(
+            f"{where}: configuration must be a relative TOML path without '.' or '..' traversal"
+        )
+    if glob.has_magic(normalized):
+        raise ConfigurationError(f"{where}: configuration must name one concrete TOML file")
+    if pure.suffix != ".toml":
+        raise ConfigurationError(f"{where}: configuration must end with '.toml'")
+    return pure.as_posix()
+
+
+def _parse_imports(
+    value: object,
+    where: str,
+    shared: SharedPatterns,
+) -> Mapping[str, ConfigurationImport]:
+    if value is None:
+        return MappingProxyType({})
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"{where}: expected a table")
+    if not value:
+        raise ConfigurationError(f"{where}: define at least one named import")
+
+    imports: dict[str, ConfigurationImport] = {}
+    for raw_name, raw_import in value.items():
+        name = _require_name(raw_name, where)
+        import_where = f"{where}.{name}"
+        if not isinstance(raw_import, dict):
+            raise ConfigurationError(f"{import_where}: expected a table")
+        _require_only_keys(
+            raw_import, {"root", "configuration", "case", "companion"}, import_where
+        )
+
+        raw_root = raw_import.get("root")
+        if not isinstance(raw_root, str):
+            raise ConfigurationError(f"{import_where}.root: expected a string")
+        root = _validate_import_root(raw_root, f"{import_where}.root")
+
+        raw_configuration = raw_import.get("configuration")
+        if not isinstance(raw_configuration, str):
+            raise ConfigurationError(f"{import_where}.configuration: expected a string")
+        configuration = _validate_import_configuration(
+            raw_configuration, f"{import_where}.configuration"
+        )
+
+        raw_case = raw_import.get("case")
+        if raw_case is None:
+            case = None
+        else:
+            case = _require_name(raw_case, f"{import_where}.case")
+
+        companions = _parse_companions(
+            raw_import.get("companion"),
+            f"{import_where}.companion",
+            shared,
+            allow_root_path=True,
+        )
+
+        imports[name] = ConfigurationImport(
+            name=name,
+            root=root,
+            configuration=configuration,
+            case=case,
+            companions=companions,
+        )
+    return MappingProxyType(imports)
 
 
 def _parse_output(value: object, where: str) -> Output:
@@ -703,6 +823,8 @@ def _parse_companions(
     value: object,
     where: str,
     shared: SharedPatterns,
+    *,
+    allow_root_path: bool = False,
 ) -> Mapping[str, Companion]:
     if value is None:
         return MappingProxyType({})
@@ -734,7 +856,9 @@ def _parse_companions(
         raw_path = raw_companion.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{companion_where}.path: expected a string")
-        path = _validate_fixed_path(raw_path, f"{companion_where}.path")
+        path = _validate_fixed_path(
+            raw_path, f"{companion_where}.path", allow_root=allow_root_path
+        )
         selection = _parse_selection(
             {
                 key: item
@@ -773,21 +897,24 @@ def _validate_case_namespace(
                 f"{where} [companion.{name}.case]: case(s) not defined by target: {listed}"
             )
 
+
 def load_config(path: str | Path = CONFIG_NAME) -> Config:
     """Load one dirpluck configuration file without resolving filesystem paths."""
 
     manifest = Path(path).expanduser().resolve()
     data = _read_toml(manifest)
-    _require_only_keys(data, {"shared", "target", "companion", "output"}, str(manifest))
+    _require_only_keys(data, {"shared", "import", "target", "companion", "output"}, str(manifest))
 
     shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
     target = _parse_target(data.get("target"), f"{manifest} [target]", shared)
     companions = _parse_companions(
         data.get("companion"), f"{manifest} [companion]", shared
     )
-    if target is None and not companions:
+    imports = _parse_imports(data.get("import"), f"{manifest} [import]", shared)
+    if target is None and not companions and not imports:
         raise ConfigurationError(
-            f"{manifest}: define [target] and/or at least one [companion.<name>]"
+            f"{manifest}: define [target], at least one [companion.<name>], "
+            "and/or at least one [import.<name>]"
         )
     _validate_case_namespace(target, companions, str(manifest))
     output = _parse_output(data.get("output"), f"{manifest} [output]")
@@ -797,5 +924,6 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
         shared=shared,
         target=target,
         companions=companions,
+        imports=imports,
         output=output,
     )

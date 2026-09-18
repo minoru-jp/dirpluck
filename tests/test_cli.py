@@ -588,5 +588,70 @@ class CliTests(unittest.TestCase):
             self.assertFalse((root / "out.zip").exists())
 
 
+    def test_import_only_configuration_runs_without_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            (external / "data").mkdir(parents=True)
+            (external / "data" / "artifact.txt").write_text("x", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "data"
+                description = "Imported data."
+                include = ["artifact.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            (root / "dirpluck.toml").write_text(textwrap.dedent('''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [output]
+                path = "result.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main([])
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                self.assertIn("data/artifact.txt", archive.namelist())
+            self.assertFalse((external / "unused.zip").exists())
+
+    def test_configs_lists_import_only_root_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "review.toml").write_text(textwrap.dedent('''
+                [import.external]
+                root = ".."
+                configuration = "external/config.toml"
+
+                [output]
+                path = "result.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            previous = Path.cwd()
+            stdout = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["--configs"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertIn("review.toml", stdout.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

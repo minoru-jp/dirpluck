@@ -11,7 +11,7 @@
     {
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_11",
-      "text": "0.2.0"
+      "text": "0.3.0"
     }
   ]
 }
@@ -19,7 +19,7 @@
 
 <!--
 この文書は自動生成された翻訳元の中間文書です。
-正本は `_internal/document_source/dirpluck_docs/changelog/canonical.py` です。
+正本は `dirpluck_docs/changelog/canonical.py` です。
 直接編集しないでください。
 
 公開文書作成方針
@@ -36,6 +36,18 @@
 # dirpluck CHANGELOG
 
 dirpluck のリリースごとの変更履歴。
+
+## 0.3.0
+
+別ディレクトリの dirpluck Configuration が宣言する Companion を明示的に取り込み、各 Configuration の境界を保ったままひとつのアーカイブへ統合できるようにする。
+
+### Added
+
+- 設定インポートを導入する。ルート設定ファイルの `[import.<name>]` に `root`、`configuration`、必要に応じて `case` を記述し、別の dirpluck 設定ファイルが宣言する Companion の抽出結果を同じ archive plan へ統合できるようにする。Root Configuration はローカル source を持たず設定インポートだけで構成することもできる。
+- 設定インポートの `root` を、ルート設定ファイルの cwd 境界を明示的に越えられる唯一の path として定義する。`root` はルート設定ファイル自身の所在ディレクトリからの相対 path に限定し、POSIX / Windows / UNC の絶対指定を OS にかかわらず拒否する。import root を解決した後は、`configuration`、import 先 Companion、選択ファイルをその root 内へ再び限定し、各 Configuration が独立した filesystem boundary を持つようにする。
+- ルート設定ファイルの CLI `DIRECTORY` と `--case` を import 先へ暗黙に伝播させず、import 先の Target は使用しない。`case` は import 先 Companion 群だけへ独立して適用する。import 先設定の `[output]` は schema validation だけを行って実行時には使用せず、最終出力はルート設定ファイルの `[output]` だけとする。0.3.0 では import 先からさらに設定を import する再帰構成を拒否する。
+- Archive path を、各ファイルを選択した Configuration の execution root から見た相対 path として統合する。同じ archive path に同じ物理ファイルが重なる場合は1回だけ格納し、異なる物理ファイルが同じ archive path へ衝突する場合、または同じ物理ファイルが異なる archive path へ解決される場合は曖昧としてエラーにする。アーカイブ README には使用した設定インポートと各 execution root を記録する。
+- 設定インポートではルート設定ファイルから `[import.<name>.companion.<companion-name>]` を定義し、import root 内の追加 source を Target ではなく Companion として取り込めるようにする。import 配下の Companion は import 先設定由来か Root 側追加かにかかわらず `<import>.<companion>` の論理名を持ち、同じ import 内での重複を拒否する。Root 側追加 Companion は Root の shared pattern を、import 先設定由来 Companion は import 先の shared pattern を使用し、`path = "."` によって import root 自体を Companion として選べる。
 
 ## 0.2.0
 

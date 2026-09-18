@@ -6,8 +6,8 @@ This document lists only the operational rules needed when using dirpluck.
 
 - The supported public interfaces are the CLI and TOML Configuration.
 - Check a new or changed Configuration with `--dry-run` before a normal run.
-- The default Configuration is `dirpluck.toml` in cwd or `./dirpluck/`.
-- `--config NAME` selects a TOML file with the same name from cwd or `./dirpluck/`. The `.toml` suffix may be omitted.
+- The default Root Configuration is `dirpluck.toml` in cwd or `./dirpluck/`.
+- `--config NAME` selects the Root Configuration from cwd or `./dirpluck/`. The `.toml` suffix may be omitted.
 - A Configuration with `[target]` requires one or more `DIRECTORY` arguments.
 - A Companion-only Configuration takes no `DIRECTORY` argument.
 
@@ -146,6 +146,35 @@ include = ["dist/tool-*.whl"]
 
 If a Companion defines a Case with the selected Case name, that Case is used. Otherwise the Companion uses its base Selection.
 
+## Configuration import
+
+To reuse Companions from another Configuration:
+
+```toml
+[import.shikumi-stack]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+case = "distribution"
+
+[import.shikumi-stack.companion.project]
+path = "shikumi"
+description = "The shikumi project itself."
+include_if_exists = ["*"]
+if_empty = "allow"
+```
+
+- `root` is relative to the directory containing the Root Configuration file itself. Use `/` separators; `..` is allowed, but absolute paths are not.
+- `configuration` is a relative TOML file path inside the import root. No discovery is performed.
+- Only Companions are used from the imported Configuration. Its Target is not used.
+- Add `[import.<name>.companion.<name>]` when the Root Configuration should define another Companion inside the import root.
+- Companion logical names under an import are `<import>.<companion>`. Do not define the same Companion name from both the imported Configuration and the Root Configuration within one import.
+- Root-defined import Companion `path` values are relative to the import root. `path = "."` selects the import root itself. Do not use absolute paths or `..`.
+- Shared pattern references in Root-defined import Companions use the Root Configuration's `[shared.*]`; imported-Configuration Companions use the imported Configuration's `[shared.*]`.
+- The imported and Root-defined Companions together must provide at least one Companion.
+- `case` applies to the whole import Companion namespace. At least one Companion must define that Case. Root `--case` does not propagate.
+- The imported `[output]` is not used. Only the Root Configuration's `[output]` is the final Output.
+- Do not import from an imported Configuration. 0.3.0 allows one import level only.
+
 ## Output
 
 Fixed name:
@@ -179,7 +208,8 @@ dirpluck PROJECT --sequence 2
 - Check the selection with `--dry-run` before a normal run.
 - Treat `[missing]` as an unmatched required `include` and investigate it.
 - Treat `[optional missing]` as an unmatched `include_if_exists` and verify that the result is intentional.
-- Treat cwd as the filesystem boundary containing Targets, Companions, and Output.
+- Treat cwd as the Root Configuration boundary; each import uses its own `root` as its boundary.
+- After adding or changing an import, use `--dry-run` to verify the resolved root, Configuration, and Companions.
 - When symlinks are present, use `--dry-run` to check the resolved selection.
 
 ## Common mistakes
@@ -190,6 +220,10 @@ dirpluck PROJECT --sequence 2
 - A Case does not inherit base selection fields or shared-pattern references.
 - Shared patterns are not applied automatically.
 - Define include and exclude shared patterns separately.
+- Root CLI `DIRECTORY` and `--case` values do not propagate into imports.
+- An imported `[output]` is not executed.
+- Do not put `[import.<name>]` inside an imported Configuration.
+- Do not use `..` on ordinary Targets or Companions to widen the boundary. Use `[import.<name>]` when another Configuration should be used.
 - Do not use internal Python modules as a public API.
 
 ## Details

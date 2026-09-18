@@ -6,18 +6,20 @@ This document defines the exact operational semantics of dirpluck's supported CL
 
 The compatibility-supported public interface is the `dirpluck` CLI together with the TOML Configuration format described here. Python modules under the package are implementation internals unless a Python API is explicitly documented in the future.
 
-## 2. Configuration discovery
+## 2. Root Configuration discovery
 
-Configuration discovery is non-recursive and limited to two locations relative to the current working directory (cwd):
+CLI discovery for the Root Configuration is non-recursive and checks only these two locations relative to the cwd:
 
-- the cwd itself;
-- `./dirpluck/`.
+- the cwd itself
+- the immediate `./dirpluck/` directory
 
-Without `--config`, the candidate filename is `dirpluck.toml`. With `--config NAME`, `NAME` is treated as a filename, not an arbitrary path; `.toml` may be omitted.
+When `--config` is omitted, the candidate filename is `dirpluck.toml`. With `--config NAME`, `NAME` is treated as a filename rather than an arbitrary path, and `.toml` may be omitted.
 
-Zero matching candidates is an error. If the same candidate filename exists in both discovery locations, the result is ambiguous and is rejected. Neither location has implicit precedence.
+Zero matching candidates is an error. If the same candidate name exists in both locations, the result is ambiguous and rejected; neither location has implicit precedence.
 
-`--configs` lists discoverable candidates. At the cwd root, only TOML files that resemble a dirpluck Configuration are listed; a candidate is recognizable when it has `[output]` and at least one of `[target]` or `[companion]`. TOML files directly under `./dirpluck/` are listed as candidates. Duplicate filenames across both locations are marked ambiguous.
+`--configs` lists discoverable Root Configuration candidates. In the cwd it lists TOML files that structurally resemble dirpluck Configurations; under `./dirpluck/` it lists TOML candidates. Duplicate names across the two locations are reported as ambiguous.
+
+Configuration imports do not use this discovery mechanism. Each import names one exact relative TOML file with `configuration` inside its import root.
 
 ## 3. Top-level Configuration shape
 
@@ -26,6 +28,7 @@ Only the following forms are accepted:
 ```text
 [shared.include_patterns]
 [shared.exclude_patterns]
+[import.<name>]
 [target]
 [target.case.<name>]
 [companion.<name>]
@@ -38,18 +41,64 @@ Unknown keys are errors at every validated level.
 A Configuration represents one extraction intent and contains:
 
 - zero or more named Shared patterns;
+- zero or more Configuration imports;
 - zero or one logical Target definition;
 - zero or more Companions;
-- at least one source in total, meaning a Target and/or one or more Companions;
+- for a Root Configuration, at least one local source or Configuration import;
 - exactly one Output definition.
 
-The Target is runtime-bound: one logical `[target]` definition may be instantiated by one or more directory arguments from the CLI. Every runtime Target uses the same selected Target definition. Each Companion is configuration-bound: its directory is fixed by its `path`.
+The Target is runtime-bound: one logical `[target]` definition is instantiated by one or more CLI directories only when that Configuration is run as the Root Configuration. An imported Configuration's Target is validated as part of its schema but is not used by the importing run. Each Companion is configuration-bound: its directory is fixed by its `path` relative to that Configuration's execution root.
 
-Shared patterns reuse named pattern arrays only; they are not complete shared selection definitions. There are no bundles, Configuration inheritance, Configuration merging, or CLI selection overrides.
+Shared patterns reuse named pattern arrays only; they are not complete shared selection definitions. A Configuration import explicitly reuses Companion definitions declared by another complete Configuration. It is not Configuration inheritance or merging, and there are no CLI selection overrides.
 
 `[shared.include_patterns]` and `[shared.exclude_patterns]` are each optional. If `[shared]` is present, at least one of these tables must be present, and every present table must contain at least one named array. Each name must be a non-empty string and each array must contain at least one string. Include arrays are validated using the include pattern grammar and exclude arrays using the exclude pattern grammar when the Configuration is loaded. Merely defining a Shared pattern does not apply it to any selection.
 
-## 4. Case semantics
+## 4. Configuration imports
+
+A Root Configuration may declare zero or more Configuration imports using `[import.<name>]`. `<name>` is a non-empty import identifier used in configuration locations, errors, and the Archive index. It is not an Archive-path prefix or selection pattern.
+
+Each import accepts only these fields:
+
+```text
+root            required string
+configuration   required string
+case            optional non-empty string
+companion.<name> zero or more Root-owned Companion tables
+```
+
+### `root`
+
+`root` is a directory path relative to the directory containing the Root Configuration file itself. Empty strings, absolute paths, and globs are rejected. `.` and `..` path elements are allowed, so an import may explicitly select a directory outside the cwd. `/` is the canonical path separator. POSIX absolute paths, Windows drive paths, and UNC paths are rejected regardless of the host OS. The resolved path must be an existing directory.
+
+`root` is the only Configuration-import field that expands the parent filesystem boundary. Its resolved real directory becomes the imported Configuration's execution root and filesystem boundary. If the root path itself traverses symbolic links, the resolved directory is the boundary.
+
+### `configuration`
+
+`configuration` is a relative TOML file path from the import root. Empty strings, absolute paths, traversal with `.` / `..`, globs, and non-`.toml` extensions are rejected. The resolved path must be an existing regular file inside the import root.
+
+Imports do not run normal Configuration discovery. The named file is loaded directly and fully parsed and validated as a normal Configuration. Shared patterns inside the imported Configuration remain local to it; identically named Shared patterns in the Root Configuration are unrelated and are not merged.
+
+The imported Configuration's Target, if present, is still schema-validated but is not a source in the importing run. The imported Configuration still requires `[output]` as part of the normal schema. That Output is schema-validated but is not selected for the importing run: its filesystem path is not resolved for output, collisions are not checked, parent directories are not created, and nothing is written there.
+
+The Root Configuration may declare zero or more `[import.<name>.companion.<companion-name>]` tables to define additional Companions inside the same import root. Their schema matches ordinary Companion tables, except that `path = "."` is permitted so the import root itself can be selected as a Companion. Other absolute paths, `..`, and globs are rejected, and the resolved directory must remain inside the import root. Selections for Root-defined import Companions resolve Shared patterns in the Root Configuration; Companions declared by the imported Configuration resolve Shared patterns in the imported Configuration.
+
+The import name is the logical Companion namespace. Root `[companion.x]` is logically `x`; Companion `x` under `[import.a]` is logically `a.x`, regardless of whether it was declared in the imported Configuration or under `[import.a.companion.x]`. If both origins define the same Companion name within one import, the logical name is duplicated and the Configuration is rejected. The same local Companion name may appear under another import or at Root scope because those logical names differ. Logical names are not used as Archive-path prefixes.
+
+Each import namespace must contain at least one Companion from either origin.
+
+### `case`
+
+When `case` is omitted, all Companions in the import namespace use their base selections. When supplied, at least one Companion from either the imported Configuration or Root-defined import Companions must define that Case. Every Companion with the same Case uses it; a Companion without that Case falls back to its base selection. The imported Target and its Target Cases are not used.
+
+The Root Configuration's CLI `--case` never propagates into imports. Every import selects at most one Companion Case through its own `case` field, so the Root Configuration and multiple imports may use different Cases in the same run.
+
+### Recursive imports
+
+In 0.3.0, an imported Configuration containing any `[import.<name>]` is a Configuration error. The import graph is limited to one level; cycles, transitive imports, and depth-dependent Case propagation are not provided.
+
+A Root Configuration may contain only imports and no local Target or Companion. An imported Configuration, however, must contain at least one Companion.
+
+## 5. Case semantics
 
 A Case is one flat, named selection variation for the Configuration. A run has zero or one active Case. Case names cannot be combined or nested, and `--case` may be specified at most once.
 
@@ -75,21 +124,21 @@ When a Case is selected and no Target exists:
 
 Every Target Case and Companion Case is a complete selection definition. It does not inherit from or merge with the source's base selection. Shared pattern references on the base selection are not inherited either; a Case that needs the same Shared pattern must explicitly reference the same name.
 
-## 5. Target and Companion semantics
+## 6. Target and Companion semantics
 
 The Target is optional. When `[target]` and/or `[target.case.<name>]` is present, the Configuration defines one logical runtime-bound Target rule. No Target `path` is stored in TOML, and TOML cannot define multiple separately configured Targets.
 
-If the Configuration defines a Target, the CLI requires one or more positional `DIRECTORY` values. The selected Target definition is applied independently to every supplied directory, in CLI order. All runtime Target directories must resolve to distinct actual directories. If the Configuration does not define a Target, supplying any positional `DIRECTORY` is an error.
+If the Root Configuration defines a Target, the CLI requires one or more positional `DIRECTORY` values. The selected Target definition is applied independently to every supplied directory, in CLI order. All runtime Target directories must resolve to distinct actual directories. If the Root Configuration does not define a Target, supplying any positional `DIRECTORY` is an error. CLI positional directories are never assigned to an imported Configuration; an imported Target definition is unused during that importing run.
 
 `[target]`, when present, is the default Target selection used when `--case` is omitted. A Target may omit `[target]` and define only named Cases; in that form, invoking without `--case` is an error.
 
 Every runtime Target directory must exist at execution time and is resolved according to the filesystem boundary rules below.
 
-Each `[companion.<name>]` must define one concrete cwd-relative `path`, a non-empty `description`, and one complete base selection. A Companion is always part of the Configuration's source set, whether or not a Target exists, and its directory must exist at execution time.
+Each `[companion.<name>]` must define one concrete `path` relative to that Configuration's execution root, a non-empty `description`, and one complete base selection. The execution root is cwd for the Root Configuration and the corresponding import `root` for an imported Configuration. A Companion is always part of the Configuration's source set, whether or not a Target exists, and its directory must exist at execution time.
 
 A Companion may additionally define zero or more complete Case selections under `[companion.<name>.case.<case-name>]`. Case selection follows the Configuration-wide rules in section 4. A missing Companion Case never removes the Companion; it causes that Companion to use its base selection.
 
-## 6. Selection definition
+## 7. Selection definition
 
 Every `[target]`, `[target.case.<name>]`, `[companion.<name>]`, and `[companion.<name>.case.<case-name>]` selection requires a non-empty `description` and at least one `include` / `include_if_exists` equivalent candidate, supplied either directly or through Shared references.
 
@@ -119,7 +168,7 @@ Shared references are expanded in reference-array order, followed by direct patt
 
 `if_empty = "allow"` is valid only for an optional-only selection with no required include patterns after Shared references have been expanded. When the final selected file count is zero and empty results are allowed, the source directory may be represented as an explicit empty directory entry in the Archive.
 
-## 7. Include pattern grammar
+## 8. Include pattern grammar
 
 Include patterns are relative POSIX-style paths from the Target or Companion directory. Absolute paths, `.` as the whole pattern, and `..` traversal are rejected. Backslashes are normalized to `/` before validation.
 
@@ -140,7 +189,7 @@ Multiple matches are all selected. Pattern matching is case-sensitive independen
 
 `**`, `?`, character classes (`[]`), and `!` are not supported. dirpluck does not interpret versions, modification times, or other metadata when several entries match.
 
-## 8. Exclude pattern grammar
+## 9. Exclude pattern grammar
 
 Exclude patterns match a single entity name rather than a relative path.
 
@@ -157,21 +206,23 @@ name*     prefix match
 
 A bare `*`, `*/`, internal-wildcard forms such as `foo*bar`, `**`, `?`, character classes, `!`, backslashes, and path separators are rejected.
 
-## 9. Filesystem boundaries and symbolic links
+## 10. Filesystem boundaries and symbolic links
 
-The cwd is the execution boundary.
+The Root Configuration uses the process cwd as the execution root and filesystem boundary for its own sources. Each `[import.<name>].root` is resolved relative to the directory containing the Root Configuration file itself, and the resulting real directory becomes the execution root and filesystem boundary for that imported Configuration.
 
-The Target directory, when present, and every Companion directory must resolve within the cwd. Paths that escape through symbolic links are rejected.
+Ordinary Target, Companion, include, and Output paths may not escape the execution root of the Configuration that owns them. The only path allowed to explicitly cross the Root Configuration's cwd boundary is an import's `root`. Once the import root is established, its `configuration`, imported Companions, and selected files are confined inside that root again.
 
-Selected files must resolve within their own Target or Companion directory. A file symlink that resolves outside that directory is rejected.
+All used Target and Companion directories must exist and resolve inside the execution root of the Configuration that owns them. Source paths that escape that root through symbolic links are rejected.
 
-During recursive directory collection, directory symlinks are never followed. A directory symlink resolving outside its source directory is an error. A directory symlink resolving inside the source directory is ignored to prevent cycles and duplicate traversal.
+Selected files must resolve inside their respective Target or Companion directory. File symbolic links resolving outside are rejected.
 
-The Target may be the cwd itself by passing `.`. Archive paths still preserve the cwd directory's actual basename as their first component rather than flattening files into the ZIP root.
+During recursive collection, directory symbolic links are not traversed. A directory link resolving outside its source directory is an error; a link resolving inside is ignored to avoid cycles and duplication.
 
-## 10. Archive planning and paths
+A Target may use `.` for the execution root itself. In that case, the root contents are not flattened at the ZIP root: the execution root's actual directory name is preserved as the leading Archive path element.
 
-Selected files preserve their actual cwd-relative filesystem paths in the ZIP.
+## 11. Archive planning and paths
+
+Selected files preserve their actual filesystem paths relative to the execution root of the Configuration that selected them. Root-local sources are cwd-relative; imported sources are relative to that import's `root`.
 
 If multiple sources resolve to the same actual directory, their selections are unioned by real Archive path. A physical file is written once even if multiple declared purposes select it.
 
@@ -179,7 +230,7 @@ The Archive root contains a generated `README.md` that acts only as a purpose-ne
 
 Archive planning is deterministic: selected entries and generated output are ordered consistently rather than depending on incidental filesystem enumeration order.
 
-## 11. Output semantics
+## 12. Output semantics
 
 `[output]` is required and defines exactly one of two forms: fixed output or generated output. Fields from the two forms cannot be mixed.
 
@@ -230,7 +281,7 @@ If a generated destination already exists when dirpluck checks it, the run fails
 
 With either form, the output file itself cannot be selected as one of the Archive inputs.
 
-## 12. Dry-run semantics
+## 13. Dry-run semantics
 
 `--dry-run` uses the same source resolution, Case resolution, selection, and Archive planning logic as a normal invocation but does not create or modify the output.
 
@@ -240,7 +291,7 @@ A source whose final selection is empty is shown as `empty, allowed` when permit
 
 Configuration contradictions, Target/DIRECTORY mismatches, invalid paths, unknown Case names, and `--sequence` on fixed output remain errors during dry-run. Because dry-run does not write the Archive, it does not resolve a timestamped filename or apply existing-output collision behavior.
 
-## 13. CLI forms
+## 14. CLI forms
 
 Build a Configuration that defines a Target with one or more runtime directories:
 

@@ -11,8 +11,15 @@ import os
 import tempfile
 import zipfile
 
-from .config import Companion, Config, ExclusionPattern, Selection
-from .errors import SelectionError
+from .config import (
+    Companion,
+    Config,
+    ConfigurationImport,
+    ExclusionPattern,
+    Selection,
+    load_config,
+)
+from .errors import ConfigurationError, SelectionError
 
 
 @dataclass(frozen=True)
@@ -50,6 +57,7 @@ class ResolvedSource:
     selection: Selection
     source: str
     config_location: str
+    import_name: str | None
 
     @property
     def label(self) -> str:
@@ -117,13 +125,13 @@ def _resolve_directory(
         relative = resolved.relative_to(cwd)
     except ValueError as exc:
         raise SelectionError(
-            f"{label} must be within the current working directory: {resolved}"
+            f"{label} must be within the Configuration execution root: {resolved}"
         ) from exc
 
     if relative == Path("."):
         if not allow_cwd:
             raise SelectionError(
-                f"{label} must name a directory below the current working directory"
+                f"{label} must name a directory below the Configuration execution root"
             )
         archive_root = resolved.name
         if not archive_root:
@@ -196,23 +204,94 @@ def _selected_target(config: Config, case: str | None) -> tuple[Selection, str] 
     return selection, f"[target.case.{case}]"
 
 
-def _selected_companion(companion: Companion, case: str | None) -> tuple[Selection, str]:
+def _selected_companion(
+    companion: Companion,
+    case: str | None,
+    *,
+    config_location_prefix: str = "companion",
+) -> tuple[Selection, str]:
     if case is not None and case in companion.cases:
-        return companion.cases[case], f"[companion.{companion.name}.case.{case}]"
-    return companion.selection, f"[companion.{companion.name}]"
+        return (
+            companion.cases[case],
+            f"[{config_location_prefix}.{companion.name}.case.{case}]",
+        )
+    return companion.selection, f"[{config_location_prefix}.{companion.name}]"
 
 
-def resolve_sources(
+def _available_companion_cases(
+    companions: Mapping[str, Companion],
+) -> tuple[str, ...]:
+    return tuple(sorted({
+        case
+        for companion in companions.values()
+        for case in companion.cases
+    }))
+
+
+def _validate_import_companion_case(
+    imported: Mapping[str, Companion],
+    added: Mapping[str, Companion],
+    case: str | None,
+) -> None:
+    if case is None:
+        return
+    available = tuple(sorted(set(_available_companion_cases(imported)) | set(_available_companion_cases(added))))
+    if case not in available:
+        listed = ", ".join(available) or "(none)"
+        raise SelectionError(
+            f"case {case!r} is not defined for any companion in the import namespace; "
+            f"available companion cases: {listed}"
+        )
+
+
+def _resolve_companion_sources(
+    companions: Mapping[str, Companion],
+    case: str | None,
+    *,
+    execution_root: Path,
+    key_prefix: str = "",
+    import_name: str | None = None,
+    config_location_prefix: str = "companion",
+    allow_execution_root: bool = False,
+) -> tuple[ResolvedSource, ...]:
+    resolved_sources: list[ResolvedSource] = []
+    for name, companion in companions.items():
+        selection, config_location = _selected_companion(
+            companion, case, config_location_prefix=config_location_prefix
+        )
+        logical_name = name if import_name is None else f"{import_name}.{name}"
+        directory, archive_root = _resolve_directory(
+            companion.path,
+            execution_root,
+            label=f"companion {logical_name!r}",
+            allow_cwd=allow_execution_root,
+        )
+        resolved_sources.append(
+            ResolvedSource(
+                key=f"{key_prefix}companion:{name}",
+                kind="companion",
+                name=logical_name,
+                description=selection.description,
+                directory=directory,
+                archive_root=archive_root,
+                selection=selection,
+                source=f"fixed path `{companion.path}`",
+                config_location=config_location,
+                import_name=import_name,
+            )
+        )
+    return tuple(resolved_sources)
+
+
+def _resolve_configuration_sources(
     config: Config,
     request: BuildRequest,
     *,
-    cwd: str | Path | None = None,
+    execution_root: Path,
+    key_prefix: str = "",
+    import_name: str | None = None,
 ) -> tuple[ResolvedSource, ...]:
-    """Resolve every runtime Target, when configured, plus every Companion."""
-
-    cwd_path = Path.cwd().resolve() if cwd is None else Path(cwd).expanduser().resolve(strict=True)
-    if not cwd_path.is_dir():
-        raise SelectionError(f"current working directory is not a directory: {cwd_path}")
+    """Resolve Target and Companion sources for one Configuration execution root."""
 
     _validate_request(config, request)
     resolved_sources: list[ResolvedSource] = []
@@ -225,7 +304,7 @@ def resolve_sources(
         for index, requested_directory in enumerate(request.directories, start=1):
             target_directory, target_archive_root = _resolve_directory(
                 requested_directory,
-                cwd_path,
+                execution_root,
                 label=f"target {index}" if target_count > 1 else "target",
                 allow_cwd=True,
             )
@@ -234,41 +313,148 @@ def resolve_sources(
                     f"target directories must resolve to distinct directories: {target_directory}"
                 )
             seen_target_directories.add(target_directory)
+            local_key = "target" if target_count == 1 else f"target:{index}"
+            if import_name is None:
+                source_text = f"CLI input #{index}" if target_count > 1 else "CLI input"
+                source_name = None if target_count == 1 else target_archive_root
+            else:
+                source_text = (
+                    f"import `{import_name}` target #{index}"
+                    if target_count > 1
+                    else f"import `{import_name}` target"
+                )
+                source_name = None if target_count == 1 else target_archive_root
             resolved_sources.append(
                 ResolvedSource(
-                    key="target" if target_count == 1 else f"target:{index}",
+                    key=f"{key_prefix}{local_key}",
                     kind="target",
-                    name=None if target_count == 1 else target_archive_root,
+                    name=source_name,
                     description=target_selection.description,
                     directory=target_directory,
                     archive_root=target_archive_root,
                     selection=target_selection,
-                    source=f"CLI input #{index}" if target_count > 1 else "CLI input",
+                    source=source_text,
                     config_location=target_location,
+                    import_name=import_name,
                 )
             )
 
-    for name, companion in config.companions.items():
-        selection, config_location = _selected_companion(companion, request.case)
-        directory, archive_root = _resolve_directory(
-            companion.path,
-            cwd_path,
-            label=f"companion {name!r}",
-            allow_cwd=False,
+    resolved_sources.extend(
+        _resolve_companion_sources(
+            config.companions,
+            request.case,
+            execution_root=execution_root,
+            key_prefix=key_prefix,
+            import_name=import_name,
         )
-        resolved_sources.append(
-            ResolvedSource(
-                key=f"companion:{name}",
-                kind="companion",
-                name=name,
-                description=selection.description,
-                directory=directory,
-                archive_root=archive_root,
-                selection=selection,
-                source=f"fixed path `{companion.path}`",
-                config_location=config_location,
+    )
+
+    return tuple(resolved_sources)
+
+
+def _resolve_import_root(spec: ConfigurationImport, manifest: Path) -> Path:
+    candidate = manifest.parent / Path(spec.root)
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise SelectionError(
+            f"import {spec.name!r} root does not exist: {candidate}"
+        ) from exc
+    if not resolved.is_dir():
+        raise SelectionError(f"import {spec.name!r} root is not a directory: {candidate}")
+    return resolved
+
+
+def _load_imported_config(spec: ConfigurationImport, import_root: Path) -> Config:
+    candidate = import_root / Path(spec.configuration)
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ConfigurationError(
+            f"import {spec.name!r} configuration was not found: {candidate}"
+        ) from exc
+    if not resolved.is_file():
+        raise ConfigurationError(
+            f"import {spec.name!r} configuration is not a regular file: {candidate}"
+        )
+    if not _is_within(resolved, import_root):
+        raise ConfigurationError(
+            f"import {spec.name!r} configuration resolves outside its import root: {resolved}"
+        )
+
+    try:
+        imported = load_config(resolved)
+    except ConfigurationError as exc:
+        raise ConfigurationError(
+            f"import {spec.name!r} configuration is invalid: {exc}"
+        ) from exc
+    if imported.imports:
+        raise ConfigurationError(
+            f"import {spec.name!r} configuration must not declare [import.<name>] in 0.3.0"
+        )
+    return imported
+
+
+def resolve_sources(
+    config: Config,
+    request: BuildRequest,
+    *,
+    cwd: str | Path | None = None,
+) -> tuple[ResolvedSource, ...]:
+    """Resolve Root-local sources plus every explicitly imported Configuration."""
+
+    cwd_path = Path.cwd().resolve() if cwd is None else Path(cwd).expanduser().resolve(strict=True)
+    if not cwd_path.is_dir():
+        raise SelectionError(f"current working directory is not a directory: {cwd_path}")
+
+    _validate_request(config, request)
+    resolved_sources = list(
+        _resolve_configuration_sources(
+            config,
+            request,
+            execution_root=cwd_path,
+        )
+    )
+
+    for name in sorted(config.imports):
+        spec = config.imports[name]
+        import_root = _resolve_import_root(spec, config.manifest)
+        imported = _load_imported_config(spec, import_root)
+        duplicate_names = sorted(set(imported.companions) & set(spec.companions))
+        if duplicate_names:
+            listed = ", ".join(f"{name}.{companion}" for companion in duplicate_names)
+            raise ConfigurationError(
+                f"import {name!r} defines duplicate companion logical name(s): {listed}"
             )
-        )
+        if not imported.companions and not spec.companions:
+            raise ConfigurationError(
+                f"import {name!r} must provide at least one companion either from "
+                "the imported Configuration or [import.<name>.companion.<name>]"
+            )
+        try:
+            _validate_import_companion_case(
+                imported.companions, spec.companions, spec.case
+            )
+            imported_sources = _resolve_companion_sources(
+                imported.companions,
+                spec.case,
+                execution_root=import_root,
+                key_prefix=f"import:{name}:imported:",
+                import_name=name,
+            )
+            added_sources = _resolve_companion_sources(
+                spec.companions,
+                spec.case,
+                execution_root=import_root,
+                key_prefix=f"import:{name}:added:",
+                import_name=name,
+                config_location_prefix=f"import.{name}.companion",
+                allow_execution_root=True,
+            )
+        except SelectionError as exc:
+            raise SelectionError(f"import {name!r}: {exc}") from exc
+        resolved_sources.extend(imported_sources)
+        resolved_sources.extend(added_sources)
 
     return tuple(resolved_sources)
 
@@ -473,6 +659,7 @@ def collect_files(source: ResolvedSource) -> tuple[Path, ...]:
 
 
 def _render_archive_readme(
+    config: Config,
     request: BuildRequest,
     sources: tuple[ResolvedSource, ...],
     selection_counts: Mapping[str, int],
@@ -487,11 +674,28 @@ def _render_archive_readme(
     lines = [
         "# Archive contents",
         "",
-        f"Case: `{selected_case}`",
+        "## Root Configuration",
         "",
-        "## Included directories",
+        "- Execution root: `.`",
+        f"- Case: `{selected_case}`",
         "",
     ]
+
+    if config.imports:
+        lines.extend(["## Configuration imports", ""])
+        for name in sorted(config.imports):
+            spec = config.imports[name]
+            imported_case = spec.case if spec.case is not None else "default"
+            lines.extend([
+                f"### `{name}`",
+                "",
+                f"- Execution root: `{spec.root}`",
+                f"- Configuration: `{spec.configuration}`",
+                f"- Case: `{imported_case}`",
+            ])
+            lines.append("")
+
+    lines.extend(["## Included directories", ""])
 
     for archive_root in sorted(grouped):
         lines.extend([f"### `{archive_root}/`", ""])
@@ -502,11 +706,10 @@ def _render_archive_readme(
                 heading = "#### Target"
             else:
                 heading = f"#### Companion `{source.name}`"
+            lines.extend([heading, "", source.description, ""])
+            if source.import_name is not None:
+                lines.append(f"- Import: `{source.import_name}`")
             lines.extend([
-                heading,
-                "",
-                source.description,
-                "",
                 f"- Configuration: `{source.config_location}`",
                 f"- Directory source: {source.source}",
                 f"- Selected files: {count}",
@@ -516,7 +719,6 @@ def _render_archive_readme(
             lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
-
 
 def plan_archive(
     config: Config,
@@ -531,6 +733,7 @@ def plan_archive(
     sources = resolve_sources(config, request, cwd=cwd_path)
 
     archive_entries: dict[str, Path] = {}
+    physical_entries: dict[Path, str] = {}
     missing_entries: list[str] = []
     optional_missing_entries: list[str] = []
     empty_selections: list[EmptySelectionStatus] = []
@@ -567,7 +770,13 @@ def plan_archive(
                 raise SelectionError(
                     f"multiple files resolve to the same archive path {arcname!r}: {previous} and {file}"
                 )
+            previous_arcname = physical_entries.get(source_resolved)
+            if previous_arcname is not None and previous_arcname != arcname:
+                raise SelectionError(
+                    f"the same physical file resolves to different archive paths {previous_arcname!r} and {arcname!r}: {file}"
+                )
             archive_entries[arcname] = file
+            physical_entries[source_resolved] = arcname
 
     empty_directories = sorted({
         status.archive_root
@@ -576,7 +785,7 @@ def plan_archive(
         and not any(arcname.startswith(f"{status.archive_root}/") for arcname in archive_entries)
     })
 
-    readme = _render_archive_readme(request, sources, selection_counts)
+    readme = _render_archive_readme(config, request, sources, selection_counts)
     return ArchivePlan(
         entries=MappingProxyType(dict(sorted(archive_entries.items()))),
         readme=readme,

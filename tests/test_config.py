@@ -947,5 +947,113 @@ class ConfigTests(unittest.TestCase):
                     load_config(manifest)
 
 
+    def test_root_configuration_may_contain_only_imports(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [import.shikumi-stack]
+                root = ".."
+                configuration = "shikumi/dirpluck.toml"
+                case = "distribution"
+            '''))
+            self.assertIsNone(config.target)
+            self.assertEqual(dict(config.companions), {})
+            imported = config.imports["shikumi-stack"]
+            self.assertEqual(imported.root, "..")
+            self.assertEqual(imported.configuration, "shikumi/dirpluck.toml")
+            self.assertEqual(imported.case, "distribution")
+
+    def test_import_fields_are_strictly_validated(self):
+        invalid = (
+            ('root = "/tmp"\nconfiguration = "a.toml"', "absolute root"),
+            ('root = "C:/projects/shikumi"\nconfiguration = "a.toml"', "Windows absolute root"),
+            ("root = 'C:\\projects\\shikumi'\nconfiguration = \"a.toml\"", "Windows backslash absolute root"),
+            ('root = "C:projects/shikumi"\nconfiguration = "a.toml"', "Windows drive-relative root"),
+            ("root = '//server/share'\nconfiguration = \"a.toml\"", "UNC root"),
+            ('root = "../*"\nconfiguration = "a.toml"', "glob root"),
+            ('root = ".."\nconfiguration = "../a.toml"', "configuration traversal"),
+            ('root = ".."\nconfiguration = "./a.toml"', "configuration dot traversal"),
+            ('root = ".."\nconfiguration = "C:/a.toml"', "Windows absolute configuration"),
+            ('root = ".."\nconfiguration = "a.txt"', "configuration extension"),
+        )
+        for body, label in invalid:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f'''
+                    [import.other]
+                    {body}
+                ''')
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+    def test_import_targets_key_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, '''
+                [import.other]
+                root = ".."
+                configuration = "other/dirpluck.toml"
+                targets = ["."]
+            ''')
+            with self.assertRaises(ConfigurationError):
+                load_config(manifest)
+
+    def test_unknown_import_key_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, '''
+                [import.other]
+                root = ".."
+                configuration = "other/dirpluck.toml"
+                inherit = true
+            ''')
+            with self.assertRaises(ConfigurationError):
+                load_config(manifest)
+
+
+    def test_import_may_define_root_owned_companions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [shared.exclude_patterns]
+                local-policy = ["*.tmp"]
+
+                [import.external]
+                root = "../external"
+                configuration = "dirpluck.toml"
+
+                [import.external.companion.project]
+                path = "."
+                description = "External project as a companion."
+                include_if_exists = ["*"]
+                exclude_pattern_refs = ["local-policy"]
+                if_empty = "allow"
+            '''))
+            imported = config.imports["external"]
+            companion = imported.companions["project"]
+            self.assertEqual(companion.path, ".")
+            self.assertEqual(companion.selection.description, "External project as a companion.")
+            self.assertEqual([pattern.raw for pattern in companion.selection.exclude], ["*.tmp"])
+
+    def test_import_added_companion_path_cannot_escape_import_root(self):
+        invalid_paths = ("..", "../other", "/tmp/other", "C:/other")
+        for path in invalid_paths:
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f'''
+                    [import.external]
+                    root = "../external"
+                    configuration = "dirpluck.toml"
+
+                    [import.external.companion.project]
+                    path = {path!r}
+                    description = "External project."
+                    include_if_exists = ["*"]
+                    if_empty = "allow"
+                ''')
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+
 if __name__ == "__main__":
     unittest.main()

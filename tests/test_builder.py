@@ -7,7 +7,7 @@ import zipfile
 
 from dirpluck.builder import BuildRequest, build_archive, plan_archive, render_archive_tree, resolve_sources
 from dirpluck.config import load_config
-from dirpluck.errors import SelectionError
+from dirpluck.errors import ConfigurationError, SelectionError
 
 
 CONFIG = '''
@@ -935,6 +935,636 @@ class BuilderTests(unittest.TestCase):
             ''', output="artifacts/out.zip")
             with self.assertRaises(SelectionError):
                 build_archive(config, BuildRequest.create("application"), cwd=root)
+
+
+    def test_import_uses_only_external_companions_with_independent_case(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "dirpluck"
+            root.mkdir()
+            (root / "src").mkdir()
+            (root / "tests").mkdir()
+            (root / "src" / "main.py").write_text("root", encoding="utf-8")
+            (root / "tests" / "test_main.py").write_text("review", encoding="utf-8")
+
+            shikumi = workspace / "shikumi"
+            (shikumi / "dist").mkdir(parents=True)
+            (shikumi / "dist" / "shikumi-0.3.0.whl").write_bytes(b"shikumi")
+            (shikumi / "base.txt").write_text("base", encoding="utf-8")
+            (shikumi / "dirpluck.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Base shikumi source."
+                include = ["base.txt"]
+
+                [target.case.distribution]
+                description = "Built shikumi distribution."
+                include = ["dist/shikumi-*.whl"]
+
+                [companion.devdoc]
+                path = "shikumi-devdoc"
+                description = "Base devdoc distribution."
+                include = ["dist/base-*.whl"]
+
+                [companion.devdoc.case.distribution]
+                description = "Built devdoc distribution."
+                include = ["dist/shikumi_devdoc-*.whl"]
+
+                [output]
+                path = "imported-output.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            (workspace / "imported-output.zip").write_bytes(b"existing imported output")
+
+            devdoc = workspace / "shikumi-devdoc" / "dist"
+            devdoc.mkdir(parents=True)
+            (devdoc / "base-0.1.0.whl").write_bytes(b"base")
+            (devdoc / "shikumi_devdoc-0.1.0.whl").write_bytes(b"devdoc")
+
+            config = self._config(root, '''
+                [target]
+                description = "Root project."
+                include = ["src"]
+
+                [target.case.review]
+                description = "Root review selection."
+                include = ["tests"]
+
+                [import.shikumi-stack]
+                root = ".."
+                configuration = "shikumi/dirpluck.toml"
+                case = "distribution"
+            ''')
+            output = build_archive(
+                config,
+                BuildRequest.create(".", case="review"),
+                cwd=root,
+            )
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+
+            self.assertIn(f"{root.name}/tests/test_main.py", names)
+            self.assertNotIn(f"{root.name}/src/main.py", names)
+            self.assertNotIn("shikumi/dist/shikumi-0.3.0.whl", names)
+            self.assertNotIn("shikumi/base.txt", names)
+            self.assertIn("shikumi-devdoc/dist/shikumi_devdoc-0.1.0.whl", names)
+            self.assertNotIn("shikumi-devdoc/dist/base-0.1.0.whl", names)
+            self.assertEqual(
+                (workspace / "imported-output.zip").read_bytes(),
+                b"existing imported output",
+            )
+            self.assertIn("## Configuration imports", readme)
+            self.assertIn("### `shikumi-stack`", readme)
+            self.assertIn("- Execution root: `..`", readme)
+            self.assertIn("- Case: `distribution`", readme)
+            self.assertNotIn("- Targets:", readme)
+
+    def test_root_configuration_may_build_from_imports_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            external.mkdir()
+            (external / "data").mkdir()
+            (external / "data" / "artifact.txt").write_text("x", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "data"
+                description = "Imported data."
+                include = ["artifact.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+            ''')
+            output = build_archive(config, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("data/artifact.txt", archive.namelist())
+
+    def test_import_root_is_relative_to_root_configuration_file_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            cwd = workspace / "project"
+            config_dir = cwd / "dirpluck"
+            config_dir.mkdir(parents=True)
+            external = workspace / "external"
+            (external / "data").mkdir(parents=True)
+            (external / "data" / "artifact.txt").write_text("x", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "data"
+                description = "Imported data."
+                include = ["artifact.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            manifest = config_dir / "context.toml"
+            manifest.write_text(textwrap.dedent('''
+                [import.external]
+                root = "../../external"
+                configuration = "config.toml"
+
+                [output]
+                path = "out.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = load_config(manifest)
+
+            output = build_archive(config, BuildRequest.create(), cwd=cwd)
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("data/artifact.txt", archive.namelist())
+
+    def test_import_requires_companion_and_ignores_imported_target(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            external.mkdir()
+            (external / "target.txt").write_text("target", encoding="utf-8")
+            (external / "target-only.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Imported target."
+                include = ["target.txt"]
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "target-only.toml"
+            ''')
+            with self.assertRaises(ConfigurationError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+            (external / "data").mkdir()
+            (external / "data" / "artifact.txt").write_text("companion", encoding="utf-8")
+            (external / "with-companion.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Ignored imported target."
+                include = ["target.txt"]
+
+                [companion.data]
+                path = "data"
+                description = "Imported companion."
+                include = ["artifact.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "with-companion.toml"
+            ''')
+            output = build_archive(config, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("data/artifact.txt", names)
+            self.assertNotIn("target.txt", names)
+
+    def test_import_case_must_be_defined_by_an_imported_companion(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            external.mkdir()
+            (external / "data").mkdir()
+            (external / "data" / "artifact.txt").write_text("x", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Target."
+                include_if_exists = ["anything"]
+                if_empty = "allow"
+
+                [target.case.release]
+                description = "Target release."
+                include_if_exists = ["anything"]
+                if_empty = "allow"
+
+                [companion.data]
+                path = "data"
+                description = "Data."
+                include = ["artifact.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+                case = "release"
+            ''')
+            with self.assertRaises(SelectionError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+    def test_recursive_configuration_import_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            external.mkdir()
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "data"
+                description = "Data."
+                include_if_exists = ["file.txt"]
+                if_empty = "allow"
+
+                [import.nested]
+                root = "."
+                configuration = "nested.toml"
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+            ''')
+            with self.assertRaises(ConfigurationError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+    def test_imported_configuration_symlink_cannot_escape_import_root(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as outside_temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            external.mkdir()
+            outside = Path(outside_temp)
+            actual = outside / "outside.toml"
+            actual.write_text(textwrap.dedent('''
+                [companion.data]
+                path = "."
+                description = "Data."
+                include_if_exists = ["x"]
+                if_empty = "allow"
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            link = external / "config.toml"
+            try:
+                link.symlink_to(actual)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+            ''')
+            with self.assertRaises(ConfigurationError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+    def test_different_real_files_cannot_share_one_archive_path_across_imports(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "a"
+            imported_root = workspace / "b"
+            for base, value in ((root, "a"), (imported_root, "b")):
+                (base / "shared").mkdir(parents=True)
+                (base / "shared" / "x.txt").write_text(value, encoding="utf-8")
+            (imported_root / "config.toml").write_text(textwrap.dedent('''
+                [companion.shared]
+                path = "shared"
+                description = "Imported shared data."
+                include = ["x.txt"]
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [companion.shared]
+                path = "shared"
+                description = "Root shared data."
+                include = ["x.txt"]
+
+                [import.other]
+                root = "../b"
+                configuration = "config.toml"
+            ''')
+            with self.assertRaises(SelectionError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+    def test_same_real_file_cannot_resolve_to_different_archive_paths(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            project = root / "project"
+            sub = project / "sub"
+            sub.mkdir(parents=True)
+            (sub / "x.txt").write_text("x", encoding="utf-8")
+            (project / "config.toml").write_text(textwrap.dedent('''
+                [companion.imported]
+                path = "sub"
+                description = "Imported."
+                include = ["x.txt"]
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [companion.local]
+                path = "project/sub"
+                description = "Root."
+                include = ["x.txt"]
+
+                [import.project]
+                root = "project"
+                configuration = "config.toml"
+            ''')
+            with self.assertRaises(SelectionError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+    def test_same_real_file_same_archive_path_is_deduplicated_across_import(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            project = root / "project"
+            project.mkdir()
+            (project / "x.txt").write_text("x", encoding="utf-8")
+            (project / "config.toml").write_text(textwrap.dedent('''
+                [companion.imported]
+                path = "project"
+                description = "Imported."
+                include = ["x.txt"]
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [companion.local]
+                path = "project"
+                description = "Root."
+                include = ["x.txt"]
+
+                [import.project]
+                root = "."
+                configuration = "project/config.toml"
+            ''')
+            output = build_archive(config, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.namelist().count("project/x.txt"), 1)
+
+    def test_imported_companion_cannot_escape_import_root_through_symlink(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as outside_temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            external.mkdir()
+            outside = Path(outside_temp)
+            (outside / "file.txt").write_text("outside", encoding="utf-8")
+            link = external / "linked"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.linked]
+                path = "linked"
+                description = "Imported companion."
+                include = ["file.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+            ''')
+            with self.assertRaises(SelectionError):
+                plan_archive(config, BuildRequest.create(), cwd=root)
+
+
+    def test_import_added_companion_can_use_import_root_itself(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            external.mkdir()
+            (external / "artifact.txt").write_text("artifact", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Ignored imported target."
+                include = ["missing-required.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [import.external.companion.project]
+                path = "."
+                description = "External project."
+                include = ["artifact.txt"]
+            ''')
+            sources = resolve_sources(config, BuildRequest.create(), cwd=root)
+            self.assertEqual([source.name for source in sources], ["external.project"])
+            self.assertEqual(sources[0].config_location, "[import.external.companion.project]")
+
+            output = build_archive(config, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("external/artifact.txt", names)
+            self.assertIn("#### Companion `external.project`", readme)
+            self.assertNotIn("missing-required.txt", names)
+
+    def test_import_added_companion_name_must_not_duplicate_imported_companion(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            (external / "data").mkdir(parents=True)
+            (external / "data" / "x.txt").write_text("x", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "data"
+                description = "Imported data."
+                include = ["x.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [import.external.companion.data]
+                path = "data"
+                description = "Root-added data."
+                include = ["x.txt"]
+            ''')
+            with self.assertRaises(ConfigurationError) as caught:
+                plan_archive(config, BuildRequest.create(), cwd=root)
+            self.assertIn("external.data", str(caught.exception))
+
+    def test_import_added_and_imported_companions_use_separate_shared_pattern_namespaces(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            imported_dir = external / "imported"
+            added_dir = external / "added"
+            imported_dir.mkdir(parents=True)
+            added_dir.mkdir(parents=True)
+            for directory in (imported_dir, added_dir):
+                for name in ("keep.txt", "root-hidden.txt", "import-hidden.txt"):
+                    (directory / name).write_text(name, encoding="utf-8")
+
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [shared.exclude_patterns]
+                policy = ["import-hidden.txt"]
+
+                [companion.original]
+                path = "imported"
+                description = "Imported companion."
+                include_if_exists = ["*"]
+                exclude_pattern_refs = ["policy"]
+                if_empty = "allow"
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [shared.exclude_patterns]
+                policy = ["root-hidden.txt"]
+
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [import.external.companion.added]
+                path = "added"
+                description = "Root-added companion."
+                include_if_exists = ["*"]
+                exclude_pattern_refs = ["policy"]
+                if_empty = "allow"
+            ''')
+            output = build_archive(config, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+
+            self.assertIn("imported/root-hidden.txt", names)
+            self.assertNotIn("imported/import-hidden.txt", names)
+            self.assertIn("added/import-hidden.txt", names)
+            self.assertNotIn("added/root-hidden.txt", names)
+
+    def test_import_case_may_be_defined_only_by_root_added_companion(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root.mkdir()
+            external = workspace / "external"
+            data = external / "data"
+            data.mkdir(parents=True)
+            (data / "base.txt").write_text("base", encoding="utf-8")
+            (data / "release.txt").write_text("release", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Ignored target."
+                include_if_exists = ["anything"]
+                if_empty = "allow"
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+                case = "release"
+
+                [import.external.companion.data]
+                path = "data"
+                description = "Base data."
+                include = ["base.txt"]
+
+                [import.external.companion.data.case.release]
+                description = "Release data."
+                include = ["release.txt"]
+            ''')
+            output = build_archive(config, BuildRequest.create(), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("data/release.txt", names)
+            self.assertNotIn("data/base.txt", names)
+
+
+    def test_root_and_import_companions_may_share_local_name_because_logical_names_differ(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            root_data = root / "root-data"
+            root_data.mkdir(parents=True)
+            (root_data / "root.txt").write_text("root", encoding="utf-8")
+
+            external = workspace / "external"
+            external_data = external / "external-data"
+            external_data.mkdir(parents=True)
+            (external_data / "external.txt").write_text("external", encoding="utf-8")
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [companion.data]
+                path = "external-data"
+                description = "External data."
+                include = ["external.txt"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            config = self._config(root, '''
+                [companion.data]
+                path = "root-data"
+                description = "Root data."
+                include = ["root.txt"]
+
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+            ''')
+            sources = resolve_sources(config, BuildRequest.create(), cwd=root)
+            self.assertEqual(
+                {source.name for source in sources},
+                {"data", "external.data"},
+            )
 
 
 if __name__ == "__main__":

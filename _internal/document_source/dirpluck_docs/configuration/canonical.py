@@ -7,27 +7,105 @@ from dirpluck_docs.vocabulary import terms
 @vocabulary(terms)
 @title("{{TERM_1}} 設定ガイド")
 class TITLE_1:
-    r'''{{TERM_1}} の設定ファイルは、ひとつの抽出意図を記述する TOML ファイルです。この文書は設定を書くためのガイドとして、対象とコンパニオンの選び方、選択定義、ケース、出力方針を説明します。
+    r'''{{TERM_1}} の設定ファイルは、抽出意図を記述する TOML ファイルです。この文書は設定を書くためのガイドとして、対象とコンパニオンの選び方、別の設定ファイルを明示的に取り込む方法、選択定義、ケース、出力方針を説明します。
 
 このモデルを何に使えるかは `README.md`、parser、matching、ファイルシステム、アーカイブ、エラーの厳密な意味論は `SPECIFICATION.md` を参照してください。
 
 ## ひとつの抽出意図から始める
 
-再現したいひとつのパッケージに対して、ひとつの設定ファイルを使います。実行ごとに変わる対象、複数ディレクトリに固定された資料、またはその両方を表現できます。
+再現したいひとつのパッケージに対して、ひとつの{{TERM_14}}を使います。実行ごとに変わる対象、固定された資料、別の設定ファイルが既に宣言しているコンパニオン、またはそれらの組み合わせを表現できます。
 
-source の構成、コンパニオン path、出力方針が異なる2つの作業は別の設定ファイルにします。ケースはひとつの意図の中で選択を協調して切り替えるためのもので、ひとつの設定を profile の積み重ねへ変えるための機能ではありません。
+ケースはひとつの設定ファイル内で選択を協調して切り替えるためのもので、profile の積み重ねには使いません。別の設定ファイルが持つコンパニオン定義を再利用したい場合は、source path を複製するのではなく{{TERM_13}}として明示的に取り込みます。
 
-設定ファイルには次を記述します。
+設定ファイルには次を記述できます。
 
 ```text
 Configuration
 ├── shared                 optional, named reusable pattern sets
+├── import.<name>          zero or more, root configuration only
+│   └── companion.<name>  zero or more, root-owned companions inside import root
 ├── target                 optional, runtime-bound
 ├── companion.<name>       zero or more, configuration-bound
 └── output                 exactly one
 ```
 
-対象またはコンパニオンの少なくとも一方が必要です。
+{{TERM_14}}は、自身の対象・コンパニオン、または設定インポートの少なくとも1つを持つ必要があります。各 import では、import 先設定が宣言する Companion と {{TERM_14}} 側の `[import.<name>.companion.<name>]` を合わせて少なくとも1個の Companion が必要です。0.3.0 では import 先設定からさらに別の設定をインポートできません。import 先に Target が定義されていても import 実行では使用しません。
+
+## {{TERM_13}}
+
+別のディレクトリにあるコンパニオン定義を再利用したい場合は、{{TERM_14}}からその設定ファイルを明示的にインポートします。個々のコンパニオンへ `../` を許して境界を広げるのではなく、import ごとに別の実行 root を宣言し、その root 内では既存の境界規則をそのまま適用します。
+
+たとえば次の配置で、`dirpluck/` を cwd として実行しながら、workspace 全体を root とする `shikumi` 用設定を取り込めます。
+
+```text
+workspace/
+├── dirpluck/
+├── shikumi/
+│   └── dirpluck.toml
+└── shikumi-devdoc/
+```
+
+```toml
+[import.shikumi-stack]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+case = "distribution"
+```
+
+各 import は名前付きです。上の `shikumi-stack` はエラー表示とアーカイブ索引で import を識別するだけでなく、その配下の Companion の論理名前空間になります。import 先設定の `[companion.devdoc]` も、{{TERM_14}}側の `[import.shikumi-stack.companion.project]` も、最終的には `shikumi-stack.devdoc` / `shikumi-stack.project` という論理名で識別します。import 名はアーカイブ path prefix ではありません。
+
+### `root`
+
+`root` は必須です。{{TERM_14}}自身が置かれているディレクトリから見た相対ディレクトリとして指定します。import の目的は別の境界を明示することなので、`root` では `..` を使用できます。絶対 path と glob は使用しません。path separator は `/` を正規形とし、Windows 形式を含む絶対 path は OS にかかわらず拒否します。解決結果は実在するディレクトリでなければなりません。
+
+この `root` が import 先設定の filesystem boundary になります。import 先から使用するコンパニオンと選択ファイルは、シンボリックリンクを含めてこの root の外へ解決できません。
+
+### `configuration`
+
+`configuration` は必須で、import の `root` から見た相対 TOML file path を指定します。
+
+```toml
+configuration = "shikumi/dirpluck.toml"
+```
+
+この path は import root 内に留まる必要があり、絶対 path、`..`、glob は使用できません。import では cwd / `./dirpluck/` の設定探索を行わず、ここへ書いた1個のファイルを直接読み込みます。
+
+読み込んだ設定ファイルは通常の設定形式として完全に検証されます。`[shared.*]`、Target、Companion、Case、`[output]` はその設定自身の定義として検証されます。ただし import 実行で使用する source は Companion だけです。import 先の Target と `[output]` は実行しません。
+
+### import root 内へ Companion を追加する
+
+{{TERM_14}}は、import 先設定が宣言していない source も、その import の Companion として明示できます。
+
+```toml
+[import.shikumi-stack.companion.project]
+path = "shikumi"
+description = "The shikumi project itself."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+```
+
+`path` は import root 相対です。通常の `[companion.<name>]` と同様に絶対 path や `..` は使えませんが、import root 自体を Companion として扱うため `path = "."` はこの形式に限って使用できます。
+
+この Companion は {{TERM_14}} が所有する定義なので、共有パターン参照は {{TERM_14}} の `[shared.*]` を解決します。import 先設定自身が宣言する Companion は import 先設定自身の `[shared.*]` を使います。同名の shared pattern が両方に存在しても merge や相互参照はしません。
+
+import 先設定に `[companion.project]` が既にあり、{{TERM_14}}でも `[import.shikumi-stack.companion.project]` を定義した場合、どちらも論理名 `shikumi-stack.project` になるため設定エラーです。一方、Root の `[companion.project]` や別 import の `other.project` とは名前空間が異なるため共存できます。
+
+### `case`
+
+import 先で名前付き Case を使う場合だけ `case` を指定します。
+
+```toml
+case = "distribution"
+```
+
+省略した場合は import 名前空間内の全 Companion の base 選択を使います。指定する場合、その Case は import 先設定由来または {{TERM_14}} 側追加の Companion の少なくとも1個が定義している必要があります。同名 Case を持つ Companion はその Case を使い、持たない Companion は base へフォールバックします。import 先の Target Case は使用しません。{{TERM_14}}に対して CLI から指定した `--case` は import 先へ伝播せず、各 `[import.<name>]` が Companion 用 Case を独立して決めます。
+
+### 再帰 import は行わない
+
+0.3.0 では設定インポートを宣言できるのは{{TERM_14}}だけです。import 先設定に `[import.<name>]` が存在する場合はエラーにします。これにより循環参照、深さ依存の Case 伝播、複雑な設定 graph を作りません。
+
+{{TERM_14}}は自身の Target / Root Companion を持たず、設定インポートだけで構成することもできます。その場合でも最終 `[output]` は{{TERM_14}}自身へ記述します。各 import 名前空間には、import 先設定由来または {{TERM_14}} 側追加の Companion が少なくとも1個必要です。
 
 ## 対象
 
@@ -42,7 +120,7 @@ include = [
 ]
 ```
 
-対象を定義する設定ファイルでは CLI の `DIRECTORY` が1個以上必須です。
+{{TERM_14}}が対象を定義する場合は CLI の `DIRECTORY` が1個以上必須です。別の設定ファイルからインポートされた Target は使用しません。
 
 ```console
 {{TERM_1}} submissions/acme
@@ -54,7 +132,7 @@ include = [
 {{TERM_1}} submissions/acme submissions/contoso submissions/globex
 ```
 
-TOML には対象定義を1個だけ記述し、CLI の複数引数が別々の対象定義を作るわけではありません。各 runtime 対象ディレクトリは互いに異なる実ディレクトリへ解決される必要があります。対象を定義しない設定へ位置引数 `DIRECTORY` を渡すとエラーです。これにより、実行時入力と設定ファイルが宣言している source を一致させます。
+TOML には対象定義を1個だけ記述し、CLI の複数引数が別々の対象定義を作るわけではありません。各 runtime 対象ディレクトリは互いに異なる実ディレクトリへ解決される必要があります。{{TERM_14}}が対象を定義しない場合に位置引数 `DIRECTORY` を渡すとエラーです。CLI の位置引数は import 先へ割り当てません。import 先設定に `[target]` が存在しても、その定義は通常の直接実行時だけに使われます。
 
 対象は既定選択、名前付きケース、またはその両方を持てます。ケースだけを持ち `[target]` の既定選択を持たない対象では、実行時に `--case` が必須です。
 
@@ -69,7 +147,7 @@ description = "Guidelines used for every review."
 include = ["*.md"]
 ```
 
-コンパニオン名（上の `guidelines`）は設定内でその source を識別します。`path` は cwd 相対で、ひとつの具体的なディレクトリを指定します。
+コンパニオン名（上の `guidelines`）はその名前空間内で source を識別します。Root の `[companion.<name>]` は `<name>`、import 配下の Companion は由来に関係なく `<import>.<companion>` を論理名とします。`path` はその Companion に割り当てられた execution root 相対で、ひとつの具体的なディレクトリを指定します。{{TERM_14}}の通常 Companion では root は process cwd、import 先設定由来または `[import.<name>.companion.<name>]` では `[import.<name>].root` です。
 
 コンパニオンは対象を必要としません。固定コンパニオンだけで設定を構成できます。
 
@@ -295,11 +373,13 @@ include = ["*.png"]
 
 ケース名は平坦です。ケースを組み合わせたり、`--case` を複数回指定したり、`case.review.case.security` のように多階層化したりしません。
 
-ケースが変更できるのは選択だけです。別のコンパニオン集合、別のコンパニオン path、別の出力方針が必要なら別の設定ファイルを使います。
+ケースが変更できるのはその設定ファイル自身の選択だけです。別のコンパニオン集合、別のコンパニオン path、別の出力方針が必要なら別の設定ファイルを使います。{{TERM_14}}の `--case` は設定インポートへ伝播せず、import 先の Case は `[import.<name>].case` から選択します。
 
 ## 出力
 
-すべての設定ファイルはひとつの `[output]` を持ちます。出力は、ひとつの既知 path を更新する**固定出力**か、実行ごとに時刻を含む新しい名前を作る**動的命名出力**のどちらかです。2つの形式は混在できません。
+すべての設定ファイルは単独実行可能な通常の設定形式としてひとつの `[output]` を持ちます。ただし設定インポートとして読み込まれた場合、その `[output]` は使用しません。一回の実行で有効になる出力は{{TERM_14}}自身の `[output]` だけです。
+
+有効な出力は、ひとつの既知 path を更新する**固定出力**か、実行ごとに時刻を含む新しい名前を作る**動的命名出力**のどちらかです。2つの形式は混在できません。
 
 ### 固定出力
 
@@ -309,7 +389,7 @@ path = "artifacts/review.zip"
 if_exists = "overwrite"
 ```
 
-`path` は cwd 配下の具体的な path です。`if_exists` は必須で、次のどちらかを指定します。
+`path` は{{TERM_14}}の実行 root である cwd 配下の具体的な path です。`if_exists` は必須で、次のどちらかを指定します。
 
 - `error` は既存出力を置き換えずに失敗します。
 - `overwrite` は新しいアーカイブが正常に書き終わった後だけ既存出力を置き換えます。
@@ -454,6 +534,74 @@ suffix = "snapshot"
 
 すべての source が固定コンパニオンなので、この設定ファイルは対象なしで完結します。実行ごとに `project-YYYYMMDD-HHMMSS-snapshot.zip` が追加されます。同じ秒にスクリプトから複数生成する場合だけ、呼び出し側が `--sequence N` を明示できます。
 
+## 完全な例: 別の設定ファイルを取り込む
+
+次の root configuration を `workspace/dirpluck/` から実行するとします。
+
+```toml
+[target]
+description = "The dirpluck project being prepared for development context."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+
+[shared.exclude_patterns]
+python-dev = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    "*.pyc",
+]
+
+[import.shikumi-stack]
+root = ".."
+configuration = "shikumi/dirpluck.toml"
+
+[import.shikumi-stack.companion.project]
+path = "shikumi"
+description = "The shikumi project itself, added by the Root Configuration."
+include_if_exists = ["pyproject.toml", "src", "README.md"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+
+[output]
+path = "development-context.zip"
+if_exists = "overwrite"
+```
+
+import 先の `workspace/shikumi/dirpluck.toml` が次のように `shikumi-devdoc` を Companion として宣言していれば、その path は import root である `workspace/` を基準に解決されます。
+
+```toml
+[target]
+description = "The project selected when this Configuration is run directly."
+include_if_exists = ["*"]
+if_empty = "allow"
+
+[companion.shikumi]
+path = "shikumi"
+description = "The shikumi wheel used by related projects."
+include = ["dist/shikumi-*.whl"]
+
+[companion.devdoc]
+path = "shikumi-devdoc"
+description = "The shikumi-devdoc wheel used for document generation."
+include = ["dist/shikumi_devdoc-*.whl"]
+
+[output]
+path = "shikumi-context.zip"
+if_exists = "overwrite"
+```
+
+root configuration の実行では import 先の `shikumi-context.zip` は作成も上書きもされません。最終成果物は root configuration の `development-context.zip` だけです。
+
+```console
+{{TERM_1}} . --dry-run
+{{TERM_1}} .
+```
+
+root configuration の Target は CLI の `.` から決まります。import 先では Target を使用せず、import 先設定由来の `shikumi-stack.shikumi` / `shikumi-stack.devdoc` と、Root 側で追加した `shikumi-stack.project` を Companion として取り込みます。
+
 ## 設定探索
 
 既定では `{{TERM_1}}.toml` を探索します。`--config NAME` では `.toml` を省略できます。
@@ -462,7 +610,7 @@ suffix = "snapshot"
 {{TERM_1}} DIRECTORY [DIRECTORY ...] --config review
 ```
 
-設定探索は cwd と `./{{TERM_1}}/` の直下だけで行います。同じ名前が両方に存在する場合は優先順位で解決せず、曖昧としてエラーにします。
+この探索は{{TERM_14}}を選ぶときだけ、cwd と `./{{TERM_1}}/` の直下で行います。同じ名前が両方に存在する場合は優先順位で解決せず、曖昧としてエラーにします。設定インポートの `root` は選択された{{TERM_14}}自身の所在ディレクトリを基準に解決します。設定インポートは探索を行わず、`configuration` に書かれた import root 内の相対 file path を直接読み込みます。
 
 次のコマンドで検出可能な設定を列挙できます。
 
@@ -474,4 +622,4 @@ suffix = "snapshot"
 
 この文書は設定をどう構成して書くかを説明します。`SPECIFICATION.md` は include / exclude の厳密なパターン文法、case-sensitive matching、シンボリックリンク境界、アーカイブ path、dry-run、validation error の最終的な規範です。
 '''
-    vocabulary_refs @= (terms.TERM_1, terms.TERM_12,)
+    vocabulary_refs @= (terms.TERM_1, terms.TERM_12, terms.TERM_13, terms.TERM_14,)

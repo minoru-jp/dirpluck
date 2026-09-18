@@ -11,7 +11,7 @@
     {
       "source": "dirpluck_docs.vocabulary.canonical",
       "identifier": "TERM_11",
-      "text": "0.2.0"
+      "text": "0.3.0"
     }
   ]
 }
@@ -19,7 +19,7 @@
 
 <!--
 この文書は自動生成された翻訳元の中間文書です。
-正本は `_internal/document_source/dirpluck_docs/specification/canonical.py` です。
+正本は `dirpluck_docs/specification/canonical.py` です。
 直接編集しないでください。
 
 公開文書作成方針
@@ -41,9 +41,9 @@ dirpluck がサポートする CLI と設定ファイル形式の厳密な動作
 
 互換性を保証する公開面は `dirpluck` CLI と、この文書で定義する TOML 設定形式です。パッケージ内の Python モジュールは、将来 Python API として明示されない限り内部実装として扱います。
 
-## 2. 設定探索
+## 2. ルート設定ファイルの探索
 
-設定探索は再帰せず、cwd を基準とした次の2箇所だけで行います。
+CLI からルート設定ファイルを選ぶ設定探索は再帰せず、cwd を基準とした次の2箇所だけで行います。
 
 - cwd 直下
 - `./dirpluck/` 直下
@@ -52,7 +52,9 @@ dirpluck がサポートする CLI と設定ファイル形式の厳密な動作
 
 一致する候補が0件ならエラーです。同じ候補名が両方の探索位置に存在する場合は曖昧として拒否し、どちらかを暗黙に優先しません。
 
-`--configs` は検出可能な候補を列挙します。cwd 直下では dirpluck 設定らしい構造を持つ TOML だけを列挙し、`./dirpluck/` 直下では TOML を候補として列挙します。両方に同名がある場合は ambiguous と表示します。
+`--configs` は検出可能な root 候補を列挙します。cwd 直下では dirpluck 設定らしい構造を持つ TOML だけを列挙し、`./dirpluck/` 直下では TOML を候補として列挙します。両方に同名がある場合は ambiguous と表示します。
+
+設定インポートではこの探索を使用しません。各 import は `configuration` に import root 内の相対 TOML file path を1個だけ明示し、その file を直接読み込みます。
 
 ## 3. トップレベル構造
 
@@ -61,6 +63,7 @@ dirpluck がサポートする CLI と設定ファイル形式の厳密な動作
 ```text
 [shared.include_patterns]
 [shared.exclude_patterns]
+[import.<name>]
 [target]
 [target.case.<name>]
 [companion.<name>]
@@ -73,20 +76,66 @@ dirpluck がサポートする CLI と設定ファイル形式の厳密な動作
 ひとつの設定ファイルはひとつの抽出意図を表し、次を含みます。
 
 - 0個以上の名前付き共有パターン
+- 0個以上の設定インポート
 - 0個または1個の論理的な対象定義
 - 0個以上のコンパニオン
-- 対象またはコンパニオンの少なくとも1個の source
+- ルート設定ファイルではローカル source または設定インポートの少なくとも1個
 - ちょうどひとつの出力定義
 
 対象は runtime-bound source 定義で、1個の論理的な `[target]` 定義を CLI から受け取った1個以上のディレクトリへ適用します。すべての runtime 対象は同じ選択済み対象定義を使います。コンパニオンは設定の `path` に固定される configuration-bound source です。
 
-共有パターンは名前付きパターン配列だけを再利用する仕組みで、完全な共有選択定義ではありません。bundle、設定継承、設定 merge、CLI からの選択 override はありません。
+共有パターンは同じ設定ファイル内の名前付きパターン配列だけを再利用する仕組みで、完全な共有選択定義ではありません。設定インポートは別の完全な設定ファイルが宣言する Companion 定義を明示的に再利用する仕組みで、設定継承や設定 merge ではありません。CLI からの選択 override もありません。
 
 `[shared.include_patterns]` と `[shared.exclude_patterns]` はそれぞれ省略可能です。`[shared]` を記述する場合は少なくともどちらか一方が必要で、記述した各 table には少なくとも1個の名前付き配列が必要です。各名前は空でない文字列で、各配列は1件以上の文字列を含みます。include 用の配列は include パターン文法、exclude 用の配列は exclude パターン文法で設定ロード時に検証します。定義しただけの共有パターンはどの選択にも適用されません。
 
-## 4. ケース
+## 4. 設定インポート
 
-ケースは設定ファイル全体で0個または1個だけ有効になる平坦な名前付き selection variation です。ケース名は組み合わせず、多階層化せず、`--case` は最大1回だけ指定できます。
+設定インポートはルート設定ファイルから0個以上宣言できます。形式は `[import.<name>]` で、`<name>` は空でない import 識別名です。import 名はアーカイブ path prefix ではなく、設定位置・エラー・アーカイブ索引で import を識別するために使います。
+
+各 import が受理する field は次だけです。
+
+```text
+root            required string
+configuration   required string
+case            optional non-empty string
+companion.<name> zero or more Root-owned Companion tables
+```
+
+### `root`
+
+`root` はルート設定ファイル自身の所在ディレクトリから見た相対ディレクトリ path です。空文字列、絶対 path、glob は拒否します。`.` と `..` path element は使用でき、`..` によって cwd 外の別ディレクトリを明示的に選べます。path separator は `/` を正規形とし、POSIX absolute path、Windows drive path、UNC path などの絶対指定は実行 OS にかかわらず拒否します。解決後は実在するディレクトリでなければなりません。
+
+`root` は設定インポートだけに与える境界拡張です。解決された実ディレクトリを import 先設定の実行 root とし、import 実行で使用する Companion と選択ファイルはすべてこの root 内に留まる必要があります。root path 自体がシンボリックリンクを経由する場合は、その解決先ディレクトリを boundary とします。
+
+### `configuration`
+
+`configuration` は import root から見た相対 TOML file path です。空文字列、絶対 path、`.` / `..` による逸脱、glob、`.toml` 以外の拡張子を拒否します。解決先は import root 内の実在 regular file でなければなりません。
+
+import では通常の設定探索を行いません。`configuration` が指す1 file を直接読み、通常の設定 schema として完全に parse / validate します。import 先設定の `[shared.*]` はその設定内だけで有効です。root 側と import 側で共有パターン名が同じでも相互参照や merge は行いません。
+
+import 先設定も通常形式として `[output]` を必須としますが、その output は import 実行では採用しません。output field の schema validation は行いますが、出力 path の作成、既存出力 collision の確認、書き込みは行いません。import 先に `[target]` / `[target.case.<name>]` が存在しても、それらは通常の直接実行用として検証するだけで、import 実行では source として使用しません。
+
+ルート設定ファイルは `[import.<name>.companion.<companion-name>]` を0個以上宣言して、同じ import root 内へ追加 Companion を定義できます。schema は通常の `[companion.<name>]` と同じですが、`path = "."` を許可して import root 自体を Companion にできます。その他の絶対 path、`..`、glob は拒否し、解決結果は import root 内の実在ディレクトリでなければなりません。Root 側追加 Companion の selection は ルート設定ファイル の shared pattern 名前空間で解決し、import 先設定由来 Companion は import 先設定の shared pattern 名前空間で解決します。
+
+import 名は Companion の論理名前空間です。Root の `[companion.x]` は `x`、`[import.a]` 配下の Companion `x` は import 先設定由来か Root 側追加かにかかわらず `a.x` を論理名とします。同じ import 内で import 先設定と Root 側追加が同じ Companion 名を定義する場合は論理名が重複するため設定エラーです。別 import や Root local Companion との同名は名前空間が異なるため許可します。論理名は Archive path prefix には使いません。
+
+各 import 名前空間には、import 先設定由来または Root 側追加の Companion が少なくとも1個必要です。
+
+### `case`
+
+`case` を省略した import は import 名前空間内の全 Companion の base 選択を使います。指定する場合、その名前を import 先設定由来または Root 側追加の Companion の少なくとも1個が Case として定義している必要があります。同名 Case を持つ Companion はその完全な Case 選択を使い、持たない Companion は base へフォールバックします。import 先 Target の Case は使用しません。
+
+ルート設定ファイルの CLI `--case` は import 先へ伝播しません。各 import の Companion Case は `[import.<name>].case` だけで決定します。したがって root 設定と複数 import は、それぞれ独立した Case を同じ実行内で持てます。
+
+### 再帰 import
+
+0.3.0 では import 先設定に `[import.<name>]` が1個でも存在する場合は設定エラーです。設定インポートの graph は1階層に限定し、循環参照、推移的 import、深さ依存の Case 束縛を提供しません。
+
+ルート設定ファイルはローカル Target / Companion を持たず import だけを持つことができます。各 import では、import 先設定自身に Companion がなくても `[import.<name>.companion.<name>]` が1個以上あれば有効です。両方とも0個なら利用可能な source がないためエラーです。
+
+## 5. ケース
+
+ケースはひとつの設定ファイル内で0個または1個だけ有効になる平坦な名前付き selection variation です。ケース名は組み合わせず、多階層化しません。ルート設定ファイルの Case は CLI `--case` から最大1個選び、各 import では import 先 Companion 群へ適用する Case を対応する `[import.<name>].case` から独立して最大1個選びます。
 
 ケースが変更できるのは source の選択だけです。対象やコンパニオンの追加・削除、コンパニオンの `path`、出力方針は変更しません。
 
@@ -94,25 +143,25 @@ dirpluck がサポートする CLI と設定ファイル形式の厳密な動作
 
 ケース指定時に対象がある場合、同名の `[target.case.<name>]` が必須です。各コンパニオンは `[companion.<companion-name>.case.<name>]` があれば使い、なければ base へフォールバックします。対象に存在しないケース名をコンパニオンだけが定義することは到達不能なので設定エラーです。
 
-ケース指定時に対象がない場合、少なくとも1個のコンパニオンが同名ケースを定義する必要があります。各コンパニオンは同名ケースがあれば使い、なければ base へフォールバックします。
+ケース指定時に対象がない場合、少なくとも1個のコンパニオンが同名ケースを定義する必要があります。各コンパニオンは同名ケースがあれば使い、なければ base へフォールバックします。設定インポートの `case` もこの Companion-only 規則を使い、import 先設定由来と Root 側追加の Companion を同じ import 名前空間として扱います。import 先に Target が存在しても Target Case は評価しません。
 
-対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。base 選択にある共有パターン参照も継承しないため、ケースで同じ共有パターンを使う場合はそのケース自身が同じ名前を明示的に参照します。
+対象ケースとコンパニオンケースはいずれも完全な選択定義で、base を継承・merge しません。base 選択にある共有パターン参照も継承しないため、ケースで同じ共有パターンを使う場合はそのケース自身が同じ名前を明示的に参照します。Root と import の間でも Case や共有パターンを継承・merge しません。
 
-## 5. 対象とコンパニオン
+## 6. 対象とコンパニオン
 
 対象は省略可能です。`[target]` または `[target.case.<name>]` が存在する場合、その設定はひとつの runtime-bound 対象規則を定義します。対象の `path` は設定ファイルへ保存せず、TOML から複数の別個な対象規則を定義することもできません。
 
-対象を定義する設定では CLI の位置引数 `DIRECTORY` が1個以上必須です。選択された対象定義を CLI 順に各ディレクトリへ独立して適用し、すべての runtime 対象ディレクトリは互いに異なる実ディレクトリへ解決される必要があります。対象を定義しない設定へ位置引数 `DIRECTORY` を指定するとエラーです。
+ルート設定ファイルが対象を定義する場合は CLI の位置引数 `DIRECTORY` が1個以上必須です。選択された対象定義を CLI 順に各ディレクトリへ独立して適用し、すべての runtime 対象ディレクトリは互いに異なる実ディレクトリへ解決される必要があります。ルート設定ファイルが対象を定義しない場合に位置引数 `DIRECTORY` を指定するとエラーです。import 先設定の Target は source として使用せず、CLI の `DIRECTORY` も import 先へ伝播しません。
 
 `[target]` は `--case` を省略した実行で使う既定の対象選択です。対象は `[target]` を省略して名前付きケースだけを定義することもでき、その場合は `--case` を省略するとエラーです。
 
-各 runtime 対象ディレクトリは実行時に存在し、ファイルシステム境界規則に従って解決される必要があります。
+各 runtime 対象ディレクトリは実行時に存在し、その設定ファイルへ割り当てられた実行 root のファイルシステム境界規則に従って解決される必要があります。
 
-各 `[companion.<name>]` は cwd 相対の固定 `path`、空でない `description`、完全な base 選択定義を必須とします。コンパニオンは対象の有無にかかわらず source 集合へ常に参加し、実行時にそのディレクトリが存在する必要があります。
+各 `[companion.<name>]` はその設定ファイルの実行 root 相対の固定 `path`、空でない `description`、完全な base 選択定義を必須とします。ルート設定ファイルでは実行 root は cwd、import 先設定では対応する import の `root` です。コンパニオンは対象の有無にかかわらず source 集合へ常に参加し、実行時にそのディレクトリが存在する必要があります。
 
 必要なら `[companion.<name>.case.<case-name>]` に完全な代替選択を追加できます。選択ケースが存在しないコンパニオンは削除されず、base 選択へフォールバックします。
 
-## 6. 選択定義
+## 7. 選択定義
 
 各 `[target]`、`[target.case.<name>]`、`[companion.<name>]`、`[companion.<name>.case.<case-name>]` の選択には、空でない `description` と、直接記述または共有参照による `include` / `include_if_exists` 相当の候補の少なくとも一方が必要です。
 
@@ -142,7 +191,7 @@ dirpluck がサポートする CLI と設定ファイル形式の厳密な動作
 
 `if_empty = "allow"` は展開後の必須 include パターンを持たない optional-only の選択だけで指定できます。最終ファイル数が0件で空を許す場合、その対象ディレクトリをアーカイブ内の明示的な空ディレクトリエントリとして保持できます。
 
-## 7. include パターン文法
+## 8. include パターン文法
 
 include パターンは対象またはコンパニオンからの POSIX 形式の相対パスです。絶対パス、パターン全体としての `.`、`..` による逸脱を拒否します。検証前にバックスラッシュは `/` へ正規化します。
 
@@ -163,7 +212,7 @@ packages/*/dist/package-*.whl
 
 `**`、`?`、文字クラス (`[]`)、`!` はサポートしません。複数一致した場合にバージョン、更新日時、その他のメタデータを解釈しません。
 
-## 8. exclude パターン文法
+## 9. exclude パターン文法
 
 exclude は相対パスではなく、ひとつの実体名を照合します。
 
@@ -180,31 +229,35 @@ name*     前方一致
 
 `*` 単体、`*/`、`foo*bar` のような内部 wildcard、`**`、`?`、文字クラス、`!`、バックスラッシュ、パス区切りは拒否します。
 
-## 9. ファイルシステム境界とシンボリックリンク
+## 10. ファイルシステム境界とシンボリックリンク
 
-cwd を実行境界とします。
+ルート設定ファイルでは process cwd を自身の source 用 execution root / filesystem boundary とします。各設定インポートの `[import.<name>].root` はルート設定ファイル自身の所在ディレクトリを基準に解決し、その実ディレクトリを import 先設定専用の execution root / filesystem boundary とします。
 
-使用される対象ディレクトリとすべてのコンパニオンディレクトリは存在し、cwd 内へ解決されなければなりません。シンボリックリンク経由で cwd 外へ逸脱するパスは拒否します。
+通常の Target、Companion、include、output path は自身の設定 root を越えられません。Root Configuration の boundary 外を明示できる path は import の `root` だけです。import root を確定した後、その import 先の `configuration`、Companion、選択ファイルは再び import root 内へ限定します。
+
+使用される対象ディレクトリとすべてのコンパニオンディレクトリは存在し、それぞれを所有する設定 root 内へ解決されなければなりません。シンボリックリンク経由でその root 外へ逸脱する source path は拒否します。
 
 選択されたファイルは、それぞれの対象またはコンパニオンディレクトリ内へ解決される必要があります。外部へ解決されるファイルシンボリックリンクは拒否します。
 
 ディレクトリを再帰収集するとき、ディレクトリシンボリックリンクはたどりません。対象ディレクトリ外へ解決されるディレクトリリンクはエラーとし、内部へ解決されるリンクは循環と重複を防ぐため無視します。
 
-対象には `.` として cwd 自体を指定できます。この場合も cwd の内容を ZIP ルートへ平坦化せず、cwd の実ディレクトリ名を先頭要素として保持します。
+対象には `.` としてその設定の execution root 自体を指定できます。この場合も root の内容を ZIP ルートへ平坦化せず、execution root の実ディレクトリ名を先頭要素として保持します。
 
-## 10. アーカイブ計画とパス
+## 11. アーカイブ計画とパス
 
-選択されたファイルは ZIP 内で cwd から見た実際のファイルシステム相対パスを保持します。
+選択されたファイルは ZIP 内で、そのファイルを選択した設定ファイルの execution root から見た実際のファイルシステム相対パスを保持します。Root Configuration の local source は cwd 相対、import source はその import の `root` 相対です。
 
-複数の source が同じ実ディレクトリへ解決される場合、その選択は実際のアーカイブパスで union します。複数の宣言目的から選択されても同じ物理ファイルは一度だけ書き込みます。
+複数の source や import が同じ archive path に同じ物理ファイルを選択した場合は1回だけ書き込みます。同じ archive path が異なる物理ファイルへ対応する場合は collision error です。同じ物理ファイルが異なる execution root から異なる archive path へ対応する場合も、同じ内容を別名で黙って複製せず曖昧としてエラーにします。
 
-アーカイブのルートには、有効なケース（未指定時は `default`）、参加するディレクトリ、設定された description、実際に選択された設定位置、ディレクトリ決定方法、選択件数、必要な空結果方針など、解決済み計画の事実だけを索引する `README.md` を生成します。固定文言では生成ツール名や下流用途を示しません。用途固有の意味は各対象・コンパニオンの `description` からのみ持ち込みます。
+アーカイブのルートには、ルート設定ファイルと使用された設定インポート、各設定の execution root、有効なケース（未指定時は `default`）、参加するディレクトリ、設定された description、実際に選択された設定位置、ディレクトリ決定方法、選択件数、必要な空結果方針など、解決済み計画の事実だけを索引する `README.md` を生成します。固定文言では生成ツール名や下流用途を示しません。用途固有の意味は root の対象・コンパニオンと import 先コンパニオンの `description` からのみ持ち込みます。
 
 アーカイブ計画は決定的な順序で作成し、偶発的なファイルシステム列挙順序へ依存しません。
 
-## 11. 出力
+## 12. 出力
 
-`[output]` は必須で、固定出力または動的命名出力のどちらか一方だけを定義します。両形式のフィールドを混在させると設定エラーです。
+各設定ファイルの `[output]` は schema 上必須で、固定出力または動的命名出力のどちらか一方だけを定義します。両形式のフィールドを混在させると設定エラーです。
+
+一回の実行で実際に計画・検証・書き込みする出力はルート設定ファイルの `[output]` だけです。import 先設定の `[output]` は構文・field validation の対象にはなりますが、filesystem output path の解決、collision check、directory 作成、書き込みを行いません。
 
 ### 固定出力
 
@@ -214,7 +267,7 @@ path = "artifacts/context.zip"
 if_exists = "error"
 ```
 
-固定出力では `path` と `if_exists` の両方が必須です。`path` は cwd より下にある具体的な cwd 相対パスでなければならず、絶対パス、`..`、glob を拒否します。必要な親ディレクトリは作成します。シンボリックリンクによって cwd 外へ解決される出力先は拒否します。
+固定出力では `path` と `if_exists` の両方が必須です。Root Configuration の `path` は cwd より下にある具体的な cwd 相対パスでなければならず、絶対パス、`..`、glob を拒否します。必要な親ディレクトリは作成します。シンボリックリンクによって cwd 外へ解決される出力先は拒否します。
 
 `if_exists` は次だけを受理します。
 
@@ -235,7 +288,7 @@ suffix = "review"
 
 動的命名出力では `directory` と `timestamp = true` が必須で、`prefix` と `suffix` は任意です。`path` と `if_exists` は指定できません。
 
-`directory` は cwd 内の具体的な cwd 相対ディレクトリでなければならず、`.` は cwd 自体を表す値として使用できます。絶対パス、`..`、glob を拒否します。必要なディレクトリは作成し、シンボリックリンクによる cwd 外への逸脱を拒否します。
+Root Configuration の `directory` は cwd 内の具体的な cwd 相対ディレクトリでなければならず、`.` は cwd 自体を表す値として使用できます。絶対パス、`..`、glob を拒否します。必要なディレクトリは作成し、シンボリックリンクによる cwd 外への逸脱を拒否します。
 
 `prefix` と `suffix` は空でない1個の portable filename fragment とし、`.`、`..`、path separator、制御文字、`< > : " | ? *` を拒否します。
 
@@ -253,31 +306,31 @@ suffix = "review"
 
 どちらの形式でも、出力ファイル自身をアーカイブ入力として選択することはできません。
 
-## 12. dry-run
+## 13. dry-run
 
-`--dry-run` は通常実行と同じ source 解決、ケース解決、選択、アーカイブ計画ロジックを使いますが、出力を作成・変更しません。
+`--dry-run` は通常実行と同じ root source 解決、設定インポート解決、各設定のケース解決、選択、アーカイブ計画ロジックを使いますが、出力を作成・変更しません。
 
 不足する必須 `include` は `[missing]`、不足する任意パターンは `[optional missing]` と表示します。
 
 最終選択が0件の対象は、許可される場合 `empty, allowed`、通常実行なら空のため失敗する場合 `empty, would error` と表示します。
 
-設定矛盾、対象と `DIRECTORY` の不整合、不正なパス、存在しないケース名、固定出力での `--sequence` 指定は dry-run でもエラーです。dry-run は出力を書かないため、timestamp から実出力名を確定せず、既存出力との衝突方針も適用しません。
+設定矛盾、対象と `DIRECTORY` の不整合、不正な import root / configuration path、不正な source path、存在しない root / import Companion Case、再帰 import、固定出力での `--sequence` 指定は dry-run でもエラーです。dry-run は出力を書かないため、timestamp から実出力名を確定せず、既存出力との衝突方針も適用しません。
 
-## 13. CLI 形式
+## 14. CLI 形式
 
-対象を定義する設定を1個以上の runtime ディレクトリで生成します。
+Target を定義するルート設定ファイルを1個以上の runtime ディレクトリで生成します。
 
 ```console
 dirpluck DIRECTORY [DIRECTORY ...]
 ```
 
-コンパニオンだけで構成する設定を生成します。
+Root local source が Companion だけ、または設定インポートだけで構成される設定を生成します。
 
 ```console
 dirpluck --config NAME
 ```
 
-名前付きケースで生成します。
+ルート設定ファイル自身の名前付きケースで生成します。Import 先 Companion 群の Case は各 `[import.<name>].case` が決めます。
 
 ```console
 dirpluck DIRECTORY [DIRECTORY ...] --case NAME
@@ -321,4 +374,4 @@ dirpluck --config NAME --sequence N
 dirpluck --version
 ```
 
-`build` サブコマンドはなく、選択規則や出力形式を一時的に上書きする CLI オプションもありません。`--sequence` は動的命名形式が定義する任意の番号位置へ実行時の値を与えるだけです。
+`build` サブコマンドはなく、設定インポート用の追加 CLI path、選択規則や出力形式を一時的に上書きする CLI オプションもありません。`--sequence` は動的命名形式が定義する任意の番号位置へ実行時の値を与えるだけです。
