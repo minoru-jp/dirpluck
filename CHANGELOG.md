@@ -2,6 +2,19 @@
 
 Release history for dirpluck.
 
+## 0.6.1
+
+Clarify the role of LLM-assisted work and the Configuration trust boundary in the documentation, and remove an unnecessarily strong reproducibility claim. There are no runtime behavior changes in this release.
+
+### Added
+
+- Add `docs/TRUST.md` to explain that a Configuration is an execution instruction for filesystem operations, that `dirpluck` does not infer sensitivity or appropriateness and alter those instructions, and that OS permissions plus explicitly referenced paths form the actual authority boundary. The document distinguishes structural checks such as source-boundary and schema validation from a guard that judges intent or content.
+
+### Changed
+
+- Clarify the README description of LLM-assisted work: `dirpluck` prepares an Archive for upload to a non-local conversational LLM or for placement in a local agent workspace. Remove wording that could imply that an LLM is expected to operate `dirpluck` directly, and route trust-model details to `docs/TRUST.md`.
+- Remove the README's `reproducibly` wording. The documentation now describes `dirpluck` in terms of collecting the files declared by a TOML selection intent without implying byte-for-byte reproducibility of the ZIP stream.
+
 ## 0.6.0
 
 Expand filesystem-location support, simplify the Archive README into a distribution-friendly content index, and allow a Configuration to describe the Archive as a whole.

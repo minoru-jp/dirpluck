@@ -10,6 +10,22 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.6.1")
+    class RELEASE_10:
+        r'''LLM-assisted work の位置付けと Configuration の trust boundary を文書上で明確化し、過剰な再現可能性の表現を取り除く。実装上の挙動変更はない。'''
+
+        @change(ADDED)
+        class CHANGE_1:
+            r'''`docs/TRUST.md` を追加し、Configuration を filesystem 操作の実行指示として扱うこと、dirpluck は参照先の機密性や操作の適切さを推論して補正しないこと、OS permission と明示された path が実際の権限境界であることをまとめて説明する。Source boundary や schema validation などの structural checks と、内容や意図を判断する guard を区別する。'''
+
+        @change(CHANGED)
+        class CHANGE_2:
+            r'''README の LLM-assisted work の説明を、非ローカルの対話型 LLM へ upload する Archive、またはローカル agent workspace へ配置する Archive を準備する用途として明確化する。LLM が dirpluck を直接操作することを前提とするように読める表現を削除し、trust model の詳細は `docs/TRUST.md` へ集約する。'''
+
+        @change(CHANGED)
+        class CHANGE_3:
+            r'''README から `reproducibly` / 「再現可能」の売り文句を削除する。dirpluck の価値は TOML に明示した selection intent から必要な file をまとめることとして説明し、ZIP byte stream の再現性を示唆する専門的な意味を持たせない。'''
+
     @release("0.6.0")
     class RELEASE_9:
         r'''Filesystem location の表現力を拡張し、Archive README を配布向けの単純な索引へ整理するとともに、Configuration 全体の説明を記述できるようにする。'''

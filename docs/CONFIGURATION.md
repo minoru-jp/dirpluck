@@ -1,6 +1,6 @@
 # dirpluck Configuration Guide
 
-This document explains how to write a Configuration file in TOML. For exact field validation, pattern grammar, import resolution, and filesystem boundaries, see [SPECIFICATION.md](SPECIFICATION.md). For Configuration selection and CLI options, see [CLI.md](CLI.md).
+This document explains how to write a Configuration file in TOML. For exact field validation, pattern grammar, import resolution, and filesystem boundaries, see [SPECIFICATION.md](SPECIFICATION.md). For Configuration selection and CLI options, see [CLI.md](CLI.md). For the trust boundary around Configurations and filesystem operations, see [TRUST.md](TRUST.md).
 
 ## Basic shape
 
@@ -135,7 +135,7 @@ exclude = [
 ]
 ```
 
-Including a directory makes files below it candidates for collection. `dirpluck` does not automatically identify secret-like names, so broad directory selections should declare exclusions appropriate to the workspace.
+Including a directory makes files below it candidates for collection. Selection adds no implicit exclusions based on content or filename meaning. For the trust boundary and guidance around broad selections, see [TRUST.md](TRUST.md).
 
 ### `if_empty`
 

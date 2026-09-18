@@ -2,7 +2,7 @@
 
 `dirpluck` is a CLI tool for recording a recurring decision, "which files belong together?", in TOML and building a ZIP archive from the same declared intent later.
 
-Rather than copying everything around a workspace like a backup, it is intended to reproducibly package only the material needed for an explicit purpose such as review, handoff, research, recurring work, or a working context shared with an LLM.
+Rather than copying everything around a workspace like a backup, it is intended to package only the material needed for an explicit purpose such as review, handoff, research, recurring work, or a working context shared with an LLM.
 
 ## Where it fits
 
@@ -30,15 +30,13 @@ For a one-off archive, creating a ZIP by hand may be simpler. `dirpluck` is usef
 
 A Configuration records what is required, what is optional, what should be excluded, and which fixed references belong with the package. That intent does not have to be reconstructed from shell history, conversation history, or memory. `--dry-run` can show how the current filesystem resolves before anything is written.
 
-The same applies to ongoing work with an LLM. Keeping the source set in a Configuration lets the human and the LLM inspect the same declaration and reconstruct the same working scope without relying on an earlier conversation.
+For LLM-assisted work, `dirpluck` prepares the material on the local filesystem as an Archive. That Archive can be uploaded to a non-local conversational LLM or placed into the workspace used by a local agent. This workflow does not assume that the LLM operates `dirpluck` itself.
 
-## Selection is explicit
+## Configuration and filesystem trust
 
-`dirpluck` does not infer which files look important, which artifact looks newest, or which filename might contain a secret. It applies the selection rules in the Configuration.
+`dirpluck` is not a guard that infers whether a filesystem operation declared in a Configuration is appropriate. It applies the declared selection and output according to its documented rules.
 
-In particular, selecting a whole directory or a broad pattern such as `*` can include `.git/`, environment files, private keys, and other material below that directory unless it is explicitly excluded. For archives that will leave the workspace, review broad selections and add exclusions appropriate to that workspace.
-
-This intentionally narrow model keeps the decision about what belongs together in the Configuration itself.
+See [docs/TRUST.md](docs/TRUST.md) for how to treat Configurations, broad selections, absolute paths, overwrite behavior, and Archives that will leave the local environment.
 
 ## A small example
 
@@ -70,7 +68,7 @@ For all Configuration fields and a larger example, see [docs/CONFIGURATION.md](d
 
 ## Installation
 
-Python 3.11 or later is required. The current release is `0.6.0`.
+Python 3.11 or later is required. The current release is `0.6.1`.
 
 ```console
 pip install dirpluck
@@ -87,6 +85,7 @@ The documents are separated by reading purpose:
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md): how to write TOML Configurations.
 - [docs/CLI.md](docs/CLI.md): how to operate the CLI.
 - [docs/SPECIFICATION.md](docs/SPECIFICATION.md): exact rules for resolution, matching, filesystem boundaries, archives, output, and validation.
+- [docs/TRUST.md](docs/TRUST.md): the trust boundary for Configurations and filesystem operations.
 - [CHANGELOG.md](CHANGELOG.md): release history.
 
 The wheel includes only compact `dirpluck/docs/CONFIGURATION.md` and `dirpluck/docs/CLI.md` references so an installed package contains enough information to write a Configuration and run the CLI. For more detail, use the documentation in the source distribution or repository.

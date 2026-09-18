@@ -52,4 +52,4 @@ dirpluck projects/example --case audit
 dirpluck --config snapshot
 ```
 
-TOML の最小 reference は同梱の `CONFIGURATION.md` を参照してください。より詳しい CLI semantics、Configuration guide、Glossary、Specification は同じ release の source distribution にある `docs/CLI.md`, `docs/CONFIGURATION.md`, `GLOSSARY.md`, `docs/SPECIFICATION.md` を参照してください。
+TOML の最小 reference は同梱の `CONFIGURATION.md` を参照してください。より詳しい CLI semantics、Configuration guide、Glossary、Specification は同じ release の source distribution にある `docs/CLI.md`, `docs/CONFIGURATION.md`, `GLOSSARY.md`, `docs/SPECIFICATION.md`, `docs/TRUST.md` を参照してください。

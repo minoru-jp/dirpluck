@@ -113,4 +113,5 @@ A successful normal build prints the final output path to standard output.
 
 - To create or modify a Configuration, read [CONFIGURATION.md](CONFIGURATION.md).
 - To check terminology, read [../GLOSSARY.md](../GLOSSARY.md).
+- To understand the trust boundary for Configurations and filesystem operations, read [TRUST.md](TRUST.md).
 - For exact import resolution, matching, filesystem boundaries, Archive README behavior, output collisions, and validation, read [SPECIFICATION.md](SPECIFICATION.md).

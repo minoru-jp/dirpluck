@@ -81,6 +81,7 @@ def check_sdist(path: Path) -> None:
             "docs/CLI.md",
             "docs/CONFIGURATION.md",
             "docs/SPECIFICATION.md",
+            "docs/TRUST.md",
         }
         required = {
             "src/dirpluck/__init__.py",

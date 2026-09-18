@@ -1,6 +1,6 @@
 # dirpluck Specification
 
-This document defines the exact compatibility-supported behavior of the `dirpluck` CLI and TOML Configuration format. For purpose, see [../README.md](../README.md). For terminology, see [../GLOSSARY.md](../GLOSSARY.md). For authoring TOML, see [CONFIGURATION.md](CONFIGURATION.md). For CLI operation, see [CLI.md](CLI.md).
+This document defines the exact compatibility-supported behavior of the `dirpluck` CLI and TOML Configuration format. For purpose, see [../README.md](../README.md). For terminology, see [../GLOSSARY.md](../GLOSSARY.md). For authoring TOML, see [CONFIGURATION.md](CONFIGURATION.md). For CLI operation, see [CLI.md](CLI.md). For the trust boundary around Configurations and filesystem operations, see [TRUST.md](TRUST.md).
 
 ## 1. Public surface
 
@@ -146,7 +146,7 @@ dist/package-*.whl
 packages/*/dist/package-*.whl
 ```
 
-When the final matched entry is a file, that file is selected. When it is a directory, files below it are collected recursively subject to exclude and symbolic-link rules. There is no implicit exclusion for hidden files, repository metadata, environment files, private keys, or other secret-like names.
+When the final matched entry is a file, that file is selected. When it is a directory, files below it are collected recursively subject to exclude and symbolic-link rules. There are no implicit exclusions based on content or filename meaning. The trust boundary is described in [TRUST.md](TRUST.md).
 
 If a pattern matches multiple entries, all of them are selected. Matching is case-sensitive independently of the host OS. `**`, `?`, character classes (`[]`), and `!` are unsupported. Multiple matches are not ranked by version, modification time, or other metadata.
 

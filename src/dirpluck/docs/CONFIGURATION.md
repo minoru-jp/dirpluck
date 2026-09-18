@@ -54,4 +54,4 @@ prefix = "project"
 timestamp = true
 ```
 
-For pattern grammar, import shadowing, Case semantics, filesystem boundaries, output collisions, and other details, see `docs/CONFIGURATION.md` and `docs/SPECIFICATION.md` in the source distribution for the same release. The bundled `CLI.md` is the compact CLI reference.
+For pattern grammar, import shadowing, Case semantics, filesystem boundaries, output collisions, and the trust model, see `docs/CONFIGURATION.md`, `docs/SPECIFICATION.md`, and `docs/TRUST.md` in the source distribution for the same release. The bundled `CLI.md` is the compact CLI reference.

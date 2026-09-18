@@ -30,7 +30,7 @@
 
 # dirpluck Specification
 
-dirpluck の CLI と TOML 設定ファイル形式について、互換性対象となる厳密な動作意味論を定義する。用途は `../README.md`、用語の意味は `../GLOSSARY.md`、TOML の書き方は `CONFIGURATION.md`、CLI の操作方法は `CLI.md` を参照する。
+dirpluck の CLI と TOML 設定ファイル形式について、互換性対象となる厳密な動作意味論を定義する。用途は `../README.md`、用語の意味は `../GLOSSARY.md`、TOML の書き方は `CONFIGURATION.md`、CLI の操作方法は `CLI.md`、Configuration と filesystem 操作の信頼境界は `TRUST.md` を参照する。
 
 ## 1. 公開面
 
@@ -176,7 +176,7 @@ dist/package-*.whl
 packages/*/dist/package-*.whl
 ```
 
-最後に一致した実体が file ならその file を選択し、directory なら exclude と symbolic-link 規則に従って配下の file を再帰収集する。Hidden file、repository metadata、environment file、secret key などに対する暗黙 exclude は行わない。
+最後に一致した実体が file ならその file を選択し、directory なら exclude と symbolic-link 規則に従って配下の file を再帰収集する。内容や filename の意味に基づく暗黙 exclude は行わない。Trust boundary の説明は `TRUST.md` に置く。
 
 複数一致した場合はすべて選択する。Matching は OS に依存せず case-sensitive とする。`**`、`?`、character class (`[]`)、`!` はサポートしない。複数一致を version、mtime、その他 metadata で順位付けしない。
 

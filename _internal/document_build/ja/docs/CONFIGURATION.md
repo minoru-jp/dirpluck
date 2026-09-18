@@ -30,7 +30,7 @@
 
 # dirpluck Configuration Guide
 
-この文書は、設定ファイルを TOML で書くためのガイドです。各 field の厳密な validation、pattern grammar、import resolution、filesystem boundary などは `SPECIFICATION.md`、Configuration の選択方法と CLI option は `CLI.md` を参照してください。
+この文書は、設定ファイルを TOML で書くためのガイドです。各 field の厳密な validation、pattern grammar、import resolution、filesystem boundary などは `SPECIFICATION.md`、Configuration の選択方法と CLI option は `CLI.md`、Configuration と filesystem 操作の信頼境界は `TRUST.md` を参照してください。
 
 ## 基本形
 
@@ -165,7 +165,7 @@ exclude = [
 ]
 ```
 
-ディレクトリを include すると配下も収集対象になります。dirpluck は秘密情報らしい名前を自動判定しないため、広い directory 選択では workspace に必要な除外を明示してください。
+ディレクトリを include すると配下も収集対象になります。Selection には内容や名前に基づく暗黙の除外を加えません。Configuration を実行するときの信頼境界と広い selection の扱いは `TRUST.md` を参照してください。
 
 ### `if_empty`
 

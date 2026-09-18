@@ -32,6 +32,19 @@
 
 dirpluck のリリースごとの変更履歴。
 
+## 0.6.1
+
+LLM-assisted work の位置付けと Configuration の trust boundary を文書上で明確化し、過剰な再現可能性の表現を取り除く。実装上の挙動変更はない。
+
+### Added
+
+- `docs/TRUST.md` を追加し、Configuration を filesystem 操作の実行指示として扱うこと、dirpluck は参照先の機密性や操作の適切さを推論して補正しないこと、OS permission と明示された path が実際の権限境界であることをまとめて説明する。Source boundary や schema validation などの structural checks と、内容や意図を判断する guard を区別する。
+
+### Changed
+
+- README の LLM-assisted work の説明を、非ローカルの対話型 LLM へ upload する Archive、またはローカル agent workspace へ配置する Archive を準備する用途として明確化する。LLM が dirpluck を直接操作することを前提とするように読める表現を削除し、trust model の詳細は `docs/TRUST.md` へ集約する。
+- README から `reproducibly` / 「再現可能」の売り文句を削除する。dirpluck の価値は TOML に明示した selection intent から必要な file をまとめることとして説明し、ZIP byte stream の再現性を示唆する専門的な意味を持たせない。
+
 ## 0.6.0
 
 Filesystem location の表現力を拡張し、Archive README を配布向けの単純な索引へ整理するとともに、Configuration 全体の説明を記述できるようにする。

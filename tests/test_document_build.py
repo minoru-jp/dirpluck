@@ -17,6 +17,7 @@ EXPECTED_DOCUMENTS = {
     "docs/CLI.md",
     "docs/CONFIGURATION.md",
     "docs/SPECIFICATION.md",
+    "docs/TRUST.md",
     "package/CLI.md",
     "package/CONFIGURATION.md",
 }

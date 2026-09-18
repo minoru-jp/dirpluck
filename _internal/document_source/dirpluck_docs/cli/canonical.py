@@ -129,4 +129,5 @@ Archive を生成する通常実行では、成功すると出力 path を標準
     class TITLE_10:
         r'''- Configuration を新しく書く、または変更する: `CONFIGURATION.md`
 - 用語の意味を確認する: `../GLOSSARY.md`
+- Configuration と filesystem 操作の信頼境界を確認する: `TRUST.md`
 - import resolution、matching、filesystem boundary、Archive README、output collision などを正確に確認する: `SPECIFICATION.md`'''

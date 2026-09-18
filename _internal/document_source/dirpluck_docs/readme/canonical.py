@@ -9,7 +9,7 @@ from dirpluck_docs.vocabulary import terms
 class TITLE_1:
     r'''{{TERM_1}} は、繰り返し現れる「どのファイルを一緒に扱うか」という判断を TOML に残し、同じ意図から ZIP アーカイブを組み立てる CLI ツールです。
 
-バックアップのように周辺をすべて複製するのではなく、レビュー、引き渡し、調査、定例作業、LLM と扱う作業コンテキストなど、明示した目的に必要な範囲だけを再現可能にまとめることを目的とします。'''
+バックアップのように周辺をすべて複製するのではなく、レビュー、引き渡し、調査、定例作業、LLM と扱う作業コンテキストなど、明示した目的に必要な範囲だけをまとめることを目的とします。'''
     vocabulary_refs @= (terms.TERM_1,)
 
     @title("何に使うか")
@@ -43,16 +43,14 @@ Import の解決順序、shadowing、filesystem boundary などの厳密な規�
 
 Configuration に残しておけば、何を含めるか、何を任意扱いにするか、何を除外するか、どの固定資料を伴わせるかを、シェル履歴や会話履歴、人間の記憶へ依存せず確認できます。`--dry-run` を使えば、出力を書き込む前に現在の filesystem に対する解決結果を確認できます。
 
-LLM と継続して作業する場合も同じです。必要な source の集合を会話の中だけに保持するのではなく Configuration として残せば、人間と LLM が同じ宣言を読み、同じ対象範囲を再構成できます。'''
+LLM と扱う作業でも、dirpluck の役割はローカル filesystem から必要な材料を選んで Archive を用意するところまでです。非ローカルの対話型 LLM にはその Archive をアップロードし、ローカル agent 型の LLM では workspace へ配置する受け渡し物として使えます。LLM が dirpluck を操作することを前提としません。'''
         vocabulary_refs @= (terms.TERM_1,)
 
-    @title("選択は明示的です")
+    @title("Configuration と filesystem の信頼境界")
     class TITLE_7:
-        r'''{{TERM_1}} は「重要そうなファイル」「最新らしい成果物」「秘密情報らしいファイル」を推論しません。Configuration に書かれた選択規則を適用します。
+        r'''{{TERM_1}} は Configuration に書かれた filesystem 操作の目的や適切さを推論して補正する guard ではありません。宣言された selection と output を、仕様で定めた規則に従って実行します。
 
-特にディレクトリ全体や `*` のような広い範囲を含める場合、その配下にある `.git/`、環境ファイル、秘密鍵なども、明示的に除外しない限り候補になります。外部へ渡すアーカイブでは、対象 workspace に応じた除外を Configuration で確認してください。
-
-この狭いモデルにより、「何を一緒に扱うか」という判断そのものを Configuration 上へ残します。'''
+Configuration をどのような入力として扱うか、広い selection、absolute path、overwrite、外部へ渡す Archive をどう確認するかは `docs/TRUST.md` にまとめています。'''
         vocabulary_refs @= (terms.TERM_1,)
 
     @title("小さな例")
@@ -104,6 +102,7 @@ pip install {{TERM_1}}
 - `docs/CONFIGURATION.md`: TOML Configuration を書くためのガイド。
 - `docs/CLI.md`: CLI を実行するためのガイド。
 - `docs/SPECIFICATION.md`: 解決、matching、filesystem、archive、output、validation の厳密な規則。
+- `docs/TRUST.md`: Configuration と filesystem 操作の信頼境界、確認すべき責任範囲。
 - `CHANGELOG.md`: リリース履歴。
 
 wheel には、インストール後すぐ Configuration を書いて CLI を実行できるよう、簡潔な `dirpluck/docs/CONFIGURATION.md` と `dirpluck/docs/CLI.md` だけを同梱します。より詳しい説明が必要な場合は、sdist またはリポジトリに含まれる上記文書を参照してください。'''

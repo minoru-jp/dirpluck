@@ -84,4 +84,4 @@ prefix = "project"
 timestamp = true
 ```
 
-Pattern grammar、import shadowing、Case semantics、filesystem boundary、output collision などの詳細は、同じ release の source distribution にある `docs/CONFIGURATION.md` と `docs/SPECIFICATION.md` を参照してください。CLI reference は同梱の `CLI.md` にあります。
+Pattern grammar、import shadowing、Case semantics、filesystem boundary、output collision などの詳細は、同じ release の source distribution にある `docs/CONFIGURATION.md`、`docs/SPECIFICATION.md`、`docs/TRUST.md` を参照してください。CLI reference は同梱の `CLI.md` にあります。
