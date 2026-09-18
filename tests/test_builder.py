@@ -943,17 +943,19 @@ class BuilderTests(unittest.TestCase):
                 build_archive(config, BuildRequest.create("application"), cwd=root)
 
 
-    def test_imported_target_is_used_when_root_has_no_target(self):
+    def test_imported_target_definition_binds_to_cli_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Path(temp)
             root = workspace / "root"
             external = workspace / "external"
+            target = root / "local"
             root.mkdir()
-            (external / "src").mkdir(parents=True)
-            (external / "src" / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+            external.mkdir()
             (external / "dirpluck.toml").write_text(textwrap.dedent('''
                 [target]
-                description = "Imported project."
+                description = "Imported selection applied to CLI target."
                 include = ["src"]
 
                 [output]
@@ -966,26 +968,24 @@ class BuilderTests(unittest.TestCase):
                 root = "../external"
                 configuration = "dirpluck.toml"
             ''')
-            output = build_archive(config, BuildRequest.create(), cwd=root)
+            output = build_archive(config, BuildRequest.create("local"), cwd=root)
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
-            self.assertIn("external/src/module.py", names)
+            self.assertIn("local/src/module.py", names)
             self.assertFalse((external / "unused.zip").exists())
 
-    def test_imported_target_rejects_cli_directory(self):
+    def test_imported_target_requires_cli_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Path(temp)
             root = workspace / "root"
             external = workspace / "external"
-            local = root / "local"
             root.mkdir()
-            local.mkdir()
             external.mkdir()
-            (external / "file.txt").write_text("x", encoding="utf-8")
             (external / "dirpluck.toml").write_text(textwrap.dedent('''
                 [target]
-                description = "Imported project."
-                include = ["file.txt"]
+                description = "Imported selection."
+                include_if_exists = ["*"]
+                if_empty = "allow"
 
                 [output]
                 path = "unused.zip"
@@ -996,8 +996,8 @@ class BuilderTests(unittest.TestCase):
                 root = "../external"
                 configuration = "dirpluck.toml"
             ''')
-            with self.assertRaisesRegex(SelectionError, "must not be specified"):
-                plan_archive(config, BuildRequest.create("local"), cwd=root)
+            with self.assertRaisesRegex(SelectionError, "DIRECTORY is required"):
+                plan_archive(config, BuildRequest.create(), cwd=root)
 
     def test_outer_target_shadows_inner_target_without_resolving_inner_project(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1031,17 +1031,19 @@ class BuilderTests(unittest.TestCase):
                 names = set(archive.namelist())
             self.assertIn("local/root.txt", names)
 
-    def test_imported_target_project_path_must_be_in_supported_form(self):
+    def test_imported_target_does_not_depend_on_configuration_placement(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Path(temp)
             root = workspace / "root"
             external = workspace / "external"
+            target = root / "local"
             root.mkdir()
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
             external.mkdir()
-            (external / "file.txt").write_text("x", encoding="utf-8")
             (external / "custom.toml").write_text(textwrap.dedent('''
                 [target]
-                description = "Cannot infer project."
+                description = "Imported selection from an arbitrary config path."
                 include = ["file.txt"]
 
                 [output]
@@ -1053,35 +1055,56 @@ class BuilderTests(unittest.TestCase):
                 root = "../external"
                 configuration = "custom.toml"
             ''')
-            with self.assertRaisesRegex(ConfigurationError, "cannot be inferred"):
-                plan_archive(config, BuildRequest.create(), cwd=root)
+            output = build_archive(config, BuildRequest.create("local"), cwd=root)
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("local/file.txt", set(archive.namelist()))
 
-    def test_named_imported_target_under_dirpluck_directory_is_inferred(self):
+    def test_imported_target_keeps_imported_companions_on_import_execution_root(self):
         with tempfile.TemporaryDirectory() as temp:
             workspace = Path(temp)
-            root = workspace / "root"
-            project = workspace / "external"
-            config_dir = project / "dirpluck"
-            root.mkdir()
-            config_dir.mkdir(parents=True)
-            (project / "file.txt").write_text("x", encoding="utf-8")
-            (config_dir / "review.toml").write_text(textwrap.dedent('''
+            root = workspace / "gp-cli-tools"
+            target = root / "dirpluck"
+            shikumi = workspace / "shikumi"
+            devdoc = workspace / "shikumi-devdoc"
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "cli.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (shikumi / "dist").mkdir(parents=True)
+            (devdoc / "dist").mkdir(parents=True)
+            (shikumi / "dist" / "shikumi-0.1.0.whl").write_text("wheel", encoding="utf-8")
+            (devdoc / "dist" / "shikumi_devdoc-0.1.0.whl").write_text("wheel", encoding="utf-8")
+            (shikumi / "dirpluck.toml").write_text(textwrap.dedent('''
                 [target]
-                description = "Imported project."
-                include = ["file.txt"]
+                description = "Reusable target selection."
+                include = ["src"]
+
+                [companion.shikumi]
+                path = "shikumi"
+                description = "Shikumi wheel."
+                include = ["dist/shikumi-*.whl"]
+
+                [companion.devdoc]
+                path = "shikumi-devdoc"
+                description = "Devdoc wheel."
+                include = ["dist/shikumi_devdoc-*.whl"]
 
                 [output]
                 path = "unused.zip"
                 if_exists = "error"
             '''), encoding="utf-8")
             config = self._config(root, '''
-                [import.external]
+                [import.shikumi]
                 root = ".."
-                configuration = "external/dirpluck/review.toml"
+                configuration = "shikumi/dirpluck.toml"
             ''')
-            output = build_archive(config, BuildRequest.create(), cwd=root)
-            with zipfile.ZipFile(output) as archive:
-                self.assertIn("external/file.txt", set(archive.namelist()))
+            sources = resolve_sources(config, BuildRequest.create("dirpluck"), cwd=root)
+            self.assertEqual(
+                [(source.key, source.directory) for source in sources],
+                [
+                    ("target", target.resolve()),
+                    ("companion:shikumi", shikumi.resolve()),
+                    ("companion:devdoc", devdoc.resolve()),
+                ],
+            )
 
     def test_outer_companion_shadows_same_named_inner_companion(self):
         with tempfile.TemporaryDirectory() as temp:

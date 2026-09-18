@@ -47,7 +47,7 @@ The Root Configuration may contain no local Target or Companion as long as resol
 
 ## 4. Configuration imports and name resolution
 
-Each Configuration may declare zero or one Configuration import using `[import.<name>]`. The import name is a non-empty identifier used for diagnostics and Archive indexing. In 0.5.0 it is not an automatic namespace prefix for Companion or Shared-pattern names.
+Each Configuration may declare zero or one Configuration import using `[import.<name>]`. The import name is a non-empty identifier used for diagnostics and Archive indexing. It is not an automatic namespace prefix for Companion or Shared-pattern names.
 
 Accepted fields are:
 
@@ -94,16 +94,9 @@ This definition participates in normal Companion-name resolution under `<compani
 
 ### Target directory resolution
 
-If the effective Target belongs to the Root Configuration, one or more CLI `DIRECTORY` arguments are required and the same Target selection is applied independently to all of them.
+If the effective Configuration contains a Target, one or more CLI `DIRECTORY` arguments are required regardless of which Configuration layer defined it. The same effective Target selection is applied independently to all supplied directories. Every `DIRECTORY` is resolved inside the Root Configuration's execution root, which is the process cwd.
 
-If the effective Target comes from an imported layer, CLI `DIRECTORY` is rejected. Its source directory is inferred from the owning Configuration file using only these forms:
-
-```text
-<project>/dirpluck.toml          -> <project>
-<project>/dirpluck/<name>.toml   -> <project>
-```
-
-If an imported Target survives name resolution but its Configuration file is not in either form, the project directory cannot be determined and the run fails. An inner Target that is shadowed by an outer Target does not need project-directory resolution.
+The Configuration layer that defined the Target affects selection, Case, and Shared-pattern resolution only. It is not used to infer the runtime Target directory, even when the effective Target originated from an imported Configuration.
 
 Outputs from inner layers are schema-validated but never executed. The final Output is always the Root Configuration's `[output]`.
 
@@ -123,7 +116,7 @@ Case selections are complete definitions, not deltas, and do not inherit include
 
 Each Configuration may define at most one Target. Across a Configuration chain, an outer Target shadows the inner Target as a whole, so the effective Configuration contains at most one Target.
 
-A Root-owned effective Target requires one or more CLI `DIRECTORY` arguments. An imported effective Target is bound to one project directory inferred from its owning Configuration file and does not accept CLI positional directories. If the effective Configuration has no Target, positional directories are also rejected.
+If the effective Configuration contains a Target, one or more CLI `DIRECTORY` arguments are required regardless of its origin layer. If the effective Configuration has no Target, positional directories are rejected.
 
 Each Companion has a fixed `path`, non-empty `description`, and complete base selection. An ordinary Companion's `path` is relative to the execution root of the layer that owns it. An `[import.<name>.companion.<name>]` overlay is relative to the immediate import root.
 
@@ -133,7 +126,7 @@ An outer same-named Companion shadows the inner Companion including path, descri
 
 Every Target or Companion base/Case selection has a non-empty `description` and at least one effective `include` or `include_if_exists` candidate from direct patterns or Shared-pattern references.
 
-`include_pattern_refs` and `include_if_exists_pattern_refs` reference names in the effective Shared-include namespace. `exclude_pattern_refs` references names in the effective Shared-exclude namespace. In 0.5.0, import names are not required as prefixes.
+`include_pattern_refs` and `include_if_exists_pattern_refs` reference names in the effective Shared-include namespace. `exclude_pattern_refs` references names in the effective Shared-exclude namespace. Import names are not required as prefixes.
 
 Shared namespaces are composed from inner to outer with same-name shadowing. A selection from an inner layer resolves its references against the final namespace, so an outer layer may provide or override a Shared pattern used by that source. A name that remains unresolved after the full chain is composed is a Configuration error.
 
@@ -183,7 +176,7 @@ A bare `*`, `*/`, internal-wildcard forms such as `foo*bar`, `**`, `?`, characte
 
 The Root Configuration uses the process cwd as its execution root and filesystem boundary. Each imported layer uses the resolved `[import.<name>].root` from the layer that imports it.
 
-Only an import `root` may explicitly cross the current layer's boundary. After an import root is resolved, the imported Configuration file, that layer's ordinary Companions, any effective imported Target project directory, and selected files must remain inside the corresponding execution root. A deeper import root is resolved relative to the Configuration file that declares it, so every layer establishes its own boundary independently.
+Only an import `root` may explicitly cross the current layer's boundary. After an import root is resolved, the imported Configuration file, that layer's ordinary Companions, and Companion-selected files must remain inside the corresponding execution root. Runtime Target directories always resolve inside the Root Configuration's execution root. A deeper import root is resolved relative to the Configuration file that declares it, so every layer establishes its own boundary independently.
 
 An ordinary Companion keeps the execution root of the layer that defined it. An import-root overlay Companion uses the immediate import root. When a source is shadowed, the replacing outer definition also replaces this root context.
 
@@ -191,7 +184,7 @@ Source paths or selected files that escape their boundary through symbolic links
 
 ## 11. Archive planning and paths
 
-Selected files retain filesystem-relative paths from the execution root associated with their effective source definition. A source inherited from an inner layer uses that inner execution root; a source replaced by an outer definition uses the outer definition's root context.
+Target-selected files retain paths relative to the Root Configuration execution root regardless of the Target definition's origin layer. Companion-selected files retain paths relative to the execution root associated with the effective Companion definition. An inner Companion that survives shadowing uses the inner execution root; a Companion replaced by an outer definition uses the outer definition's root context.
 
 If multiple sources select the same physical file at the same Archive path, it is written once. Different physical files resolving to the same Archive path are a collision error. The same physical file resolving to different Archive paths from different execution roots is also rejected as ambiguous.
 
@@ -254,17 +247,17 @@ With either form, the output file itself cannot be selected as one of the Archiv
 
 Missing required includes are shown as `[missing]`; missing optional patterns are `[optional missing]`. Empty selections are reported according to their policy.
 
-Multiple imports in one Configuration, import cycles, invalid root/configuration paths, unresolved imported-Target project directories, unresolved Shared-pattern references, invalid source paths, and Case contradictions are errors even in dry-run. Import depth itself is never an error or warning.
+Multiple imports in one Configuration, import cycles, invalid root/configuration paths, unresolved Shared-pattern references, invalid source paths, and Case contradictions are errors even in dry-run. Import depth itself is never an error or warning.
 
 ## 14. CLI forms
 
-When the Root Configuration's own Target survives into the effective Configuration, supply one or more runtime directories:
+When the effective Configuration contains a Target, supply one or more runtime directories regardless of which Configuration layer defined it:
 
 ```console
 dirpluck DIRECTORY [DIRECTORY ...]
 ```
 
-When an imported Target is effective, or when the effective Configuration has no Target, supply no positional directory:
+When the effective Configuration has no Target, supply no positional directory:
 
 ```console
 dirpluck --config NAME

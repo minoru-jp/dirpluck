@@ -124,16 +124,9 @@ Selection の `include_pattern_refs` / `include_if_exists_pattern_refs` / `exclu
 
 ### Target directory resolution
 
-実効設定の Target がルート設定ファイル自身に由来する場合、CLI `DIRECTORY` を1個以上必要とし、同じ Target Selection をそれぞれへ適用します。
+実効設定に Target が存在する場合、その Target 定義の origin layer にかかわらず CLI `DIRECTORY` を1個以上必要とし、同じ Target Selection をそれぞれへ適用します。各 `DIRECTORY` はルート設定ファイルの execution root、つまり process cwd 内で解決します。
 
-実効 Target が import chain 内側に由来する場合、CLI `DIRECTORY` は指定できません。対象 directory は Target を定義した Configuration file の配置から次だけを解決します。
-
-```text
-<project>/dirpluck.toml          -> <project>
-<project>/dirpluck/<name>.toml   -> <project>
-```
-
-この形で project directory を一意に推定できない imported Target が実効 Target として残る場合は Configuration error です。外側 Target に shadow された内側 Target については project directory を解決しません。
+Target Selection の origin Configuration は selection / Case / shared pattern の名前解決にだけ影響し、runtime Target directory の自動推定には使用しません。import chain 内側の Target が実効 Targetとして残っていても、Configuration file の配置から project directory を推定することはありません。
 
 import chain 内側の `[output]` は schema validation の対象ですが実行しません。最終 output はルート設定ファイルの `[output]` だけです。
 
@@ -153,7 +146,7 @@ Case Selection は base の差分ではなく完全な Selection で、include /
 
 各 Configuration の Target 定義は最大1個です。Target は `path` を保存せず、base または Case Selection を持ちます。Configuration chain では外側 Target が内側 Target を定義全体として shadow するため、実効設定に残る Target は最大1個です。
 
-Root-owned Target が実効 Targetなら CLI `DIRECTORY` を1個以上束縛します。Imported Target が実効 Targetなら Configuration placement から project directory を1個自動解決し、CLI `DIRECTORY` は受理しません。Target がない実効設定でも `DIRECTORY` は受理しません。
+Target が実効設定に存在するなら origin layer にかかわらず CLI `DIRECTORY` を1個以上束縛します。Target がない実効設定では `DIRECTORY` を受理しません。
 
 各 Companion は固定 `path`、空でない `description`、完全な base Selection を持ちます。通常 Companion の `path` は定義を所有する Configuration layer の execution root 相対です。`[import.<name>.companion.<name>]` overlay は直下 import root 相対です。
 
@@ -213,7 +206,7 @@ name*     前方一致
 
 ルート設定ファイルの execution root / filesystem boundary は process cwd です。各 import layer の execution root は、その layer を読み込んだ `[import.<name>].root` の解決結果です。
 
-Import root を解決できる唯一の越境 path とし、その root 確定後は imported `configuration`、その layer の通常 Companion、Target project directory、選択ファイルを対応する execution root 内へ限定します。次の import root は importing Configuration file 自身の所在 directory から解決するため、chain が深くても各 boundary は独立して確定します。
+Import root を解決できる唯一の越境 path とし、その root 確定後は imported `configuration`、その layer の通常 Companion、Companion の選択ファイルを対応する execution root 内へ限定します。Target directory は常にルート設定ファイルの execution root 内で CLI から解決します。次の import root は importing Configuration file 自身の所在 directory から解決するため、chain が深くても各 boundary は独立して確定します。
 
 通常 Companion は定義 origin layer の execution root、import-root overlay Companion は直下 import root を path 基準として保持します。Definition が shadow された場合は shadow した outer definition の root 情報へ置き換わります。
 
@@ -221,7 +214,7 @@ Import root を解決できる唯一の越境 path とし、その root 確定�
 
 ## 11. アーカイブ計画とパス
 
-選択されたファイルは、その effective source definition に対応する execution root から見た filesystem relative path を ZIP 内で保持します。Shadow されずに inner layer から残った source は inner execution root、outer definition に置き換わった source は outer execution root を使います。
+Target の選択ファイルは、Target 定義の origin layer にかかわらずルート設定ファイルの execution root から見た filesystem relative path を ZIP 内で保持します。Companion の選択ファイルは、その effective Companion definition に対応する execution root から見た相対 path を保持します。Shadow されずに inner layer から残った Companion は inner execution root、outer definition に置き換わった Companion は outer execution root を使います。
 
 同じ archive path に同じ物理 file が重なる場合は1回だけ書き込みます。異なる物理 file が同じ archive path へ衝突する場合、または同じ物理 file が異なる execution root から異なる archive path へ解決される場合は ambiguity error です。
 
@@ -284,7 +277,7 @@ Root Configuration の `directory` は cwd 内の具体的な cwd 相対ディ�
 
 不足する必須 `include` は `[missing]`、不足する任意 pattern は `[optional missing]` と表示します。最終選択0件は policy に応じて `empty, allowed` または `empty, would error` と表示します。
 
-複数 import を同じ Configuration に定義した場合、import cycle、不正 root / configuration path、解決不能な imported Target project directory、未解決 shared pattern ref、不正 source path、Case 矛盾などは dry-run でも error です。Import depth 自体は error / warning にしません。
+複数 import を同じ Configuration に定義した場合、import cycle、不正 root / configuration path、未解決 shared pattern ref、不正 source path、Case 矛盾などは dry-run でも error です。Import depth 自体は error / warning にしません。
 
 ## 14. CLI 形式
 
@@ -294,7 +287,7 @@ Root Configuration の `directory` は cwd 内の具体的な cwd 相対ディ�
 dirpluck DIRECTORY [DIRECTORY ...]
 ```
 
-Imported Target が実効 Targetになる場合、または Target を持たない effective Configuration を実行する場合は `DIRECTORY` を指定しません。
+Target が実効設定に存在する場合は、その origin layer にかかわらず `DIRECTORY` を指定します。Target を持たない effective Configuration では `DIRECTORY` を指定しません。
 
 ```console
 dirpluck --config NAME

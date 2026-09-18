@@ -42,7 +42,7 @@ dirpluck の抽出意図を記述する TOML ファイル。各ファイルは0�
 
 ## 対象
 
-設定ファイルごとに最大1個だけ定義できる主 source。`[target]` に base 選択、必要に応じて `[target.case.<name>]` に独立した Case 選択を記述する。設定 chain では外側の Target 定義が内側の Target 定義全体を shadow し、最終的に1個以下の Target が実効設定へ残る。ルート設定ファイル自身の Target が残る場合は CLI の `DIRECTORY` を束縛し、import 由来 Target が残る場合はその Target を所有する Configuration の project directory を対象ディレクトリとして解決する。
+設定ファイルごとに最大1個だけ定義できる主 source。`[target]` に base 選択、必要に応じて `[target.case.<name>]` に独立した Case 選択を記述する。設定 chain では外側の Target 定義が内側の Target 定義全体を shadow し、最終的に1個以下の Target が実効設定へ残る。Target 定義がどの Configuration layer に由来するかにかかわらず、実効 Target が存在する実行では CLI の `DIRECTORY` を1個以上束縛する。
 
 ## ケース
 
@@ -54,7 +54,7 @@ dirpluck の抽出意図を記述する TOML ファイル。各ファイルは0�
 
 ## 対象ディレクトリ
 
-抽出を行う実際のディレクトリ。実効 Target がルート設定ファイル自身に由来する場合は CLI から1個以上与えられる。実効 Target が import chain の内側に由来する場合は、その Target を定義した Configuration の project directory から1個の対象ディレクトリを決定する。コンパニオンは定義を所有する設定層または import root overlay の固定 `path` から決定する。いずれも対応する filesystem boundary 内へ解決されなければならない。
+抽出を行う実際のディレクトリ。実効 Target が存在する場合は、その定義の origin layer にかかわらず CLI から1個以上与え、ルート設定ファイルの execution root 内で解決する。コンパニオンは定義を所有する設定層または import root overlay の固定 `path` から決定する。いずれも対応する filesystem boundary 内へ解決されなければならない。
 
 ## 抽出
 
@@ -62,7 +62,7 @@ dirpluck の抽出意図を記述する TOML ファイル。各ファイルは0�
 
 ## アーカイブ
 
-dirpluck が生成する ZIP 成果物。選択されたファイルは、その source 定義に対応する execution root から見た実際の相対 path を保持し、ルートには dirpluck が生成する `README.md` を置く。同じ archive path に同じ実ファイルが重なる場合は1回だけ書き込み、異なる実ファイルの path 衝突や、同じ実ファイルが異なる archive path へ解決される曖昧さは拒否する。
+dirpluck が生成する ZIP 成果物。Target の選択ファイルはルート設定ファイルの execution root、Companion の選択ファイルはその Companion 定義に対応する execution root から見た実際の相対 path を保持し、ルートには dirpluck が生成する `README.md` を置く。同じ archive path に同じ実ファイルが重なる場合は1回だけ書き込み、異なる実ファイルの path 衝突や、同じ実ファイルが異なる archive path へ解決される曖昧さは拒否する。
 
 ## 出力定義
 
@@ -82,7 +82,7 @@ dirpluck が生成する ZIP 成果物。選択されたファイルは、その
 
 ## ルート設定ファイル
 
-1回の dirpluck 実行を開始する最外側の設定ファイル。CLI の通常探索または `--config NAME` で選択され、process cwd を自身の execution root とする。0個または1個の設定インポートを持ち、import chain を解決して実効設定を作る。最終 `[output]` を所有し、実効 Target が自身の定義である場合だけ CLI の `DIRECTORY` を束縛する。
+1回の dirpluck 実行を開始する最外側の設定ファイル。CLI の通常探索または `--config NAME` で選択され、process cwd を自身の execution root とする。0個または1個の設定インポートを持ち、import chain を解決して実効設定を作る。最終 `[output]` を所有し、実効 Target が存在する場合の CLI `DIRECTORY` を自身の execution root 内へ束縛する。
 
 ## 実効設定
 

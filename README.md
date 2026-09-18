@@ -114,7 +114,7 @@ Name resolution proceeds from the deepest layer outward. Each Configuration may 
 
 If the imported Configuration defines a Target and the outer layer does not, that Target becomes effective. If the outer layer also defines `[target]`, the outer Target shadows the inner Target together with all of its Cases. The same rule applies to same-named Companions and Shared patterns.
 
-When an imported Target survives resolution, its source directory is inferred from the Configuration location if the file is `<project>/dirpluck.toml` or `<project>/dirpluck/<name>.toml`. This allows a composition Configuration to contain only `import + output`.
+When an imported Target survives resolution, its selection definition is reused, but its runtime directory is still supplied through CLI `DIRECTORY`. Target binding is therefore independent of which Configuration layer defined the effective Target.
 
 `root` is relative to the Configuration file that declares the import, not to the process cwd. Absolute paths are rejected. The resolved root becomes the filesystem boundary of the directly imported layer, and the same rule repeats at every hop in the chain.
 
@@ -187,7 +187,7 @@ For the complete TOML authoring guide, including Target and Companion forms, Cas
 
 The supported public interface is the CLI.
 
-When the Root Configuration's own Target survives into the effective Configuration, supply one or more `DIRECTORY` values. When an imported Target is effective, do not supply a positional directory.
+When the effective Configuration contains a Target, supply one or more `DIRECTORY` values regardless of which Configuration layer defined that Target. The Target selection is resolved through the Configuration chain; the runtime Target directories always come from the CLI.
 
 ```console
 dirpluck DIRECTORY [DIRECTORY ...]
@@ -239,7 +239,7 @@ There are intentionally no CLI options that temporarily replace selection rules 
 
 ## Installation
 
-Python 3.11 or later is required. Current release: `0.5.0`.
+Python 3.11 or later is required. Current release: `0.5.1`.
 
 ```console
 pip install dirpluck

@@ -95,7 +95,7 @@ Resolution starts at the deepest Configuration and proceeds outward.
 
 `include_pattern_refs`, `include_if_exists_pattern_refs`, and `exclude_pattern_refs` are resolved against the final effective Shared-pattern namespaces, not only against the layer where the selection was written. An outer layer may therefore provide or override a Shared pattern referenced by an inner source. A reference that remains unresolved after the full chain is composed is a Configuration error.
 
-The import name identifies the link for diagnostics and Archive indexing. In 0.5.0 it is not an automatic namespace prefix for Companion or Shared-pattern names.
+The import name identifies the link for diagnostics and Archive indexing. It is not an automatic namespace prefix for Companion or Shared-pattern names.
 
 ### Add or override a Companion inside the import root
 
@@ -113,22 +113,15 @@ This definition participates in normal Companion resolution under the name `proj
 
 Its `path` is relative to the immediate import root. `path = "."` is allowed to select the import root itself. Absolute paths, `..`, and globs are rejected.
 
-### Imported Target resolution
+### Target resolution
 
-If the effective Target is defined by the Root Configuration, one or more CLI `DIRECTORY` arguments are required as before.
+If a Target survives into the effective Configuration, one or more CLI `DIRECTORY` arguments are required regardless of which Configuration layer defined it. The Target selection definition is resolved through the Configuration chain, while each runtime Target directory is resolved from CLI input inside the Root Configuration's execution root.
 
-If the effective Target comes from an inner Configuration, no CLI `DIRECTORY` is supplied. Its source directory is inferred from the Configuration file location using only these forms:
-
-```text
-<project>/dirpluck.toml          -> <project>
-<project>/dirpluck/<name>.toml   -> <project>
-```
-
-If an imported Target survives name resolution but its owning Configuration is not in either form, dirpluck cannot determine the project directory and reports a Configuration error. An inner Target that is shadowed by an outer Target does not need to be resolved.
+This allows an imported Configuration to provide the Target selection rules while the importing run chooses the concrete runtime directory. dirpluck does not infer a Target directory from the imported Configuration file's location.
 
 ### Case
 
-`[import.<name>].case` is not used in 0.5.0. After the Configuration chain is resolved, a single CLI `--case` is applied to the effective Configuration. Shadowing a Target or Companion also replaces all Cases owned by that source.
+`[import.<name>].case` is not used. After the Configuration chain is resolved, a single CLI `--case` is applied to the effective Configuration. Shadowing a Target or Companion also replaces all Cases owned by that source.
 
 ## Target
 
@@ -145,13 +138,13 @@ include = [
 
 Across a Configuration chain, an outer Target shadows the inner Target as a complete definition. The effective Configuration therefore contains at most one Target.
 
-If the effective Target belongs to the Root Configuration, at least one CLI `DIRECTORY` is required and the same Target selection is applied independently to every supplied directory.
+If the effective Configuration contains a Target, at least one CLI `DIRECTORY` is required regardless of that Target's origin layer, and the same Target selection is applied independently to every supplied directory.
 
 ```console
 dirpluck submissions/acme submissions/contoso
 ```
 
-If the effective Target comes from an imported Configuration, do not supply a positional `DIRECTORY`; dirpluck resolves that Target's project directory from the owning Configuration's location as described above. If the effective Configuration has no Target, positional directories are also rejected.
+An imported Target follows the same rule: its selection definition may survive layering, but its runtime directory still comes from CLI `DIRECTORY`. If the effective Configuration has no Target, positional directories are rejected.
 
 A Target may define a base selection, named Cases, or both. If it defines Cases but no base `[target]`, `--case` is required.
 
@@ -202,7 +195,7 @@ include_pattern_refs = ["project-core"]
 exclude_pattern_refs = ["python-dev"]
 ```
 
-Shared include and exclude patterns are resolved in separate namespaces from the deepest Configuration outward. An outer definition with the same name shadows the inner array. In 0.5.0, import names are not required as prefixes for Shared-pattern references.
+Shared include and exclude patterns are resolved in separate namespaces from the deepest Configuration outward. An outer definition with the same name shadows the inner array. Import names are not required as prefixes for Shared-pattern references.
 
 This also means that a source defined in an inner Configuration resolves its Shared-pattern references against the final effective namespace. An outer Configuration may provide or override a pattern referenced by that inner source. Conversely, a reference may be absent in the inner file and still be valid if an outer layer supplies it. If the name is still missing after the full chain is resolved, the Configuration is invalid.
 
@@ -289,7 +282,7 @@ if_empty = "allow"
 
 ## Cases
 
-A single flat Case name may be active for the effective Configuration. Select it with CLI `--case` after the Configuration chain has been composed. There is no per-import Case setting in 0.5.0.
+A single flat Case name may be active for the effective Configuration. Select it with CLI `--case` after the Configuration chain has been composed. There is no per-import Case setting.
 
 If a source is shadowed by an outer layer, its base and all of its Cases are replaced together. Cases of sources that survive shadowing remain part of the effective Configuration regardless of which layer originally defined them.
 
@@ -456,34 +449,52 @@ This Configuration is complete without a Target because all of its sources are f
 
 ## Complete example: layer another Configuration
 
-Assume `projects/context/dirpluck.toml` contains only an import and the final output:
+Assume the following Root Configuration is run from `workspace/dirpluck/`:
 
 ```toml
-[import.shikumi]
+[target]
+description = "The dirpluck project being prepared for development context."
+include_if_exists = ["*"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
+
+[shared.exclude_patterns]
+python-dev = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    "*.pyc",
+]
+
+[import.shikumi-stack]
 root = ".."
 configuration = "shikumi/dirpluck.toml"
+
+[import.shikumi-stack.companion.project]
+path = "shikumi"
+description = "The shikumi project itself, added by the Root Configuration."
+include_if_exists = ["pyproject.toml", "src", "README.md"]
+exclude_pattern_refs = ["python-dev"]
+if_empty = "allow"
 
 [output]
 path = "development-context.zip"
 if_exists = "overwrite"
 ```
 
-And `projects/shikumi/dirpluck.toml` contains:
+If the imported `workspace/shikumi/dirpluck.toml` declares `shikumi-devdoc` as a Companion like this, its path is resolved from the import root `workspace/`:
 
 ```toml
-[shared.exclude_patterns]
-python-dev = [
-    ".git/",
-    ".venv/",
-    "__pycache__/",
-    "*.pyc",
-]
-
 [target]
-description = "The shikumi project."
+description = "The project selected when this Configuration is run directly."
 include_if_exists = ["*"]
-exclude_pattern_refs = ["python-dev"]
 if_empty = "allow"
+
+[companion.shikumi]
+path = "shikumi"
+description = "The shikumi wheel used by related projects."
+include = ["dist/shikumi-*.whl"]
 
 [companion.devdoc]
 path = "shikumi-devdoc"
@@ -495,17 +506,14 @@ path = "shikumi-context.zip"
 if_exists = "overwrite"
 ```
 
-Because the Root layer does not define a Target, the imported Target survives name resolution. Its Configuration is at `projects/shikumi/dirpluck.toml`, so the effective Target directory is `projects/shikumi/`. No positional `DIRECTORY` is needed:
+The imported `shikumi-context.zip` is neither created nor overwritten during the Root run. Only the Root Configuration's `development-context.zip` is the final Output.
 
 ```console
-cd projects/context
-dirpluck --dry-run
-dirpluck
+dirpluck . --dry-run
+dirpluck .
 ```
 
-The imported `[output]` is ignored; only `development-context.zip` is written.
-
-If the Root layer later defines its own `[target]`, that outer Target shadows the imported Target and all of its Cases. The imported `devdoc` Companion remains unless the Root layer also defines `[companion.devdoc]`.
+The Root Target binds to CLI `.` and shadows the imported Target, so the effective Target comes from the Root Configuration. After name resolution, the Companions named `shikumi` and `devdoc` come from the imported Configuration, while `project` comes from the Root import overlay. If the outer Target were removed, the imported Target definition would survive and would still bind to CLI `DIRECTORY` at runtime.
 
 ## Configuration discovery
 

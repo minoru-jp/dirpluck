@@ -217,7 +217,7 @@ TOML の完全な書き方、対象とコンパニオンの形、ケース、選
 
 サポート対象の公開インターフェースは CLI です。
 
-ルート設定ファイル自身の Target が実効設定へ残る場合は1個以上の `DIRECTORY` を指定します。Import 由来 Target が実効 Targetの場合は位置引数を指定しません。
+実効設定に Target が残る場合は、その Target 定義がどの Configuration layer に由来するかにかかわらず1個以上の `DIRECTORY` を指定します。Target Selection は Configuration chain で解決し、runtime Target directory は常に CLI から束縛します。
 
 ```console
 dirpluck DIRECTORY [DIRECTORY ...]
@@ -269,7 +269,7 @@ dirpluck --config snapshot --sequence 2
 
 ## インストール
 
-Python 3.11 以降を使用します。現在のリリースは `0.5.0` です。
+Python 3.11 以降を使用します。現在のリリースは `0.5.1` です。
 
 ```console
 pip install dirpluck

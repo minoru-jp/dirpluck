@@ -8,8 +8,8 @@ This document lists only the operational rules needed when using dirpluck.
 - Check a new or changed Configuration with `--dry-run` before a normal run.
 - The default Root Configuration is `dirpluck.toml` in cwd or `./dirpluck/`.
 - `--config NAME` selects the Root Configuration from cwd or `./dirpluck/`. The `.toml` suffix may be omitted.
-- Pass one or more `DIRECTORY` arguments only when the Root Configuration's own `[target]` survives into the effective Configuration.
-- When an imported Target is effective, or when no Target is effective, pass no `DIRECTORY`.
+- Pass one or more `DIRECTORY` arguments whenever the effective Configuration contains a Target, regardless of which Configuration layer defined it.
+- When the effective Configuration has no Target, pass no `DIRECTORY`.
 
 ```console
 dirpluck PROJECT --dry-run
@@ -197,14 +197,7 @@ if_empty = "allow"
 
 This participates in normal Companion-name resolution under `project`. `path = "."` selects the import root itself.
 
-If an imported Target survives into the effective Configuration, its owning Configuration must be located as one of:
-
-```text
-<project>/dirpluck.toml
-<project>/dirpluck/<name>.toml
-```
-
-The corresponding `<project>` is used as the Target directory. If the Root layer defines its own Target, that outer Target shadows the imported Target and all of its Cases.
+If an imported Target survives into the effective Configuration, apply that Target selection to the runtime directory supplied with CLI `DIRECTORY`. dirpluck does not infer a Target directory from the imported Configuration file's location. If the Root layer defines its own Target, that outer Target shadows the imported Target and all of its Cases.
 
 ## Output
 
@@ -254,7 +247,7 @@ dirpluck PROJECT --sequence 2
 - Do not define more than one `[import.<name>]` in one Configuration.
 - Import depth is unlimited, but cycles are not allowed.
 - Do not treat the import name as a Companion or Shared-pattern prefix.
-- Do not pass CLI `DIRECTORY` when an imported Target is effective.
+- If a Target is effective, pass CLI `DIRECTORY` even when that Target definition came from an imported Configuration.
 - Inner `[output]` definitions are not executed.
 - Do not use `..` on ordinary Targets or Companions to widen the boundary. Use `[import.<name>]` when another Configuration should be used.
 - Do not use internal Python modules as a public API.

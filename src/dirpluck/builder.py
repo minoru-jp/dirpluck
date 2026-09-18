@@ -398,14 +398,9 @@ def _validate_request(
             raise SelectionError(
                 "the effective Configuration does not define a Target; DIRECTORY must not be specified"
             )
-    elif effective.target.layer is effective.layers[0]:
-        if not request.directories:
-            raise SelectionError(
-                "DIRECTORY is required when the Root Configuration's Target is effective (one or more may be specified)"
-            )
-    elif request.directories:
+    elif not request.directories:
         raise SelectionError(
-            "the effective Target comes from an imported Configuration; DIRECTORY must not be specified"
+            "DIRECTORY is required when the effective Configuration defines a Target (one or more may be specified)"
         )
 
     if request.case is None:
@@ -460,31 +455,6 @@ def _selected_companion(
     return _materialize_selection(companion.selection, shared, location), location
 
 
-def _infer_imported_target_project(binding: _TargetBinding) -> tuple[Path, str]:
-    manifest = binding.layer.config.manifest.resolve()
-    execution_root = binding.layer.execution_root.resolve()
-    if manifest.name == "dirpluck.toml":
-        project = manifest.parent
-    elif manifest.suffix == ".toml" and manifest.parent.name == "dirpluck":
-        project = manifest.parent.parent
-    else:
-        raise ConfigurationError(
-            "effective imported Target project cannot be inferred from Configuration path: "
-            f"{manifest}; expected <project>/dirpluck.toml or <project>/dirpluck/<name>.toml"
-        )
-    if not project.is_dir() or not _is_within(project, execution_root):
-        raise ConfigurationError(
-            f"effective imported Target project must stay inside its execution root: {project}"
-        )
-    directory, archive_root = _resolve_directory(
-        project,
-        execution_root,
-        label="effective imported target",
-        allow_cwd=True,
-    )
-    return directory, archive_root
-
-
 def _resolve_effective_sources(
     effective: _EffectiveConfiguration,
     request: BuildRequest,
@@ -498,51 +468,34 @@ def _resolve_effective_sources(
             request.case,
             shared=effective.shared,
         )
-        if effective.target.layer is effective.layers[0]:
-            target_count = len(request.directories)
-            seen: set[Path] = set()
-            for index, requested in enumerate(request.directories, start=1):
-                directory, archive_root = _resolve_directory(
-                    requested,
-                    effective.target.layer.execution_root,
-                    label=f"target {index}" if target_count > 1 else "target",
-                    allow_cwd=True,
+        target_count = len(request.directories)
+        target_root = effective.layers[0].execution_root
+        seen: set[Path] = set()
+        for index, requested in enumerate(request.directories, start=1):
+            directory, archive_root = _resolve_directory(
+                requested,
+                target_root,
+                label=f"target {index}" if target_count > 1 else "target",
+                allow_cwd=True,
+            )
+            if directory in seen:
+                raise SelectionError(
+                    f"target directories must resolve to distinct directories: {directory}"
                 )
-                if directory in seen:
-                    raise SelectionError(
-                        f"target directories must resolve to distinct directories: {directory}"
-                    )
-                seen.add(directory)
-                key = "target" if target_count == 1 else f"target:{index}"
-                name = None if target_count == 1 else archive_root
-                source = f"CLI input #{index}" if target_count > 1 else "CLI input"
-                resolved.append(
-                    ResolvedSource(
-                        key=key,
-                        kind="target",
-                        name=name,
-                        description=selection.description,
-                        directory=directory,
-                        archive_root=archive_root,
-                        selection=selection,
-                        source=source,
-                        config_location=location,
-                        config_manifest=effective.target.layer.config.manifest,
-                        import_name=None,
-                    )
-                )
-        else:
-            directory, archive_root = _infer_imported_target_project(effective.target)
+            seen.add(directory)
+            key = "target" if target_count == 1 else f"target:{index}"
+            name = None if target_count == 1 else archive_root
+            source = f"CLI input #{index}" if target_count > 1 else "CLI input"
             resolved.append(
                 ResolvedSource(
-                    key="target",
+                    key=key,
                     kind="target",
-                    name=None,
+                    name=name,
                     description=selection.description,
                     directory=directory,
                     archive_root=archive_root,
                     selection=selection,
-                    source=f"Configuration project `{effective.target.layer.config.manifest}`",
+                    source=source,
                     config_location=location,
                     config_manifest=effective.target.layer.config.manifest,
                     import_name=effective.target.layer.import_name,

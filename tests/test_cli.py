@@ -629,6 +629,47 @@ class CliTests(unittest.TestCase):
                 self.assertIn("data/artifact.txt", archive.namelist())
             self.assertFalse((external / "unused.zip").exists())
 
+    def test_imported_target_definition_accepts_cli_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            root = workspace / "root"
+            external = workspace / "external"
+            target = root / "app"
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
+            external.mkdir()
+            (external / "config.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Reusable imported Target definition."
+                include = ["src"]
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            (root / "dirpluck.toml").write_text(textwrap.dedent('''
+                [import.external]
+                root = "../external"
+                configuration = "config.toml"
+
+                [output]
+                path = "result.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app"])
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                self.assertIn("app/src/app.py", archive.namelist())
+            self.assertFalse((external / "unused.zip").exists())
+
     def test_configs_lists_import_only_root_configuration(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

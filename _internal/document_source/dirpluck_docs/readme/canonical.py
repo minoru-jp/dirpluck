@@ -194,7 +194,7 @@ TOML の完全な書き方、対象とコンパニオンの形、ケース、選
 
 サポート対象の公開インターフェースは CLI です。
 
-{{TERM_14}}自身の Target が{{TERM_15}}へ残る場合は1個以上の `DIRECTORY` を指定します。Import 由来 Target が実効 Targetの場合は位置引数を指定しません。
+{{TERM_15}}に Target が残る場合は、その Target 定義がどの Configuration layer に由来するかにかかわらず1個以上の `DIRECTORY` を指定します。Target Selection は Configuration chain で解決し、runtime Target directory は常に CLI から束縛します。
 
 ```console
 {{TERM_1}} DIRECTORY [DIRECTORY ...]

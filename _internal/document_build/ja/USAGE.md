@@ -38,8 +38,8 @@
 - 新規または変更した Configuration は、通常実行の前に `--dry-run` で確認する。
 - 既定のルート設定ファイルは cwd または `./dirpluck/` の `dirpluck.toml`。
 - `--config NAME` は cwd または `./dirpluck/` からルート設定ファイルを選ぶ。`.toml` は省略可能。
-- ルート設定ファイル自身の `[target]` が実効設定へ残る場合だけ1個以上の `DIRECTORY` を渡す。
-- import 由来 Target が実効 Targetになる場合、または Target がない場合は `DIRECTORY` を渡さない。
+- 実効設定に Target が存在する場合は、その定義の origin layer にかかわらず1個以上の `DIRECTORY` を渡す。
+- Target が存在しない場合は `DIRECTORY` を渡さない。
 
 ```console
 dirpluck PROJECT --dry-run
@@ -227,14 +227,7 @@ if_empty = "allow"
 
 この Companion は通常の名前 `project` で名前解決へ参加する。`path = "."` で import root 自体を Companion にできる。
 
-Import 由来 Target が実効設定へ残る場合、Target を定義した Configuration は次のどちらかに配置する。
-
-```text
-<project>/dirpluck.toml
-<project>/dirpluck/<name>.toml
-```
-
-この配置から `<project>` を対象 directory として解決する。Root 側 Target が同名 singleton `target` を定義すれば、import 由来 Target とその Case は使用されない。
+Import 由来 Target が実効設定へ残る場合も、その Selection を CLI `DIRECTORY` で指定した runtime directory へ適用する。Target を定義した Configuration file の配置から対象 directory を推定しない。Root 側 Target が singleton `target` を定義すれば、import 由来 Target とその Case は shadow される。
 
 ## Output
 
@@ -284,7 +277,7 @@ dirpluck PROJECT --sequence 2
 - 1つの Configuration に複数の `[import.<name>]` を定義しない。
 - import depth に上限はないが、循環参照は許可されない。
 - import 名を shared pattern / Companion の prefix として扱わない。
-- import 由来 Target が実効 Targetの場合は CLI `DIRECTORY` を渡さない。
+- Target が実効設定に存在する場合は、import 由来であっても CLI `DIRECTORY` を渡す。
 - import chain 内側の `[output]` は実行されない。
 - 通常の Target / Companion に `..` を使って boundary を広げない。別 Configuration を使う場合は `[import.<name>]` を使う。
 - Python 内部モジュールを公開 API として使用しない。

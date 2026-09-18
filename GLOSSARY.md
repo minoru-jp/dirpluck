@@ -12,7 +12,7 @@ A TOML file that describes a dirpluck extraction intent. Each file may define ze
 
 ## Target
 
-The main source definition, with at most one Target per Configuration. A Target has a base selection and optional named Cases but no fixed path. Across a Configuration chain, an outer Target shadows the inner Target as a whole. A Root-owned effective Target receives CLI `DIRECTORY` values; an imported effective Target is bound to the project directory inferred from its owning Configuration file.
+The main source definition, with at most one Target per Configuration. A Target has a base selection and optional named Cases but no fixed path. Across a Configuration chain, an outer Target shadows the inner Target as a whole. Whenever an effective Target exists, one or more CLI `DIRECTORY` values bind its runtime source regardless of which Configuration layer defined it.
 
 ## Case
 
@@ -24,7 +24,7 @@ A fixed source associated with the extraction intent. An ordinary `[companion.<n
 
 ## Source directory
 
-The actual directory from which files are extracted. A Root-owned Target uses one or more CLI directories. An imported effective Target uses the project directory inferred from its Configuration placement. Companion directories come from the fixed path and execution-root context associated with their effective definition. Every source directory must stay inside its corresponding filesystem boundary.
+The actual directory from which files are extracted. Whenever an effective Target exists, one or more CLI directories are resolved inside the Root Configuration execution root regardless of the Target definition's origin layer. Companion directories come from the fixed path and execution-root context associated with their effective definition. Every source directory must stay inside its corresponding filesystem boundary.
 
 ## Extraction
 
@@ -32,7 +32,7 @@ The process of resolving files from the effective Target and Companions. `includ
 
 ## Archive
 
-The ZIP artifact produced by dirpluck. Files retain paths relative to the execution root associated with their effective source definition. Identical physical files at the same Archive path are written once; path collisions between different files and ambiguous multiple Archive paths for the same physical file are rejected.
+The ZIP artifact produced by dirpluck. Target-selected files retain paths relative to the Root Configuration execution root; Companion-selected files retain paths relative to the execution root associated with the effective Companion definition. Identical physical files at the same Archive path are written once; path collisions between different files and ambiguous multiple Archive paths for the same physical file are rejected.
 
 ## Output definition
 
@@ -52,7 +52,7 @@ The mechanism for loading one other dirpluck Configuration as the next inner lay
 
 ## Root Configuration
 
-The outermost Configuration that starts one dirpluck run. It is selected by normal CLI discovery or `--config NAME`, uses the process cwd as its execution root, may import zero or one inner Configuration, owns the final Output, and receives CLI `DIRECTORY` values only when its own Target survives into the effective Configuration.
+The outermost Configuration that starts one dirpluck run. It is selected by normal CLI discovery or `--config NAME`, uses the process cwd as its execution root, may import zero or one inner Configuration, owns the final Output, and resolves CLI `DIRECTORY` values inside its execution root whenever the effective Configuration contains a Target.
 
 ## Effective Configuration
 

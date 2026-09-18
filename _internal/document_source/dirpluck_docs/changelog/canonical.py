@@ -1,4 +1,4 @@
-from shikumi_devdoc.norms.changelog import ADDED, CHANGED, canonical, change, changelog, release, vocabulary, vocabulary_refs
+from shikumi_devdoc.norms.changelog import ADDED, CHANGED, FIXED, canonical, change, changelog, release, vocabulary, vocabulary_refs
 
 from dirpluck_docs.vocabulary import terms
 
@@ -9,6 +9,15 @@ from dirpluck_docs.vocabulary import terms
 class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
+
+    @release("0.5.1")
+    class RELEASE_7:
+        r'''0.5.0 の実効 Target binding を修正し、Target 定義の origin layer に依存せず runtime directory を CLI から受け取る一貫したモデルへ戻す。'''
+
+        @change(FIXED)
+        class CHANGE_1:
+            r'''{{TERM_15}}に Target が存在する場合、Target 定義が{{TERM_14}}自身または import chain 内側のどちらに由来していても CLI `DIRECTORY` を1個以上必須とする。0.5.0 で導入した imported Target の Configuration placement から project directory を推定する規則と、imported Target への CLI `DIRECTORY` 禁止を廃止する。Target Selection は chain で名前解決し、runtime Target directory は常に{{TERM_14}}の execution root 内で解決する。'''
+            vocabulary_refs @= (terms.TERM_14, terms.TERM_15)
 
     @release("0.5.0")
     class RELEASE_6:

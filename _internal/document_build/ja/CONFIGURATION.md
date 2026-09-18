@@ -143,16 +143,9 @@ if_empty = "allow"
 
 ### Target の解決
 
-実効設定に残った Target がルート設定ファイル自身の定義なら、従来どおり CLI の `DIRECTORY` を1個以上束縛します。
+実効設定に Target が残る場合、その Target 定義がどの Configuration layer に由来するかにかかわらず、CLI の `DIRECTORY` を1個以上束縛します。Target の Selection 定義は Configuration chain で名前解決しますが、実際の対象ディレクトリは常にルート設定ファイルの execution root、つまり process cwd を基準に解決します。
 
-実効設定に残った Target が import chain 内側の Configuration に由来する場合、外側 CLI から `DIRECTORY` は渡しません。その Target の対象ディレクトリは、Target を定義した Configuration file の配置から次の形だけを解決します。
-
-```text
-<project>/dirpluck.toml          -> <project>
-<project>/dirpluck/<name>.toml   -> <project>
-```
-
-import 由来 Target が最終的に残るのに Configuration file がこのどちらの配置にも当てはまらない場合は、対象ディレクトリを一意に決定できないため設定エラーです。外側の Target が shadow する場合、内側 Target の project directory を解決する必要はありません。
+このため、import 先 Configuration の Target 定義を再利用しつつ、import 元で指定した runtime directory へその選択規則を適用できます。Configuration file の配置から Target directory を推定する規則はありません。
 
 ### Case
 
@@ -173,19 +166,19 @@ include = [
 
 Configuration chain では外側の Target が内側の Target を定義全体として shadow します。したがって実効設定へ残る Target は最大1個です。
 
-ルート設定ファイル自身の Target が残る場合は CLI の `DIRECTORY` が1個以上必須で、同じ Target 選択を各 runtime directory へ適用します。
+実効設定に Target が残る場合は、その定義の origin layer にかかわらず CLI の `DIRECTORY` が1個以上必須で、同じ Target 選択を各 runtime directory へ適用します。
 
 ```console
 dirpluck submissions/acme submissions/contoso
 ```
 
-import 由来 Target が残る場合は CLI `DIRECTORY` を指定せず、その Target を所有する Configuration の project directory を import 節の規則で自動解決します。
+import 由来 Target が残る場合も同じ規則です。例えば import 先の Target 定義を `PROJECT` へ適用する場合は次のように実行します。
 
 ```console
-dirpluck --config composed-context
+dirpluck PROJECT --config composed-context
 ```
 
-Target が実効設定に存在しない場合も `DIRECTORY` は指定できません。
+Target が実効設定に存在しない場合は `DIRECTORY` を指定できません。
 
 Target は既定選択、名前付き Case、またはその両方を持てます。Case だけを持ち `[target]` の既定選択を持たない Target では、実行時に `--case` が必須です。
 
@@ -562,7 +555,7 @@ dirpluck . --dry-run
 dirpluck .
 ```
 
-root configuration の Target は CLI の `.` から決まります。import 先では Target を使用せず、import 先設定由来の `shikumi-stack.shikumi` / `shikumi-stack.devdoc` と、Root 側で追加した `shikumi-stack.project` を Companion として取り込みます。
+root configuration の Target は CLI の `.` から決まります。この outer Target が import 先の Target を shadow するため、実効 Target は root configuration の定義です。Companion は import 先設定由来の `shikumi` / `devdoc` と、Root 側で追加した `project` が名前解決後に残ります。もし outer Target を削除すれば、import 先の Target 定義が実効 Target として残り、その場合も CLI `DIRECTORY` へ束縛します。
 
 ## 設定探索
 

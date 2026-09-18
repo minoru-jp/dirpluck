@@ -2,6 +2,14 @@
 
 Release history for dirpluck.
 
+## 0.5.1
+
+Fix Target binding in the 0.5.0 effective-Configuration model so runtime directories always come from CLI input, independent of the layer that defined the Target.
+
+### Fixed
+
+- When the effective Configuration contains a Target, require one or more CLI `DIRECTORY` arguments whether the Target was defined by the Root Configuration or by an imported layer. Remove the 0.5.0 rule that inferred an imported Target's project directory from Configuration placement and rejected CLI `DIRECTORY`. Target Selection still resolves through the Configuration chain, while runtime Target directories always resolve inside the Root Configuration's execution root.
+
 ## 0.5.0
 
 Configuration import is generalized into one linear layering model so that Target, Companion, and Shared-pattern definitions can be composed under the same name-resolution rules from imported Configuration to importing Configuration.
