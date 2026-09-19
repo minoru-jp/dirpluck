@@ -35,12 +35,12 @@
 ## 基本形
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
+dirpluck [TARGET ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
 
-選択した実効設定に対象がある場合は、1個以上の `DIRECTORY` を指定します。Target がない場合は positional directory を指定しません。
+選択した実効設定に対象がある場合は、1個以上の `TARGET` argument を指定します。Target がない場合は positional argument を指定しません。
 
 ```console
 dirpluck projects/example
@@ -48,7 +48,7 @@ dirpluck projects/a projects/b
 dirpluck --config snapshot
 ```
 
-Target definition が import 先から来た場合でも、実際の Target directory は同じく CLI `DIRECTORY` から与えます。
+Positional `TARGET` は常に raw filesystem path とは限りません。Effective Target に named location があり、argument の先頭 segment がその名前と一致する場合は、その location を基準に Target directory を解決します。Location を使わない argument は cwd から解決します。Target definition が import 先から来た場合も、この runtime resolution を使います。
 
 ## Configuration を選ぶ
 
@@ -66,15 +66,38 @@ dirpluck projects/example --config review
 dirpluck --configs
 ```
 
-`--configs` は一覧表示だけを行い、build option や `DIRECTORY` とは組み合わせません。
+`--configs` は一覧表示だけを行い、build option や positional `TARGET` とは組み合わせません。
 
-## Target directory
+## Target の指定
 
-Target がある Configuration では、各 `DIRECTORY` に同じ Target selection が独立して適用されます。
+Target がある Configuration では、各 positional `TARGET` から解決した source directory へ同じ Target selection が独立して適用されます。
+
+Location を使わない argument は cwd から解決します。
 
 ```console
 dirpluck submissions/acme submissions/contoso
 ```
+
+`[target.location.<name>]` が定義されている場合、先頭 segment が location 名と一致する argument はその location から解決します。
+
+```console
+dirpluck work/acme
+dirpluck work/team/project
+```
+
+Location 名と cwd 上の directory 名が衝突する場合は `./` で cwd 相対を明示できます。
+
+```console
+dirpluck ./work/acme
+```
+
+Location 直下の directory をすべて Target にするには、location 名だけを末尾 `/` 付きで指定します。
+
+```console
+dirpluck work/
+```
+
+`work/` は `work` location 直下の directory だけを展開します。再帰列挙は行いません。この形は明示的な location expansion なので、`work` location が未定義なら cwd へ fallback せず error です。
 
 Target がない Configuration は Companion など固定 source だけで実行できます。
 
@@ -82,7 +105,7 @@ Target がない Configuration は Companion など固定 source だけで実行
 dirpluck --config project-snapshot
 ```
 
-許可される path と filesystem boundary の厳密な規則は `SPECIFICATION.md` を参照してください。
+Location path の定義方法は `CONFIGURATION.md`、location lookup、boundary、archive path の厳密な規則は `SPECIFICATION.md` を参照してください。
 
 ## Case
 

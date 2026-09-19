@@ -3,12 +3,14 @@
 This is the compact CLI reference included in the wheel.
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
+dirpluck [TARGET ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
 
-- Supply one or more `DIRECTORY` arguments when the Effective Configuration has a Target. Supply none when it has no Target.
+- Supply one or more positional `TARGET` arguments when the Effective Configuration has a Target. Supply none when it has no Target.
+- `project` resolves as `cwd/project`; `work/project` resolves from the named `work` location when that location exists. `./work/project` explicitly requests cwd-relative resolution.
+- `work/` expands all direct child directories of the named `work` location into Targets. If that location is undefined, the command fails instead of falling back to cwd.
 - `--config NAME` selects a Configuration filename from the current working directory or `./dirpluck/`; `.toml` may be omitted.
 - `--case NAME` selects one named Case.
 - `--dry-run` prints the planned ZIP contents without writing an archive.
@@ -18,7 +20,8 @@ dirpluck --version
 
 ```console
 dirpluck projects/example --dry-run
-dirpluck projects/example --case audit
+dirpluck work/example --case audit
+dirpluck work/
 dirpluck --config snapshot
 ```
 

@@ -2,6 +2,20 @@
 
 Release history for dirpluck.
 
+## 0.7.0
+
+Allow Targets to live independently from the Configuration workspace by introducing named Target locations and logical CLI Target references.
+
+### Added
+
+- Add `[target.location.<name>]`. A location is a named filesystem base owned by the Target definition. A relative `path` resolves from the execution root of the Configuration layer that owns that Target; an absolute `path` refers directly to a host filesystem directory. When an outer Target shadows an inner Target, the location set is replaced together with the rest of the Target definition, including its Cases.
+- Add named-location expansion with `<location>/`. It expands only the direct child directories of that location into independent runtime Targets; it does not recurse and does not turn regular files into Targets. An undefined location, an expansion with no directories, or a directory symbolic link that resolves outside the location boundary is an error. Normal Target references and expansions may be combined in one run.
+
+### Changed
+
+- Resolve each positional CLI argument as a Target reference rather than as a raw directory path. If the first segment of `work/project` matches an effective Target location, the remaining path resolves from that location; otherwise the whole reference resolves relative to cwd as before. `./work/project` explicitly bypasses location lookup. Absolute positional Target references are rejected; use a Target location for Targets outside cwd.
+- For a Target resolved through a Target location, preserve Archive paths relative to the location directory and omit the logical location name. cwd-relative Targets continue to preserve paths relative to cwd. In both cases, the final resolved Target directory remains the file-selection boundary.
+
 ## 0.6.2
 
 Adjust documentation distribution after the 0.6.1 publication so sharing guidance is visible at the entry points and the wheel can provide the trust model directly. There are no runtime behavior changes in this release.

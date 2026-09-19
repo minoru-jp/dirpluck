@@ -41,16 +41,19 @@ class TITLE_0:
 [import.<name>]
 [import.<name>.companion.<name>]
 [target]
+[target.location.<name>]
 [target.case.<name>]
 [companion.<name>]
 [companion.<name>.case.<name>]
 [output]
 ```
 
-未知の key は error とする。`[about]` は任意で、定義する場合は空でない `description` だけを持つ。各 Configuration は `[import.<name>]` を0個または1個、Target を0個または1個持てる。Companion と shared pattern は名前付きで複数定義できる。各 Configuration は `[output]` を1個持つ。
+未知の key は error とする。`[about]` は任意で、定義する場合は空でない `description` だけを持つ。各 Configuration は `[import.<name>]` を0個または1個、Target を0個または1個持てる。Target は名前付き{{TERM_16}}を0個以上持てる。Companion と shared pattern も名前付きで複数定義できる。各 Configuration は `[output]` を1個持つ。
+
+`[target.location.<name>]` の `<name>` は CLI の path segment として使用できる空でない名前とし、`.`、`..`、`/`、backslash を含めない。Location は Target の一部であり、Case ごとの location は定義しない。
 
 Root Configuration 自身に Target / Companion がなくても、import composition 後の{{TERM_15}}に Target または Companion が少なくとも1個残れば source 構成として有効である。'''
-        vocabulary_refs @= (terms.TERM_15,)
+        vocabulary_refs @= (terms.TERM_15, terms.TERM_16)
 
     @title('4. Configuration filesystem path notation')
     class TITLE_350:
@@ -60,7 +63,7 @@ Relative path は各 field が定める基準 directory から解決する。Abs
 
 Filesystem-location field では `~` expansion と environment-variable interpolation を行わず、glob を受理しない。`.` と `..` は field 固有の規則で許可または拒否する。Absolute path を使用した Configuration は参照先 filesystem に依存し、OS 間 portability を保証しない。
 
-この notation は import `root`、通常 / import-root overlay Companion の `path`、Root output の `path` / `directory` に適用する。Imported `configuration`、include pattern、archive path など relative notation として別途定義する値は、それぞれの規則に従う。'''
+この notation は Target location の `path`、import `root`、通常 / import-root overlay Companion の `path`、Root output の `path` / `directory` に適用する。Imported `configuration`、include pattern、archive path、CLI の Target reference など relative notation として別途定義する値は、それぞれの規則に従う。'''
 
     @title('5. Configuration import と composition')
     class TITLE_4:
@@ -104,7 +107,7 @@ companion.<name> zero or more import-root overlays
 - shared include patterns: 同名 pattern は outer layer が配列全体を shadow する。
 - shared exclude patterns: include とは独立した namespace で同じ規則を使う。
 
-Target / Companion の shadow は部分 merge ではない。`path`、`description`、base selection、全 Case selection を含む source definition 全体を置き換える。
+Target / Companion の shadow は部分 merge ではない。Target は `description`、base selection、全 Case selection、全 Target location を含む definition 全体を置き換える。Companion も `path`、`description`、base selection、全 Case selection を含む definition 全体を置き換える。
 
 Selection の shared pattern reference は、source の origin layer ではなく chain 全体を重ね終えた effective namespace で解決する。Outer layer は inner source が参照する名前を提供または override できる。最終 composition 後も存在しない参照名は Configuration error とする。'''
             vocabulary_refs @= (terms.TERM_15,)
@@ -120,13 +123,45 @@ Overlay は Companion 名 `<companion-name>` として outer layer から defini
 
     @title('6. Runtime source と Case')
     class TITLE_5:
-        r'''{{TERM_15}}に Target が存在する場合、その Target definition の origin layer にかかわらず CLI `DIRECTORY` を1個以上必要とし、同じ Target selection を各 directory へ独立して適用する。各 `DIRECTORY` は{{TERM_14}}の execution root、すなわち process cwd 内で解決する。
+        r'''{{TERM_15}}に Target が存在する場合は、Target definition の origin layer にかかわらず CLI positional `TARGET` を1個以上必要とする。Positional `TARGET` は source directory の raw path そのものとは限らず、次の規則で1個以上の runtime Target directory へ解決する。
 
-Target selection の origin Configuration は definition composition にだけ影響し、runtime Target directory の自動推定には使用しない。Inner Configuration の Target が effective Target として残っていても、その Configuration file の配置から project directory を推定しない。
+Target がない{{TERM_15}}では positional `TARGET` を受理しない。
 
-Target がない{{TERM_15}}では positional `DIRECTORY` を受理しない。
+Target selection の origin Configuration は definition composition と Target location の relative `path` 基準に影響するが、runtime Target directory を Configuration file の配置から自動推定しない。Inner Configuration の Target が effective Target として残っていても、CLI positional argument から Target を選ぶ。'''
+        vocabulary_refs @= (terms.TERM_15,)
 
-通常 Companion の relative `path` は definition を所有する Configuration layer の execution root を基準とする。Import-root overlay Companion の relative `path` は直下 import root を基準とする。どちらも `.` と `..` を使用でき、absolute `path` は基準 root に依存せず host filesystem 上の directory を直接参照する。解決先は実在 directory でなければならず、filesystem root 自体は Companion source として拒否する。Shadow されず inner layer から残った Companion は inner layer の path 基準を保持し、outer definition に置き換わった Companion は outer definition に対応する基準を使用する。
+        @title('Target location')
+        class TITLE_501:
+            r'''`[target.location.<name>]` は `path` だけを持つ。`path` は concrete directory path とし、empty string と glob を拒否する。Relative `path` は effective Target definition を所有する Configuration layer の execution root を基準に解決し、`.` と `..` を使用できる。Absolute `path` は host filesystem 上の directory を直接参照する。解決先は実在 directory でなければならない。
+
+Target location は Target definition の一部であり、outer Target が inner Target を shadow した場合は location 集合も全体として置き換わる。Case selection は location 集合を変更しない。'''
+
+        @title('CLI Target reference resolution')
+        class TITLE_502:
+            r'''各 positional `TARGET` argument は独立して次の順序で解決する。
+
+1. Argument が `./` で始まる場合、location lookup を行わず process cwd を基準とした明示的な cwd-relative Target reference とする。
+2. Argument が `<name>/` という「1個の non-dot segment と末尾 `/` だけ」の形なら、named-location expansion とする。`<name>` と一致する effective Target location がなければ error とし、cwd へ fallback しない。
+3. それ以外で先頭 segment が effective Target location 名と一致し、後続 relative path がある場合、その location directory を基準に後続 path を解決する。
+4. それ以外は argument 全体を process cwd を基準とする relative Target reference として解決する。
+
+Absolute positional Target reference は受理しない。cwd 外の Target を選ぶ場合は Target location を定義する。
+
+cwd-relative Target は解決後も process cwd 内、location-relative Target は解決後もその location directory 内に存在しなければならない。`..` や symbolic link によって各 resolution base の外へ出る Target reference は拒否する。解決先は実在 directory でなければならない。
+
+Location prefix は locating namespace であり Target 名ではない。`work/project` の `work` が location 名でも、runtime Target は解決された `project` directory である。'''
+
+        @title('Named-location expansion')
+        class TITLE_503:
+            r'''`<name>/` は、対応する Target location directory の直下にある directory entry を列挙し、それぞれを独立した runtime Target directory として展開する。再帰的な directory 列挙は行わず、regular file は Target にしない。
+
+Directory symbolic link は解決先が同じ Target location directory 内にある場合だけ Target 候補として扱い、外部へ解決する link は error とする。展開結果が0 directory の場合は error とする。
+
+複数 positional `TARGET` と location expansion は同じ run で併用でき、最終的に得られた各 runtime Target directoryへ同じ effective Target selection を独立して適用する。'''
+
+        @title('Companion と Case')
+        class TITLE_504:
+            r'''通常 Companion の relative `path` は definition を所有する Configuration layer の execution root を基準とする。Import-root overlay Companion の relative `path` は直下 import root を基準とする。どちらも `.` と `..` を使用でき、absolute `path` は基準 root に依存せず host filesystem 上の directory を直接参照する。解決先は実在 directory でなければならず、filesystem root 自体は Companion source として拒否する。Shadow されず inner layer から残った Companion は inner layer の path 基準を保持し、outer definition に置き換わった Companion は outer definition に対応する基準を使用する。
 
 {{TERM_4}}は{{TERM_15}}全体で0個または1個だけ有効にし、CLI `--case` から選択する。Layer ごとに別 Case を指定する field はない。
 
@@ -135,7 +170,7 @@ Case 未指定時は Target があれば `[target]`、各 Companion は base `[c
 Case 指定時に Target がある場合、同名 `[target.case.<name>]` を必須とする。各 Companion は同名 Case があれば使い、なければ base へ fallback する。Target がない場合は、少なくとも1個の Companion が同名 Case を定義しなければならない。
 
 Case selection は base の差分ではなく完全な selection とし、include / exclude / shared pattern refs を継承しない。'''
-        vocabulary_refs @= (terms.TERM_4, terms.TERM_14, terms.TERM_15)
+            vocabulary_refs @= (terms.TERM_4, terms.TERM_15)
 
     @title('7. Selection と shared pattern')
     class TITLE_6:
@@ -181,16 +216,18 @@ name*     prefix
 
     @title('8. Filesystem boundary と symbolic link')
     class TITLE_7:
-        r'''{{TERM_14}}の execution root は process cwd とする。各 import layer の execution root は、その layer を読み込んだ `[import.<name>].root` の解決結果とする。Execution root は relative path の resolution base であり、すべての source をその配下へ閉じ込める共通 boundary ではない。
+        r'''{{TERM_14}}の execution root は process cwd とする。各 import layer の execution root は、その layer を読み込んだ `[import.<name>].root` の解決結果とする。Execution root は relative Configuration path の resolution base であり、すべての source をその配下へ閉じ込める共通 boundary ではない。
 
-Target directory は常に Root Configuration の execution root 内で CLI から解決し、その Target directory 自体を selection boundary とする。Imported `configuration` は import root 内へ限定する。Companion は relative / absolute `path` から任意の実在 directory を解決でき、解決した Companion source directory 自体を selection boundary とする。Output location は source boundary に参加しない。
+Target location を使わない runtime Target directory は process cwd 内で解決し、その Target directory 自体を selection boundary とする。Target location を使う runtime Target directory はその location directory 内で解決し、解決後の Target directory 自体を selection boundary とする。Location は Target を探す boundary であり、selected file の boundary は常に最終 Target directory である。
+
+Imported `configuration` は import root 内へ限定する。Companion は relative / absolute `path` から任意の実在 directory を解決でき、解決した Companion source directory 自体を selection boundary とする。Output location は source boundary に参加しない。
 
 各 source の include resolution と selected file は、その source directory 内へ限定する。Symbolic link による source boundary 外への file / directory の逸脱は拒否する。Directory recursion では directory symlink をたどらず、外部へ解決する link は error、内部へ解決する link は循環と重複防止のため無視する。'''
         vocabulary_refs @= (terms.TERM_14,)
 
     @title('9. Archive planning')
     class TITLE_8:
-        r'''Target の selected file は、Target definition の origin layer にかかわらず Root Configuration の execution root から見た filesystem relative path を ZIP 内で保持する。
+        r'''cwd-relative Target の selected file は、Target definition の origin layer にかかわらず process cwd から見た filesystem relative path を ZIP 内で保持する。Target location から解決した Target の selected file は、location directory から見た filesystem relative path を ZIP 内で保持する。Logical location 名そのものは archive path へ含めない。たとえば `work/team/project` が location `work` から解決された場合、archive path は `team/project/...` であり `work/team/project/...` ではない。`work/` expansion で得た direct child も同じ規則を使う。
 
 Companion source directory がその Companion の relative-path resolution base 内にある場合、selected file は従来どおりその base から見た relative path を ZIP 内で保持する。Absolute path または `..` により source directory がその base 外にある場合は、解決済み source directory の最終 directory name を archive root とし、その下へ source directory からの relative path を配置する。Filesystem root 自体を Companion source として受理しないのは、この portable archive root を持たないためである。Host の absolute path、drive、UNC share 名そのものは archive path へ埋め込まない。
 
@@ -261,20 +298,20 @@ Generated filename が確認時点で既に存在する場合は error とし、
 
     @title('11. Dry run')
     class TITLE_10:
-        r'''`--dry-run` は通常実行と同じ import chain resolution、cycle detection、definition composition、Target directory resolution、Case selection、file selection、archive planning を使うが、output を作成・変更しない。
+        r'''`--dry-run` は通常実行と同じ import chain resolution、cycle detection、definition composition、Target location lookup / expansion、Target directory resolution、Case selection、file selection、archive planning を使うが、output を作成・変更しない。
 
 不足する必須 `include` は `[missing]`、不足する optional pattern は `[optional missing]` と表示する。最終選択0件は policy に応じて `empty, allowed` または `empty, would error` と表示する。
 
-Multiple import、import cycle、不正 root / configuration path、不正な host absolute path、未解決 shared pattern ref、不正 source path、Case inconsistency などは dry-run でも error とする。Import depth 自体は error / warning にしない。'''
+Multiple import、import cycle、不正 root / configuration path、不正な host absolute path、unknown location expansion、location boundary を外れる Target reference、未解決 shared pattern ref、不正 source path、Case inconsistency などは dry-run でも error とする。Import depth 自体は error / warning にしない。'''
 
     @title('12. CLI contract')
     class TITLE_11:
         r'''CLI が受理する主な form は次とする。
 
 ```console
-dirpluck DIRECTORY [DIRECTORY ...]
+dirpluck TARGET [TARGET ...]
 dirpluck --config NAME
-dirpluck DIRECTORY [DIRECTORY ...] --case NAME
+dirpluck TARGET [TARGET ...] --case NAME
 dirpluck --config NAME --case NAME
 dirpluck ... --dry-run
 dirpluck ... --paths
@@ -283,7 +320,9 @@ dirpluck --configs
 dirpluck --version
 ```
 
-`--case` と `--sequence` はそれぞれ最大1回だけ指定できる。`--sequence` は1以上の integer を受理する。`--paths` は通常 build で生成する{{TERM_10}}へ Source column を追加する。`--dry-run` と組み合わせても archive は生成されないため、表示 tree には影響しない。`--configs` は `DIRECTORY`、`--case`、`--sequence`、`--config`、`--dry-run`、`--paths` と組み合わせない。
+Effective Configuration に Target がある場合、positional argument は `TARGET` reference として6節の規則で解決する。Target がない場合は positional `TARGET` を受理しない。
+
+`--case` と `--sequence` はそれぞれ最大1回だけ指定できる。`--sequence` は1以上の integer を受理する。`--paths` は通常 build で生成する{{TERM_10}}へ Source column を追加する。`--dry-run` と組み合わせても archive は生成されないため、表示 tree には影響しない。`--configs` は `TARGET`、`--case`、`--sequence`、`--config`、`--dry-run`、`--paths` と組み合わせない。
 
 Argument parse error と dirpluck の Configuration / build error は status 2 で終了する。Successful build と informational command は status 0 とする。通常 build の成功時は final output path を標準出力へ表示する。
 

@@ -131,11 +131,20 @@ class Selection:
 
 
 @dataclass(frozen=True)
+class TargetLocation:
+    """One named filesystem base used to locate runtime Targets."""
+
+    name: str
+    path: str
+
+
+@dataclass(frozen=True)
 class Target:
-    """One optional CLI-bound source definition with a default selection and named cases."""
+    """One optional CLI-bound source definition with selection, cases, and locations."""
 
     default: Selection | None
     cases: Mapping[str, Selection]
+    locations: Mapping[str, TargetLocation]
 
 
 @dataclass(frozen=True)
@@ -875,6 +884,36 @@ def _parse_cases(
     return MappingProxyType(cases)
 
 
+def _parse_target_locations(
+    value: object,
+    where: str,
+) -> Mapping[str, TargetLocation]:
+    if value is None:
+        return MappingProxyType({})
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"{where}: expected a table")
+    if not value:
+        raise ConfigurationError(f"{where}: define at least one named location")
+
+    locations: dict[str, TargetLocation] = {}
+    for raw_name, raw_location in value.items():
+        name = _require_name(raw_name, where)
+        if name in {".", ".."} or "." in name or "/" in name or "\\" in name:
+            raise ConfigurationError(
+                f"{where}: location names must be one non-dot path segment: {name!r}"
+            )
+        location_where = f"{where}.{name}"
+        if not isinstance(raw_location, dict):
+            raise ConfigurationError(f"{location_where}: expected a table")
+        _require_only_keys(raw_location, {"path"}, location_where)
+        raw_path = raw_location.get("path")
+        if not isinstance(raw_path, str):
+            raise ConfigurationError(f"{location_where}.path: expected a string")
+        path = _validate_fixed_path(raw_path, f"{location_where}.path")
+        locations[name] = TargetLocation(name=name, path=path)
+    return MappingProxyType(locations)
+
+
 def _parse_target(
     value: object,
     where: str,
@@ -896,6 +935,7 @@ def _parse_target(
             "exclude_pattern_refs",
             "if_empty",
             "case",
+            "location",
         },
         where,
     )
@@ -922,12 +962,15 @@ def _parse_target(
     cases = _parse_cases(
         value.get("case"), f"{where}.case", shared
     )
+    locations = _parse_target_locations(
+        value.get("location"), f"{where}.location"
+    )
 
     if default is None and not cases:
         raise ConfigurationError(
             f"{where}: define the default target directly or at least one [target.case.<name>]"
         )
-    return Target(default=default, cases=cases)
+    return Target(default=default, cases=cases, locations=locations)
 
 
 def _parse_companions(

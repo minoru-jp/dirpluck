@@ -33,12 +33,14 @@
 wheel に同梱する最小 CLI reference です。
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
+dirpluck [TARGET ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
 
-- Effective Configuration に Target がある場合は1個以上の `DIRECTORY` を指定します。Target がない場合は指定しません。
+- Effective Configuration に Target がある場合は1個以上の positional `TARGET` を指定します。Target がない場合は指定しません。
+- `project` は `cwd/project`、`work/project` は `work` location が定義されていればその location から解決します。`./work/project` は cwd 相対を明示します。
+- `work/` は named location `work` 直下の directory をすべて Target として展開します。未定義 location では cwd へ fallback せず error です。
 - `--config NAME` は cwd と `./dirpluck/` から Configuration filename を選びます。`.toml` は省略できます。
 - `--case NAME` は named Case を1個選びます。
 - `--dry-run` は archive を書き込まず ZIP contents の plan を表示します。
@@ -48,7 +50,8 @@ dirpluck --version
 
 ```console
 dirpluck projects/example --dry-run
-dirpluck projects/example --case audit
+dirpluck work/example --case audit
+dirpluck work/
 dirpluck --config snapshot
 ```
 

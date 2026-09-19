@@ -47,11 +47,11 @@ C:/Users/name/references
 
 An absolute path refers directly to that location, so a Configuration that uses one is less portable. `dirpluck` does not translate absolute-root notation from another OS, expand `~`, or interpolate environment variables.
 
-This notation applies to filesystem-location fields such as Companion `path`, import `root`, and output `path` / `directory`. Fields intentionally defined as relative, such as include patterns and imported `configuration`, retain their own restrictions. See [SPECIFICATION.md](SPECIFICATION.md) for exact validation.
+This notation applies to filesystem-location fields such as Target-location `path`, Companion `path`, import `root`, and output `path` / `directory`. Values intentionally defined as relative, such as include patterns, imported `configuration`, and CLI Target references, retain their own restrictions. See [SPECIFICATION.md](SPECIFICATION.md) for exact validation.
 
 ## Target
 
-Use a Target when the same selection rules should be applied to source directories supplied through the CLI.
+Use a Target when the same selection rules should be applied to source directories selected at runtime.
 
 ```toml
 [target]
@@ -61,13 +61,42 @@ include_if_exists = ["attachments"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
 ```
 
-The concrete Target directory is not stored in the Configuration. The same Target selection is applied independently to one or more directories supplied by the CLI.
+The Target itself does not fix a source path. Without a locating namespace, positional Target arguments continue to resolve from the current working directory.
 
 ```console
 dirpluck submissions/acme submissions/contoso
 ```
 
-Do not supply positional `DIRECTORY` arguments for a Configuration with no Target.
+When the Configuration workspace should be separated from the Target material, define named Target locations under the Target.
+
+```toml
+[target.location.work]
+path = "/srv/work"
+
+[target.location.oss]
+path = "../external-projects"
+```
+
+A location name is used as the first segment of a positional Target argument.
+
+```console
+dirpluck work/acme
+dirpluck oss/example
+```
+
+`work/acme` locates `acme` relative to the `work` location. If the first segment does not match a defined location, the whole argument is resolved relative to the current working directory. If a location name collides with a directory in the current working directory, prefix the argument with `./`, as in `./work/acme`, to explicitly bypass location lookup.
+
+To use every directory immediately below a location as a Target, specify only the location name with a trailing `/`.
+
+```console
+dirpluck work/
+```
+
+This expands each direct child directory of `work` into an independent Target and does not recurse. Because `work/` is explicit location-expansion syntax, an undefined `work` location is an error and does not fall back to the current working directory.
+
+A relative location `path` is resolved from the execution root of the Configuration layer that owns the Target definition; an absolute `path` refers directly to a host-filesystem location. See [SPECIFICATION.md](SPECIFICATION.md) for exact Target-reference resolution, location boundaries, and archive-path rules.
+
+Do not supply positional Target arguments for a Configuration with no Target.
 
 ## Companion
 
@@ -205,7 +234,7 @@ configuration = "shikumi/dirpluck.toml"
 
 The imported definitions and the current Configuration are composed into the Effective Configuration. Exact shadowing, chain, cycle, and Shared-pattern resolution rules are in [SPECIFICATION.md](SPECIFICATION.md).
 
-If an imported Target remains in the Effective Configuration, its concrete Target directory still comes from CLI `DIRECTORY`; `dirpluck` does not infer it from the imported Configuration file's location.
+If an imported Target remains in the Effective Configuration, its concrete Target directory is still selected from positional CLI `TARGET` arguments. Target locations belong to the Target definition and remain with an imported Target unless that Target is shadowed. `dirpluck` does not infer a runtime Target from the imported Configuration file's location.
 
 To add a fixed source anchored at the immediate import root, define an import-root Companion overlay:
 
@@ -271,6 +300,9 @@ include_if_exists = ["README.md", "src", "tests", "docs"]
 exclude_pattern_refs = ["python-dev"]
 if_empty = "allow"
 
+[target.location.projects]
+path = "/srv/projects"
+
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
@@ -284,6 +316,7 @@ if_exists = "overwrite"
 ```console
 dirpluck projects/example
 dirpluck projects/example --case full --dry-run
+dirpluck projects/
 ```
 
 For all CLI options and Configuration discovery, see [CLI.md](CLI.md). For exactly how this Configuration is resolved and validated, see [SPECIFICATION.md](SPECIFICATION.md).

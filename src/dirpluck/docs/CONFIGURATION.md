@@ -12,6 +12,9 @@ include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
 if_empty = "allow"
 
+[target.location.work]
+path = "/srv/work"
+
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
@@ -32,7 +35,7 @@ exclude = [".git/", ".env*", "*.pem", "*.key"]
 
 This is only an example. See the bundled `TRUST.md` for the trust model and filesystem responsibilities.
 
-The concrete Target directory comes from CLI `DIRECTORY`. A Companion fixes its directory with `path` in the Configuration. Filesystem locations in a Configuration use `/` as the separator, and Companion `path` may be relative or absolute. A relative Companion path is resolved from the corresponding Configuration execution root.
+The concrete Target directory is selected by a positional CLI `TARGET`. `[target.location.<name>]` maps a logical prefix such as `work/project` to a filesystem directory. `work/` expands every direct child directory of the `work` location and is an error if that location is undefined. Arguments without a location prefix resolve from the current working directory; `./work/project` explicitly bypasses location lookup. A Companion fixes its directory with `path` in the Configuration. Filesystem locations use `/` as the separator, and Target-location / Companion paths may be relative or absolute. Relative paths are resolved from the corresponding Configuration execution root.
 
 Selections can use:
 

@@ -1200,5 +1200,63 @@ class ConfigTests(unittest.TestCase):
                     self.assertEqual(config.imports["external"].companions["project"].path, path)
 
 
+    def test_target_locations_are_named_paths_owned_by_target(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, f'''                [target]
+                description = "Default."
+                include = ["src"]
+
+                [target.location.work]
+                path = "../projects"
+
+                [target.location.external]
+                path = {root.as_posix()!r}
+            '''))
+            self.assertEqual(config.target.locations["work"].path, "../projects")
+            self.assertEqual(config.target.locations["external"].path, root.as_posix())
+
+    def test_target_location_is_not_a_case_and_does_not_supply_selection(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(ConfigurationError, "default target"):
+                load_config(self._write(root, '''                    [target.location.work]
+                    path = "../projects"
+                '''))
+
+    def test_target_location_names_and_tables_are_strict(self):
+        invalid_bodies = (
+            '''            [target]
+            description = "Default."
+            include = ["src"]
+            [target.location."work.dev"]
+            path = "projects"
+            ''',
+            '''            [target]
+            description = "Default."
+            include = ["src"]
+            [target.location.work]
+            ''',
+            '''            [target]
+            description = "Default."
+            include = ["src"]
+            [target.location.work]
+            path = "projects"
+            extra = true
+            ''',
+            r'''            [target]
+            description = "Default."
+            include = ["src"]
+            [target.location.work]
+            path = 'projects\nested'
+            ''',
+        )
+        for body in invalid_bodies:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                with self.assertRaises(ConfigurationError):
+                    load_config(self._write(root, body))
+
+
 if __name__ == "__main__":
     unittest.main()

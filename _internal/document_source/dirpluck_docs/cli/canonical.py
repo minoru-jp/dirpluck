@@ -13,12 +13,12 @@ class TITLE_1:
     @title("基本形")
     class TITLE_2:
         r'''```text
-{{TERM_1}} [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
+{{TERM_1}} [TARGET ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 {{TERM_1}} --configs
 {{TERM_1}} --version
 ```
 
-選択した{{TERM_15}}に{{TERM_3}}がある場合は、1個以上の `DIRECTORY` を指定します。Target がない場合は positional directory を指定しません。
+選択した{{TERM_15}}に{{TERM_3}}がある場合は、1個以上の `TARGET` argument を指定します。Target がない場合は positional argument を指定しません。
 
 ```console
 {{TERM_1}} projects/example
@@ -26,7 +26,7 @@ class TITLE_1:
 {{TERM_1}} --config snapshot
 ```
 
-Target definition が import 先から来た場合でも、実際の Target directory は同じく CLI `DIRECTORY` から与えます。'''
+Positional `TARGET` は常に raw filesystem path とは限りません。Effective Target に named location があり、argument の先頭 segment がその名前と一致する場合は、その location を基準に Target directory を解決します。Location を使わない argument は cwd から解決します。Target definition が import 先から来た場合も、この runtime resolution を使います。'''
         vocabulary_refs @= (terms.TERM_1, terms.TERM_3, terms.TERM_15)
 
     @title("Configuration を選ぶ")
@@ -45,16 +45,39 @@ Target definition が import 先から来た場合でも、実際の Target dire
 {{TERM_1}} --configs
 ```
 
-`--configs` は一覧表示だけを行い、build option や `DIRECTORY` とは組み合わせません。'''
+`--configs` は一覧表示だけを行い、build option や positional `TARGET` とは組み合わせません。'''
         vocabulary_refs @= (terms.TERM_1, terms.TERM_14)
 
-    @title("Target directory")
+    @title("Target の指定")
     class TITLE_4:
-        r'''Target がある Configuration では、各 `DIRECTORY` に同じ Target selection が独立して適用されます。
+        r'''Target がある Configuration では、各 positional `TARGET` から解決した source directory へ同じ Target selection が独立して適用されます。
+
+Location を使わない argument は cwd から解決します。
 
 ```console
 {{TERM_1}} submissions/acme submissions/contoso
 ```
+
+`[target.location.<name>]` が定義されている場合、先頭 segment が location 名と一致する argument はその location から解決します。
+
+```console
+{{TERM_1}} work/acme
+{{TERM_1}} work/team/project
+```
+
+Location 名と cwd 上の directory 名が衝突する場合は `./` で cwd 相対を明示できます。
+
+```console
+{{TERM_1}} ./work/acme
+```
+
+Location 直下の directory をすべて Target にするには、location 名だけを末尾 `/` 付きで指定します。
+
+```console
+{{TERM_1}} work/
+```
+
+`work/` は `work` location 直下の directory だけを展開します。再帰列挙は行いません。この形は明示的な location expansion なので、`work` location が未定義なら cwd へ fallback せず error です。
 
 Target がない Configuration は Companion など固定 source だけで実行できます。
 
@@ -62,7 +85,7 @@ Target がない Configuration は Companion など固定 source だけで実行
 {{TERM_1}} --config project-snapshot
 ```
 
-許可される path と filesystem boundary の厳密な規則は `SPECIFICATION.md` を参照してください。'''
+Location path の定義方法は `CONFIGURATION.md`、location lookup、boundary、archive path の厳密な規則は `SPECIFICATION.md` を参照してください。'''
         vocabulary_refs @= (terms.TERM_1,)
 
     @title("Case")

@@ -56,11 +56,11 @@ C:/Users/name/references
 
 Absolute path はその場所を直接参照するため、Configuration の portability は低くなります。別の OS の absolute-root notation への変換、`~` expansion、environment-variable interpolation は行いません。
 
-この規則は Companion `path`、import `root`、output `path` / `directory` など filesystem location を表す field に適用します。Include pattern や imported `configuration` のように意図的に relative と定義される field は、それぞれの制約に従います。厳密な validation は `SPECIFICATION.md` を参照してください。'''
+この規則は Target location `path`、Companion `path`、import `root`、output `path` / `directory` など filesystem location を表す field に適用します。Include pattern、imported `configuration`、CLI Target reference のように意図的に relative と定義される値は、それぞれの制約に従います。厳密な validation は `SPECIFICATION.md` を参照してください。'''
 
     @title("Target")
     class TITLE_3:
-        r'''Target は実行時に CLI から与える source directory へ同じ選択規則を適用するときに使います。
+        r'''Target は、実行時に選ぶ source directory へ同じ選択規則を適用するときに使います。
 
 ```toml
 [target]
@@ -70,14 +70,43 @@ include_if_exists = ["attachments"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
 ```
 
-実際の Target directory は Configuration に書きません。CLI から1個以上与えた directory へ同じ Target selection が独立して適用されます。
+Target 自体には source path を固定しません。Locating namespace を使わない CLI argument は従来どおり cwd から解決します。
 
 ```console
 {{TERM_1}} submissions/acme submissions/contoso
 ```
 
-Target がない Configuration では positional `DIRECTORY` は使いません。'''
-        vocabulary_refs @= (terms.TERM_1,)
+Configuration workspace と Target の実体を分離したい場合は、Target の下に{{TERM_16}}を定義します。
+
+```toml
+[target.location.work]
+path = "/srv/work"
+
+[target.location.oss]
+path = "../external-projects"
+```
+
+Location 名は CLI argument の先頭 segment として使います。
+
+```console
+{{TERM_1}} work/acme
+{{TERM_1}} oss/example
+```
+
+`work/acme` は `work` location の `path` を基準に `acme` を探します。先頭 segment に一致する location がなければ argument 全体を cwd 相対として解決します。Location 名と cwd 上の directory 名が衝突する場合は `./work/acme` のように `./` を付けると location lookup を行わず cwd 相対を明示できます。
+
+Location 直下の directory をすべて Target として使う場合は、location 名だけに末尾 `/` を付けます。
+
+```console
+{{TERM_1}} work/
+```
+
+これは `work` location 直下の directory をそれぞれ独立した Target として展開します。再帰的には列挙しません。`work/` のような location 展開で指定した名前が定義されていない場合は cwd へ fallback せず error です。
+
+Relative location `path` はその Target definition を所有する Configuration layer の execution root を基準に解決し、absolute `path` は host filesystem 上の場所を直接参照します。Target reference の解決、location boundary、archive path の正確な規則は `SPECIFICATION.md` を参照してください。
+
+Target がない Configuration では positional Target argument は使いません。'''
+        vocabulary_refs @= (terms.TERM_1, terms.TERM_16)
 
     @title("Companion")
     class TITLE_4:
@@ -218,7 +247,7 @@ configuration = "shikumi/dirpluck.toml"
 
 Import された definition と現在の Configuration の definition から{{TERM_15}}が構成されます。同名 definition がある場合の shadowing、chain、cycle、shared pattern resolution の正確な規則は `SPECIFICATION.md` にまとめています。
 
-Import 先の Target が{{TERM_15}}へ残る場合でも、実際の Target directory は CLI `DIRECTORY` から与えます。Import 先 Configuration file の directory を Target directory として推論しません。
+Import 先の Target が{{TERM_15}}へ残る場合でも、実際の Target directory は CLI positional `TARGET` から選びます。Target location を持つ imported Target では、その location も Target definition の一部として残ります。Import 先 Configuration file の directory を runtime Target として推論しません。
 
 Import root 内の固定 source を親側から Companion として追加したい場合は overlay を使えます。
 
@@ -285,6 +314,9 @@ include_if_exists = ["README.md", "src", "tests", "docs"]
 exclude_pattern_refs = ["python-dev"]
 if_empty = "allow"
 
+[target.location.projects]
+path = "/srv/projects"
+
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
@@ -298,6 +330,7 @@ if_exists = "overwrite"
 ```console
 {{TERM_1}} projects/example
 {{TERM_1}} projects/example --case full --dry-run
+{{TERM_1}} projects/
 ```
 
 CLI の全 option と Configuration discovery は `CLI.md`、この Configuration が正確にどう解決・検証されるかは `SPECIFICATION.md` を参照してください。'''

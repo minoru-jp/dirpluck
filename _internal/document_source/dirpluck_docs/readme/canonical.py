@@ -25,10 +25,12 @@ class TITLE_1:
 
         @title("実行ごとに変わる対象へ固定資料を付ける")
         class TITLE_4:
-            r'''異なるプロジェクト、提出物、案件などへ毎回同じ選択規則を適用したい場合は、{{TERM_3}}を使います。Target の選択規則は Configuration に残し、実際の{{TERM_6}}は実行時に与えます。
+            r'''異なるプロジェクト、提出物、案件などへ毎回同じ選択規則を適用したい場合は、{{TERM_3}}を使います。Target の選択規則は Configuration に残し、実際の{{TERM_6}}は実行時に選びます。
 
-固定ガイドライン、テンプレート、参照資料などは Companion として同じアーカイブへ加えられます。これにより、対象だけを変えながら同じ抽出意図を繰り返せます。'''
-            vocabulary_refs @= (terms.TERM_3, terms.TERM_6)
+通常は cwd から Target を選べます。Configuration workspace と Target の実体を別の場所で管理したい場合は、{{TERM_16}}に filesystem 上の起点を名前付きで定義し、`work/project` のような論理参照で選べます。`work/` と指定すれば、その location 直下の directory を一括して Target にできます。
+
+固定ガイドライン、テンプレート、参照資料などは Companion として同じアーカイブへ加えられます。これにより、Configuration の置き場所、実行時の Target、固定資料を互いに独立して配置できます。'''
+            vocabulary_refs @= (terms.TERM_3, terms.TERM_6, terms.TERM_16)
 
         @title("別の Configuration が表す抽出意図を再利用する")
         class TITLE_5:
@@ -68,6 +70,9 @@ include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
 if_empty = "allow"
 
+[target.location.work]
+path = "/srv/projects"
+
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
@@ -79,8 +84,8 @@ if_exists = "overwrite"
 ```
 
 ```console
-{{TERM_1}} projects/example --dry-run
-{{TERM_1}} projects/example
+{{TERM_1}} work/example --dry-run
+{{TERM_1}} work/example
 ```
 
 TOML の各 field とより大きな例は `docs/CONFIGURATION.md`、CLI option と Configuration discovery は `docs/CLI.md` を参照してください。'''

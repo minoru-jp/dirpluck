@@ -19,6 +19,9 @@ include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
 if_empty = "allow"
 
+[target.location.work]
+path = "/srv/work"
+
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
@@ -39,7 +42,7 @@ exclude = [".git/", ".env*", "*.pem", "*.key"]
 
 これは一例です。信頼境界と filesystem 操作の責任範囲は、同梱の `TRUST.md` を参照してください。
 
-Target の実 directory は CLI `DIRECTORY` から与えます。Companion は `path` を Configuration に固定します。Configuration の filesystem location は `/` を separator として書き、Companion `path` は relative / absolute のどちらでも指定できます。Relative Companion path は対応する Configuration execution root を基準に解決します。
+Target の実 directory は CLI の positional `TARGET` から選びます。`[target.location.<name>]` を使うと、`name/project` のような論理 prefix を任意の filesystem directory へ対応付けられます。`name/` はその location 直下の directory をすべて Target として展開し、未定義 location では error です。Location prefix を使わない argument は cwd から解決し、`./name/project` は location lookup を避けて cwd 相対を明示します。Companion は `path` を Configuration に固定します。Configuration の filesystem location は `/` を separator として書き、Target location / Companion `path` は relative / absolute のどちらでも指定できます。Relative path は対応する Configuration execution root を基準に解決します。
 
 Selection では次を使えます。
 

@@ -12,7 +12,11 @@ A TOML document that describes a `dirpluck` extraction intent.
 
 ## Target
 
-A source definition whose common selection rules are applied to source directories supplied at runtime.
+A source definition whose common selection rules are applied to source directories selected at runtime.
+
+## Target location
+
+A named directory used as a base for locating Targets at invocation time.
 
 ## Case
 

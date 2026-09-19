@@ -34,9 +34,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "directories",
         nargs="*",
-        type=Path,
-        metavar="DIRECTORY",
-        help="one or more target directories when the selected Configuration defines [target]",
+        metavar="TARGET",
+        help="one or more Target references when the selected Configuration defines [target]",
     )
     parser.add_argument(
         "--case",

@@ -10,6 +10,26 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.7.0")
+    class RELEASE_12:
+        r'''Target を Configuration workspace から独立して配置できるようにし、named Target location と logical CLI reference による Target resolution を導入する。'''
+
+        @change(ADDED)
+        class CHANGE_1:
+            r'''`[target.location.<name>]` を追加する。Location は Target definition に属する named filesystem base で、relative `path` はその Target definition を所有する Configuration layer の execution root、absolute `path` は host filesystem 上の directory を参照する。Outer Target が inner Target を shadow すると、Case と同様に location 集合も Target definition 全体とともに置き換わる。'''
+
+        @change(CHANGED)
+        class CHANGE_2:
+            r'''CLI positional argument を raw directory path ではなく Target reference として解決する。`work/project` の先頭 segment が effective Target location 名と一致すれば残りをその location から解決し、一致しなければ従来どおり cwd 相対で解決する。`./work/project` は location lookup を明示的に回避する。Absolute positional Target reference は受理せず、cwd 外の Target には Target location を使用する。'''
+
+        @change(ADDED)
+        class CHANGE_3:
+            r'''`<location>/` の形を named-location expansion として追加する。対応する location 直下の directory だけを独立した runtime Target として展開し、再帰列挙や regular file の Target 化は行わない。未定義 location、0 directory の展開、location boundary 外へ解決する directory symbolic link は error とする。複数の通常 Target reference と expansion は同じ run で併用できる。'''
+
+        @change(CHANGED)
+        class CHANGE_4:
+            r'''Target location から解決した Target の archive path は logical location 名を含めず、location directory から見た filesystem-relative path を保持する。cwd-relative Target は引き続き cwd からの relative path を保持する。どちらの Target も最終的に解決された Target directory 自体を file selection boundary とする。'''
+
     @release("0.6.2")
     class RELEASE_11:
         r'''0.6.1 公開後の文書配布を微調整し、共有前の注意を入口文書へ戻すとともに、wheel だけでも trust model を参照できるようにする。実装上の挙動変更はない。'''

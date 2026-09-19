@@ -683,7 +683,7 @@ class BuilderTests(unittest.TestCase):
                 description = "Target."
                 include = ["src"]
             ''')
-            with self.assertRaisesRegex(SelectionError, "DIRECTORY is required"):
+            with self.assertRaisesRegex(SelectionError, "TARGET is required"):
                 resolve_sources(target_config, BuildRequest.create(), cwd=root)
 
         with tempfile.TemporaryDirectory() as temp:
@@ -1293,7 +1293,7 @@ class BuilderTests(unittest.TestCase):
                 root = "../external"
                 configuration = "dirpluck.toml"
             ''')
-            with self.assertRaisesRegex(SelectionError, "DIRECTORY is required"):
+            with self.assertRaisesRegex(SelectionError, "TARGET is required"):
                 plan_archive(config, BuildRequest.create(), cwd=root)
 
     def test_outer_target_shadows_inner_target_without_resolving_inner_project(self):
@@ -1930,6 +1930,210 @@ class BuilderTests(unittest.TestCase):
             self.assertIn("data/src/a.txt", names)
             self.assertIn("data/docs/b.txt", names)
 
+    def test_target_location_resolves_target_outside_cwd_without_exposing_location_name(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            target = projects / "team" / "app"
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            config = self._config(root, f'''
+                [target]
+                description = "Application."
+                include = ["src"]
+
+                [target.location.work]
+                path = {projects.as_posix()!r}
+            ''')
+            sources = resolve_sources(config, BuildRequest.create("work/team/app"), cwd=root)
+            target_source = next(source for source in sources if source.kind == "target")
+            self.assertEqual(target_source.directory, target.resolve())
+            self.assertEqual(target_source.archive_root, "team/app")
+            plan = plan_archive(config, BuildRequest.create("work/team/app"), cwd=root)
+            self.assertIn("team/app/src/main.py", plan.entries)
+            self.assertFalse(any(path.startswith("work/") for path in plan.entries))
+
+    def test_unknown_location_prefix_falls_back_to_cwd_relative_target(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "team" / "app"
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            config = self._config(root, '''
+                [target]
+                description = "Application."
+                include = ["src"]
+
+                [target.location.work]
+                path = "somewhere-else"
+            ''')
+            source = resolve_sources(config, BuildRequest.create("team/app"), cwd=root)[0]
+            self.assertEqual(source.directory, target.resolve())
+            self.assertEqual(source.archive_root, "team/app")
+
+    def test_explicit_dot_slash_bypasses_matching_target_location(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            cwd_target = root / "work" / "app"
+            external_target = Path(other) / "app"
+            (cwd_target / "src").mkdir(parents=True)
+            (external_target / "src").mkdir(parents=True)
+            config = self._config(root, f'''
+                [target]
+                description = "Application."
+                include = ["src"]
+
+                [target.location.work]
+                path = {Path(other).as_posix()!r}
+            ''')
+            location_source = resolve_sources(config, BuildRequest.create("work/app"), cwd=root)[0]
+            cwd_source = resolve_sources(config, BuildRequest.create("./work/app"), cwd=root)[0]
+            self.assertEqual(location_source.directory, external_target.resolve())
+            self.assertEqual(location_source.archive_root, "app")
+            self.assertEqual(cwd_source.directory, cwd_target.resolve())
+            self.assertEqual(cwd_source.archive_root, "work/app")
+
+    def test_location_expansion_selects_only_direct_child_directories(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            for name in ("alpha", "beta"):
+                (projects / name / "src").mkdir(parents=True)
+                (projects / name / "src" / f"{name}.py").write_text(name, encoding="utf-8")
+            (projects / "alpha" / "nested" / "src").mkdir(parents=True)
+            (projects / "note.txt").write_text("not a target", encoding="utf-8")
+            config = self._config(root, f'''
+                [target]
+                description = "Project."
+                include = ["src"]
+
+                [target.location.work]
+                path = {projects.as_posix()!r}
+            ''')
+            sources = resolve_sources(config, BuildRequest.create("work/"), cwd=root)
+            targets = [source for source in sources if source.kind == "target"]
+            self.assertEqual([source.archive_root for source in targets], ["alpha", "beta"])
+            plan = plan_archive(config, BuildRequest.create("work/"), cwd=root)
+            self.assertIn("alpha/src/alpha.py", plan.entries)
+            self.assertIn("beta/src/beta.py", plan.entries)
+            self.assertFalse(any(path.startswith("alpha/nested/") for path in plan.entries))
+
+    def test_location_expansion_requires_defined_nonempty_location(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            projects.mkdir()
+            config = self._config(root, f'''
+                [target]
+                description = "Project."
+                include_if_exists = ["src"]
+                if_empty = "allow"
+
+                [target.location.work]
+                path = {projects.as_posix()!r}
+            ''')
+            with self.assertRaisesRegex(SelectionError, "not defined"):
+                resolve_sources(config, BuildRequest.create("other/"), cwd=root)
+            with self.assertRaisesRegex(SelectionError, "no direct child directories"):
+                resolve_sources(config, BuildRequest.create("work/"), cwd=root)
+
+    def test_location_relative_target_cannot_escape_location_boundary(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            base = Path(other) / "projects"
+            base.mkdir()
+            outside = Path(other) / "outside"
+            (outside / "src").mkdir(parents=True)
+            config = self._config(root, f'''
+                [target]
+                description = "Project."
+                include = ["src"]
+
+                [target.location.work]
+                path = {base.as_posix()!r}
+            ''')
+            with self.assertRaisesRegex(SelectionError, "outside its Target resolution base"):
+                resolve_sources(config, BuildRequest.create("work/../outside"), cwd=root)
+
+    def test_location_expansion_rejects_directory_symlink_outside_boundary(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            projects = root / "projects"
+            projects.mkdir()
+            outside = Path(other) / "outside"
+            outside.mkdir()
+            link = projects / "escape"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+            config = self._config(root, '''
+                [target]
+                description = "Project."
+                include_if_exists = ["src"]
+                if_empty = "allow"
+
+                [target.location.work]
+                path = "projects"
+            ''')
+            with self.assertRaisesRegex(SelectionError, "symbolic link outside"):
+                resolve_sources(config, BuildRequest.create("work/"), cwd=root)
+
+    def test_absolute_positional_target_reference_is_rejected_even_if_it_exists(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            target = Path(other) / "target"
+            (target / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [target]
+                description = "Project."
+                include = ["src"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "must be relative"):
+                resolve_sources(config, BuildRequest.create(target.as_posix()), cwd=root)
+
+    def test_imported_target_locations_use_import_layer_execution_root_and_shadow_whole_target(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "root"
+            inner = Path(temp) / "inner"
+            projects = inner / "projects"
+            target = projects / "app"
+            root.mkdir()
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (inner / "dirpluck.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Imported target."
+                include = ["src"]
+
+                [target.location.work]
+                path = "projects"
+
+                [output]
+                path = "unused.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            config = self._config(root, '''
+                [import.base]
+                root = "../inner"
+                configuration = "dirpluck.toml"
+            ''')
+            source = resolve_sources(config, BuildRequest.create("work/app"), cwd=root)[0]
+            self.assertEqual(source.directory, target.resolve())
+            self.assertEqual(source.archive_root, "app")
+
+            (root / "local" / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [target]
+                description = "Outer target."
+                include = ["src"]
+
+                [import.base]
+                root = "../inner"
+                configuration = "dirpluck.toml"
+            ''')
+            with self.assertRaisesRegex(SelectionError, "not defined"):
+                resolve_sources(config, BuildRequest.create("work/"), cwd=root)
 
 
 if __name__ == "__main__":

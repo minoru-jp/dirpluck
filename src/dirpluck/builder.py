@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Mapping
 import os
@@ -27,9 +27,9 @@ from .errors import ConfigurationError, SelectionError
 
 @dataclass(frozen=True)
 class BuildRequest:
-    """One build request with runtime directories, one Case, output sequence, and README options."""
+    """One build request with Target references, one Case, output sequence, and README options."""
 
-    directories: tuple[Path, ...] = ()
+    directories: tuple[str, ...] = ()
     case: str | None = None
     sequence: int | None = None
     paths: bool = False
@@ -42,8 +42,14 @@ class BuildRequest:
         sequence: int | None = None,
         paths: bool = False,
     ) -> "BuildRequest":
+        normalized_directories: list[str] = []
+        for directory in directories:
+            if isinstance(directory, Path):
+                normalized_directories.append(directory.as_posix())
+            else:
+                normalized_directories.append(str(directory))
         return cls(
-            directories=tuple(Path(directory) for directory in directories),
+            directories=tuple(normalized_directories),
             case=case,
             sequence=sequence,
             paths=paths,
@@ -148,25 +154,25 @@ def _is_within(path: Path, root: Path) -> bool:
 
 
 def _resolve_target_directory(
-    path: str | Path,
-    cwd: Path,
+    reference: str,
+    base: Path,
     *,
     label: str,
 ) -> tuple[Path, str]:
-    candidate = Path(path).expanduser()
-    if not candidate.is_absolute():
-        candidate = cwd / candidate
+    candidate = base / Path(reference)
     try:
         resolved = candidate.resolve(strict=True)
     except FileNotFoundError as exc:
         raise SelectionError(f"{label} does not exist: {candidate}") from exc
     if not resolved.is_dir():
         raise SelectionError(f"{label} is not a directory: {candidate}")
+
+    base_resolved = base.resolve()
     try:
-        relative = resolved.relative_to(cwd)
+        relative = resolved.relative_to(base_resolved)
     except ValueError as exc:
         raise SelectionError(
-            f"{label} must be within the Configuration execution root: {resolved}"
+            f"{label} resolves outside its Target resolution base: {resolved}"
         ) from exc
 
     if relative == Path("."):
@@ -177,6 +183,127 @@ def _resolve_target_directory(
             )
         return resolved, archive_root
     return resolved, relative.as_posix()
+
+
+def _resolve_target_location(path: str, base: Path, *, name: str) -> Path:
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise SelectionError(
+            f"target location {name!r} does not exist: {candidate}"
+        ) from exc
+    if not resolved.is_dir():
+        raise SelectionError(
+            f"target location {name!r} is not a directory: {candidate}"
+        )
+    return resolved
+
+
+def _target_reference_is_absolute(reference: str) -> bool:
+    pure = PurePosixPath(reference)
+    windows = PureWindowsPath(reference)
+    return pure.is_absolute() or windows.is_absolute() or bool(windows.drive)
+
+
+def _location_expansion_name(reference: str) -> str | None:
+    if not reference.endswith("/"):
+        return None
+    candidate = reference[:-1]
+    if not candidate or "/" in candidate or candidate in {".", ".."}:
+        return None
+    return candidate
+
+
+def _expand_target_location(
+    name: str,
+    location_root: Path,
+) -> tuple[tuple[Path, str], ...]:
+    resolved_root = location_root.resolve()
+    targets: list[tuple[Path, str]] = []
+    for entry in sorted(location_root.iterdir(), key=lambda item: item.name):
+        if entry.is_symlink():
+            try:
+                resolved_entry = entry.resolve(strict=True)
+            except FileNotFoundError as exc:
+                raise SelectionError(
+                    f"target location {name!r} contains a broken symbolic link: {entry}"
+                ) from exc
+            if resolved_entry.is_dir() and not _is_within(resolved_entry, resolved_root):
+                raise SelectionError(
+                    f"target location {name!r} contains a directory symbolic link outside its boundary: {entry}"
+                )
+        if not entry.is_dir():
+            continue
+        directory, archive_root = _resolve_target_directory(
+            entry.name,
+            location_root,
+            label=f"target from location {name!r}",
+        )
+        targets.append((directory, archive_root))
+
+    if not targets:
+        raise SelectionError(
+            f"target location {name!r} contains no direct child directories"
+        )
+    return tuple(targets)
+
+
+def _resolve_target_reference(
+    reference: str,
+    binding: _TargetBinding,
+    cwd: Path,
+    *,
+    label: str,
+) -> tuple[tuple[Path, str], ...]:
+    if not reference:
+        raise SelectionError(f"{label} must not be empty")
+    if "\\" in reference:
+        raise SelectionError(
+            f"{label} must use '/' as the path separator: {reference!r}"
+        )
+    if _target_reference_is_absolute(reference):
+        raise SelectionError(
+            f"{label} must be relative; use a Target location for Targets outside cwd: {reference!r}"
+        )
+
+    if reference.startswith("./"):
+        relative = reference[2:] or "."
+        return (_resolve_target_directory(relative, cwd, label=label),)
+
+    expansion = _location_expansion_name(reference)
+    if expansion is not None:
+        location = binding.target.locations.get(expansion)
+        if location is None:
+            raise SelectionError(f"target location {expansion!r} is not defined")
+        location_root = _resolve_target_location(
+            location.path,
+            binding.layer.execution_root,
+            name=expansion,
+        )
+        return _expand_target_location(expansion, location_root)
+
+    parts = PurePosixPath(reference).parts
+    if len(parts) >= 2:
+        location = binding.target.locations.get(parts[0])
+        if location is not None:
+            location_root = _resolve_target_location(
+                location.path,
+                binding.layer.execution_root,
+                name=parts[0],
+            )
+            relative = PurePosixPath(*parts[1:]).as_posix()
+            return (
+                _resolve_target_directory(
+                    relative,
+                    location_root,
+                    label=label,
+                ),
+            )
+
+    return (_resolve_target_directory(reference, cwd, label=label),)
 
 
 def _resolve_companion_directory(
@@ -426,11 +553,11 @@ def _validate_request(
     if effective.target is None:
         if request.directories:
             raise SelectionError(
-                "the effective Configuration does not define a Target; DIRECTORY must not be specified"
+                "the effective Configuration does not define a Target; TARGET must not be specified"
             )
     elif not request.directories:
         raise SelectionError(
-            "DIRECTORY is required when the effective Configuration defines a Target (one or more may be specified)"
+            "TARGET is required when the effective Configuration defines a Target (one or more may be specified)"
         )
 
     if request.case is None:
@@ -498,20 +625,26 @@ def _resolve_effective_sources(
             request.case,
             shared=effective.shared,
         )
-        target_count = len(request.directories)
-        target_root = effective.layers[0].execution_root
+        runtime_targets: list[tuple[Path, str]] = []
         seen: set[Path] = set()
+        reference_count = len(request.directories)
         for index, requested in enumerate(request.directories, start=1):
-            directory, archive_root = _resolve_target_directory(
+            label = f"target reference {index}" if reference_count > 1 else "target reference"
+            for directory, archive_root in _resolve_target_reference(
                 requested,
-                target_root,
-                label=f"target {index}" if target_count > 1 else "target",
-            )
-            if directory in seen:
-                raise SelectionError(
-                    f"target directories must resolve to distinct directories: {directory}"
-                )
-            seen.add(directory)
+                effective.target,
+                effective.layers[0].execution_root,
+                label=label,
+            ):
+                if directory in seen:
+                    raise SelectionError(
+                        f"target directories must resolve to distinct directories: {directory}"
+                    )
+                seen.add(directory)
+                runtime_targets.append((directory, archive_root))
+
+        target_count = len(runtime_targets)
+        for index, (directory, archive_root) in enumerate(runtime_targets, start=1):
             key = "target" if target_count == 1 else f"target:{index}"
             name = None if target_count == 1 else archive_root
             resolved.append(

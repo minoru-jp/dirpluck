@@ -5,12 +5,12 @@ This document explains how to use the `dirpluck` CLI. For TOML authoring, see [C
 ## Basic forms
 
 ```text
-dirpluck [DIRECTORY ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
+dirpluck [TARGET ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
 dirpluck --configs
 dirpluck --version
 ```
 
-When the selected Effective Configuration contains a Target, supply one or more `DIRECTORY` arguments. When it has no Target, do not supply positional directories.
+When the selected Effective Configuration contains a Target, supply one or more positional `TARGET` arguments. When it has no Target, do not supply positional arguments.
 
 ```console
 dirpluck projects/example
@@ -18,7 +18,7 @@ dirpluck projects/a projects/b
 dirpluck --config snapshot
 ```
 
-The concrete Target directory still comes from CLI `DIRECTORY` when the Target definition originated in an imported Configuration.
+A positional `TARGET` is not always a raw filesystem path. If the Effective Target defines a named location and the argument's first segment matches that name, the Target is resolved from that location. Arguments that do not use a location are resolved from the current working directory. The same runtime resolution applies when the Target definition originated in an imported Configuration.
 
 ## Select a Configuration
 
@@ -36,15 +36,38 @@ List discoverable Configurations with:
 dirpluck --configs
 ```
 
-`--configs` only lists candidates and cannot be combined with build options or `DIRECTORY`.
+`--configs` only lists candidates and cannot be combined with build options or positional `TARGET` arguments.
 
-## Target directories
+## Target selection
 
-When a Configuration has a Target, the same Target selection is applied independently to every supplied `DIRECTORY`.
+When a Configuration has a Target, the same Target selection is applied independently to every source directory resolved from a positional `TARGET` argument.
+
+Without a named location, Targets are resolved from the current working directory.
 
 ```console
 dirpluck submissions/acme submissions/contoso
 ```
+
+When `[target.location.<name>]` is defined, an argument whose first segment matches the location name is resolved from that location.
+
+```console
+dirpluck work/acme
+dirpluck work/team/project
+```
+
+If a location name collides with a directory in the current working directory, use `./` to explicitly request cwd-relative resolution.
+
+```console
+dirpluck ./work/acme
+```
+
+To select every directory immediately below a location, specify only the location name with a trailing `/`.
+
+```console
+dirpluck work/
+```
+
+`work/` expands only the direct child directories of the `work` location; it does not recurse. This syntax explicitly requests location expansion, so an undefined `work` location is an error rather than a fallback to the current working directory.
 
 A Configuration without a Target can run using only fixed sources such as Companions.
 
@@ -52,7 +75,7 @@ A Configuration without a Target can run using only fixed sources such as Compan
 dirpluck --config project-snapshot
 ```
 
-For exact path and filesystem-boundary rules, see [SPECIFICATION.md](SPECIFICATION.md).
+For Target-location authoring, see [CONFIGURATION.md](CONFIGURATION.md). For exact location lookup, filesystem boundaries, and archive-path rules, see [SPECIFICATION.md](SPECIFICATION.md).
 
 ## Case
 

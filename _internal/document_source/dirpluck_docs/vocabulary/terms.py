@@ -21,6 +21,7 @@ __all__ = [
     "TERM_1",
     "TERM_2",
     "TERM_3",
+    "TERM_16",
     "TERM_4",
     "TERM_5",
     "TERM_6",
@@ -52,9 +53,16 @@ dirpluck の抽出意図を TOML で記述した文書。"""
 class TERM_3:
     r"""対象
 
-実行時に与える source directory へ共通の選択規則を適用するための source 定義。"""
+実行時に選ぶ source directory へ共通の選択規則を適用するための source 定義。"""
 
     __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_3
+
+class TERM_16:
+    r"""ターゲットロケーション
+
+実行時に対象を探す基準として名前を付けたディレクトリ。"""
+
+    __shikumi_devdoc_vocabulary_target__ = _VOCABULARY.TERM_16
 
 class TERM_4:
     r"""ケース

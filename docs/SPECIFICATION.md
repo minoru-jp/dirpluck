@@ -32,13 +32,16 @@ The accepted top-level structures are:
 [import.<name>]
 [import.<name>.companion.<name>]
 [target]
+[target.location.<name>]
 [target.case.<name>]
 [companion.<name>]
 [companion.<name>.case.<name>]
 [output]
 ```
 
-Unknown keys are errors. `[about]` is optional; when present, it contains only a non-empty `description`. Each Configuration may contain zero or one `[import.<name>]` and zero or one Target. Companions and Shared patterns are named and may have multiple definitions. Every Configuration contains one `[output]`.
+Unknown keys are errors. `[about]` is optional; when present, it contains only a non-empty `description`. Each Configuration may contain zero or one `[import.<name>]` and zero or one Target. A Target may define zero or more named Target locations. Companions and Shared patterns are also named and may have multiple definitions. Every Configuration contains one `[output]`.
+
+The `<name>` in `[target.location.<name>]` must be a non-empty name usable as one CLI path segment and must not contain `.`, `..`, `/`, or a backslash. Locations belong to the Target and are not defined separately per Case.
 
 A Root Configuration does not need to define a Target or Companion itself if, after import composition, the Effective Configuration contains at least one Target or Companion.
 
@@ -50,7 +53,7 @@ A relative path is resolved from the base directory defined by that field. An ab
 
 Filesystem-location fields do not perform `~` expansion or environment-variable interpolation and do not accept globs. `.` and `..` are accepted or rejected according to the field-specific rule. A Configuration that uses an absolute path depends on the referenced filesystem and is not guaranteed to be portable across operating systems.
 
-This notation applies to import `root`, ordinary and import-root-overlay Companion `path`, and Root output `path` / `directory`. Values defined separately as relative notation, including imported `configuration`, include patterns, and archive paths, follow their own rules.
+This notation applies to Target-location `path`, import `root`, ordinary and import-root-overlay Companion `path`, and Root output `path` / `directory`. Values defined separately as relative notation, including imported `configuration`, include patterns, archive paths, and CLI Target references, follow their own rules.
 
 ## 5. Configuration import and composition
 
@@ -93,7 +96,7 @@ For `[about].description`, resolution searches from the outermost layer inward a
 - **Shared include patterns:** an outer definition replaces an inner array with the same name.
 - **Shared exclude patterns:** the same rule applies in a namespace independent of Shared include patterns.
 
-Target and Companion shadowing is not a partial merge. It replaces the complete source definition, including `path`, `description`, base selection, and all Case selections.
+Target and Companion shadowing is not a partial merge. A Target replacement includes its `description`, base selection, every Case selection, and every Target location. A Companion replacement includes its `path`, `description`, base selection, and every Case selection.
 
 Shared-pattern references are resolved against the effective namespace after the full chain has been composed, not only against the source definition's origin layer. An outer layer may therefore provide or override a name referenced by an inner source. A reference still missing after composition is a Configuration error.
 
@@ -107,11 +110,42 @@ Each Configuration's `[output]` is schema-validated but is not composed. Only th
 
 ## 6. Runtime sources and Case
 
-When the Effective Configuration contains a Target, one or more CLI `DIRECTORY` arguments are required regardless of the layer where the Target definition originated. The same Target selection is applied independently to each directory. Every `DIRECTORY` is resolved inside the Root Configuration execution root, which is the process working directory.
+When the Effective Configuration contains a Target, one or more positional CLI `TARGET` arguments are required regardless of the layer where the Target definition originated. A positional `TARGET` is not necessarily a raw source-directory path; it is resolved into one or more runtime Target directories by the rules below.
 
-The origin Configuration of the Target selection affects definition composition only. It is never used to infer a runtime Target directory. Even when an inner Configuration's Target survives as the effective Target, `dirpluck` does not infer a project directory from that Configuration file's location.
+When the Effective Configuration has no Target, positional `TARGET` arguments are rejected.
 
-When the Effective Configuration has no Target, positional `DIRECTORY` arguments are rejected.
+The origin Configuration of the Target selection affects definition composition and the base for relative Target-location paths, but it is never used to infer a runtime Target directory automatically. Even when an inner Configuration's Target survives as the effective Target, the runtime Target is selected from positional CLI arguments.
+
+### Target location
+
+`[target.location.<name>]` contains only `path`. The value is a concrete directory path; empty strings and globs are rejected. A relative `path` is resolved from the execution root of the Configuration layer that owns the effective Target definition and may use `.` and `..`. An absolute `path` refers directly to a directory on the host filesystem. The resolved location must be an existing directory.
+
+Target locations are part of the Target definition. When an outer Target shadows an inner Target, the full location set is replaced with the rest of the Target definition. Case selection does not change the location set.
+
+### CLI Target-reference resolution
+
+Each positional `TARGET` argument is resolved independently in this order:
+
+1. If the argument begins with `./`, location lookup is skipped and the argument is treated as an explicitly cwd-relative Target reference.
+2. If the argument has exactly the form `<name>/`, meaning one non-dot segment followed by a trailing `/`, it is a named-location expansion. If the Effective Target has no location named `<name>`, resolution fails and does not fall back to cwd.
+3. Otherwise, if the first segment matches an Effective Target location name and a relative path follows it, that remaining path is resolved from the location directory.
+4. Otherwise, the entire argument is resolved relative to the process working directory.
+
+Absolute positional Target references are not accepted. To select a Target outside cwd, define a Target location.
+
+A cwd-relative Target must remain inside the process working directory after resolution. A location-relative Target must remain inside its location directory. A Target reference that escapes its resolution base through `..` or a symbolic link is rejected. The resolved Target must be an existing directory.
+
+A location prefix is a locating namespace, not a Target name. If `work/project` uses a location named `work`, the runtime Target is the resolved `project` directory.
+
+### Named-location expansion
+
+`<name>/` enumerates the directory entries immediately below the corresponding Target location and expands each directory into an independent runtime Target. Enumeration is not recursive, and regular files are not Targets.
+
+A directory symlink is eligible only when it resolves inside the same Target location; a link resolving outside the location is an error. An expansion that yields no Target directories is an error.
+
+Multiple positional `TARGET` arguments and location expansions may be combined in one run. The same Effective Target selection is applied independently to every runtime Target directory produced by resolution.
+
+### Companion and Case
 
 An ordinary Companion relative `path` is resolved from the execution root of the Configuration layer that owns the definition. An import-root overlay Companion relative `path` is resolved from the immediate import root. Both may use `.` and `..`; an absolute `path` refers directly to a directory on the host filesystem without depending on either base. The resolved path must be an existing directory, and the filesystem root itself is rejected as a Companion source. An inner Companion that survives shadowing retains the path base of its inner layer; a Companion replaced by an outer definition uses the base associated with the outer definition.
 
@@ -167,15 +201,17 @@ A bare `*`, `*/`, internal wildcards such as `foo*bar`, `**`, `?`, character cla
 
 ## 8. Filesystem boundaries and symbolic links
 
-The Root Configuration execution root is the process working directory. The execution root of each imported layer is the resolved `[import.<name>].root` that loaded that layer. An execution root is a resolution base for relative paths, not a universal boundary that constrains every source below it.
+The Root Configuration execution root is the process working directory. The execution root of each imported layer is the resolved `[import.<name>].root` that loaded that layer. An execution root is a resolution base for relative Configuration paths, not a universal boundary that constrains every source below it.
 
-A Target directory is always resolved from CLI input inside the Root Configuration execution root, and that Target directory becomes its selection boundary. Imported `configuration` remains constrained to the import root. A Companion may resolve any existing directory from a relative or absolute `path`, and the resolved Companion source directory itself becomes its selection boundary. Output locations do not participate in source boundaries.
+A runtime Target that does not use a Target location is resolved inside the process working directory, and the resolved Target directory becomes its selection boundary. A runtime Target that uses a Target location is resolved inside that location directory, and the resolved Target directory again becomes its selection boundary. A location is therefore a boundary for locating Targets; the final Target directory is the boundary for selected files.
+
+Imported `configuration` remains constrained to the import root. A Companion may resolve any existing directory from a relative or absolute `path`, and the resolved Companion source directory itself becomes its selection boundary. Output locations do not participate in source boundaries.
 
 Include resolution and selected files for each source are constrained to that source directory. A file or directory that escapes the source boundary through a symbolic link is rejected. Directory recursion does not follow directory symlinks. A symlink resolving outside the boundary is an error; a symlink resolving inside it is ignored to prevent cycles and duplicate traversal.
 
 ## 9. Archive planning
 
-Selected Target files retain their filesystem-relative paths from the Root Configuration execution root inside the ZIP, regardless of the layer where the Target definition originated.
+For a cwd-relative Target, selected files retain their filesystem-relative paths from the process working directory inside the ZIP, regardless of the layer where the Target definition originated. For a Target resolved through a Target location, selected files retain their filesystem-relative paths from the location directory. The logical location name itself is not included in the archive path. For example, if `work/team/project` resolves through location `work`, the archive path is `team/project/...`, not `work/team/project/...`. Direct children produced by `work/` expansion use the same rule.
 
 When a Companion source directory lies inside the resolution base for that Companion's relative path, selected files retain their paths relative to that base as before. When an absolute path or `..` resolves the source directory outside that base, the final directory name of the resolved source becomes the archive root, and selected files are placed below it using paths relative to the source directory. The filesystem root itself is not accepted as a Companion source because it has no portable archive root. The host absolute path, drive, or UNC share name is never embedded in the archive path.
 
@@ -244,20 +280,20 @@ With either output form, the final output file itself cannot be selected as an a
 
 ## 11. Dry run
 
-`--dry-run` uses the same import-chain resolution, cycle detection, definition composition, Target-directory resolution, Case selection, file selection, and archive-planning logic as a normal run, but it does not create or modify output.
+`--dry-run` uses the same import-chain resolution, cycle detection, definition composition, Target-location lookup and expansion, Target-directory resolution, Case selection, file selection, and archive-planning logic as a normal run, but it does not create or modify output.
 
 A missing required `include` is shown as `[missing]`. A missing optional pattern is shown as `[optional missing]`. A final zero-file selection is shown as `empty, allowed` or `empty, would error` according to policy.
 
-Multiple imports in one Configuration, import cycles, invalid root or configuration paths, invalid host absolute paths, unresolved Shared-pattern references, invalid source paths, Case inconsistencies, and comparable validation failures are errors during dry-run as well. Import depth by itself is neither an error nor a warning.
+Multiple imports in one Configuration, import cycles, invalid root or configuration paths, invalid host absolute paths, unknown location expansions, Target references that escape a location boundary, unresolved Shared-pattern references, invalid source paths, Case inconsistencies, and comparable validation failures are errors during dry-run as well. Import depth by itself is neither an error nor a warning.
 
 ## 12. CLI contract
 
 The principal accepted forms are:
 
 ```console
-dirpluck DIRECTORY [DIRECTORY ...]
+dirpluck TARGET [TARGET ...]
 dirpluck --config NAME
-dirpluck DIRECTORY [DIRECTORY ...] --case NAME
+dirpluck TARGET [TARGET ...] --case NAME
 dirpluck --config NAME --case NAME
 dirpluck ... --dry-run
 dirpluck ... --paths
@@ -266,7 +302,9 @@ dirpluck --configs
 dirpluck --version
 ```
 
-`--case` and `--sequence` may each be specified at most once. `--sequence` accepts an integer greater than or equal to 1. `--paths` adds the `Source` column to the Archive README produced by a normal build. When combined with `--dry-run`, no Archive is created, so it does not change the displayed tree. `--configs` cannot be combined with `DIRECTORY`, `--case`, `--sequence`, `--config`, `--dry-run`, or `--paths`.
+When the Effective Configuration contains a Target, positional arguments are `TARGET` references and are resolved by the rules in section 6. When there is no Target, positional `TARGET` arguments are rejected.
+
+`--case` and `--sequence` may each be specified at most once. `--sequence` accepts an integer greater than or equal to 1. `--paths` adds the `Source` column to the Archive README produced by a normal build. When combined with `--dry-run`, no Archive is created, so it does not change the displayed tree. `--configs` cannot be combined with `TARGET`, `--case`, `--sequence`, `--config`, `--dry-run`, or `--paths`.
 
 Argument parsing errors and `dirpluck` Configuration or build errors exit with status 2. Successful builds and informational commands exit with status 0. A successful normal build prints the final output path to standard output.
 

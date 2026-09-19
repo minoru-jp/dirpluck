@@ -275,7 +275,7 @@ class CliTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
-            self.assertIn("DIRECTORY must not be specified", stderr.getvalue())
+            self.assertIn("TARGET must not be specified", stderr.getvalue())
 
     def test_directory_is_required_when_configuration_defines_target(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -290,7 +290,7 @@ class CliTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
-            self.assertIn("DIRECTORY is required", stderr.getvalue())
+            self.assertIn("TARGET is required", stderr.getvalue())
 
     def test_companion_case_is_selected_and_missing_case_falls_back_to_base(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -736,6 +736,72 @@ class CliTests(unittest.TestCase):
                 os.chdir(previous)
             self.assertEqual(result, 0)
             self.assertIn("review.toml", stdout.getvalue())
+
+    def test_cli_preserves_location_expansion_trailing_slash(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            for name in ("alpha", "beta"):
+                (projects / name / "src").mkdir(parents=True)
+                (projects / name / "src" / f"{name}.py").write_text(name, encoding="utf-8")
+            (root / "dirpluck.toml").write_text(textwrap.dedent(f'''
+                [target]
+                description = "Projects."
+                include = ["src"]
+
+                [target.location.work]
+                path = {projects.as_posix()!r}
+
+                [output]
+                path = "result.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["work/"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                names = set(archive.namelist())
+            self.assertIn("alpha/src/alpha.py", names)
+            self.assertIn("beta/src/beta.py", names)
+
+    def test_cli_dot_slash_bypasses_location_lookup(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            cwd_target = root / "work" / "app" / "src"
+            external_target = Path(other) / "app" / "src"
+            cwd_target.mkdir(parents=True)
+            external_target.mkdir(parents=True)
+            (cwd_target / "cwd.py").write_text("cwd", encoding="utf-8")
+            (external_target / "external.py").write_text("external", encoding="utf-8")
+            (root / "dirpluck.toml").write_text(textwrap.dedent(f'''
+                [target]
+                description = "Project."
+                include = ["src"]
+
+                [target.location.work]
+                path = {Path(other).as_posix()!r}
+
+                [output]
+                path = "result.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["./work/app"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                names = set(archive.namelist())
+            self.assertIn("work/app/src/cwd.py", names)
+            self.assertNotIn("app/src/external.py", names)
 
 
 if __name__ == "__main__":

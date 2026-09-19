@@ -14,9 +14,11 @@ For example, a review package can combine proposal material, research results, a
 
 ### Attach stable references to a changing subject
 
-Use a Target when the same selection rules should be applied to different projects, submissions, cases, or similar subjects. The Target selection stays in the Configuration while the concrete source directory is supplied when `dirpluck` runs.
+Use a Target when the same selection rules should be applied to different projects, submissions, cases, or similar subjects. The Target selection stays in the Configuration while the concrete source directory is selected when `dirpluck` runs.
 
-Stable guidelines, templates, and reference material can remain as Companions in the same archive. This keeps the extraction intent fixed while only the subject changes.
+By default, Targets are located from the current working directory. When the Configuration workspace and the Target material should live in different places, define a named Target location and select through a logical reference such as `work/project`. `work/` selects every direct child directory of that location as a Target.
+
+Stable guidelines, templates, and reference material can remain as Companions in the same archive. This lets the Configuration workspace, runtime Targets, and fixed reference material live independently.
 
 ### Reuse an extraction intent declared elsewhere
 
@@ -53,6 +55,9 @@ include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
 if_empty = "allow"
 
+[target.location.work]
+path = "/srv/projects"
+
 [companion.guidelines]
 path = "review-guidelines"
 description = "Guidelines used for every review."
@@ -64,15 +69,15 @@ if_exists = "overwrite"
 ```
 
 ```console
-dirpluck projects/example --dry-run
-dirpluck projects/example
+dirpluck work/example --dry-run
+dirpluck work/example
 ```
 
 For all Configuration fields and a larger example, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md). For CLI options and Configuration discovery, see [docs/CLI.md](docs/CLI.md).
 
 ## Installation
 
-Python 3.11 or later is required. The current release is `0.6.2`.
+Python 3.11 or later is required. The current release is `0.7.0`.
 
 ```console
 pip install dirpluck

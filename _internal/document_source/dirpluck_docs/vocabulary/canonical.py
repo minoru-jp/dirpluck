@@ -19,7 +19,12 @@ class VOCABULARY:
 
     @term("対象")
     class TERM_3:
-        r'''実行時に与える source directory へ共通の選択規則を適用するための source 定義。'''
+        r'''実行時に選ぶ source directory へ共通の選択規則を適用するための source 定義。'''
+        glossary @= True
+
+    @term("ターゲットロケーション")
+    class TERM_16:
+        r'''実行時に対象を探す基準として名前を付けたディレクトリ。'''
         glossary @= True
 
     @term("ケース")
