@@ -769,39 +769,54 @@ class CliTests(unittest.TestCase):
             self.assertIn("alpha/src/alpha.py", names)
             self.assertIn("beta/src/beta.py", names)
 
-    def test_cli_dot_slash_bypasses_location_lookup(self):
-        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+    def test_cli_rejects_nested_cwd_target_reference(self):
+        with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            cwd_target = root / "work" / "app" / "src"
-            external_target = Path(other) / "app" / "src"
-            cwd_target.mkdir(parents=True)
-            external_target.mkdir(parents=True)
-            (cwd_target / "cwd.py").write_text("cwd", encoding="utf-8")
-            (external_target / "external.py").write_text("external", encoding="utf-8")
-            (root / "dirpluck.toml").write_text(textwrap.dedent(f'''
+            (root / "team" / "app" / "src").mkdir(parents=True)
+            (root / "dirpluck.toml").write_text(textwrap.dedent('''
                 [target]
                 description = "Project."
                 include = ["src"]
-
-                [target.location.work]
-                path = {Path(other).as_posix()!r}
 
                 [output]
                 path = "result.zip"
                 if_exists = "error"
             '''), encoding="utf-8")
             previous = Path.cwd()
+            stderr = StringIO()
             try:
                 os.chdir(root)
-                with redirect_stdout(StringIO()):
-                    result = main(["./work/app"])
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["team/app"])
             finally:
                 os.chdir(previous)
-            self.assertEqual(result, 0)
-            with zipfile.ZipFile(root / "result.zip") as archive:
-                names = set(archive.namelist())
-            self.assertIn("work/app/src/cwd.py", names)
-            self.assertNotIn("app/src/external.py", names)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("target location 'team' is not defined", stderr.getvalue())
+
+    def test_cli_target_skip_rejects_explicit_target(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "archive" / "src").mkdir(parents=True)
+            (root / "dirpluck.toml").write_text(textwrap.dedent('''
+                [target]
+                description = "Project."
+                include = ["src"]
+                skip = ["archive"]
+
+                [output]
+                path = "result.zip"
+                if_exists = "error"
+            '''), encoding="utf-8")
+            previous = Path.cwd()
+            stderr = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["archive"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("[target].skip", stderr.getvalue())
 
 
 if __name__ == "__main__":

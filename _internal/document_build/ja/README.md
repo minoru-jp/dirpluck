@@ -46,7 +46,7 @@ dirpluck は、繰り返し現れる「どのファイルを一緒に扱うか�
 
 異なるプロジェクト、提出物、案件などへ毎回同じ選択規則を適用したい場合は、対象を使います。Target の選択規則は Configuration に残し、実際の対象ディレクトリは実行時に選びます。
 
-通常は cwd から Target を選べます。Configuration workspace と Target の実体を別の場所で管理したい場合は、ターゲットロケーションに filesystem 上の起点を名前付きで定義し、`work/project` のような論理参照で選べます。`work/` と指定すれば、その location 直下の directory を一括して Target にできます。
+通常は cwd 直下の directory を Target として選べます。Configuration workspace と Target の実体を別の場所で管理したい場合は、ターゲットロケーションに filesystem 上の起点を名前付きで定義し、`work/project` のように location 直下の directory を選べます。`work/` と指定すれば、その location 直下の eligible directory を一括して Target にできます。Target は cwd または location の直下に限定し、Target の中に別の Target candidate を再帰的に設けません。
 
 固定ガイドライン、テンプレート、参照資料などは Companion として同じアーカイブへ加えられます。これにより、Configuration の置き場所、実行時の Target、固定資料を互いに独立して配置できます。
 
@@ -83,10 +83,12 @@ exclude = [".git/", ".env*", "*.pem", "*.key"]
 description = "The project currently under review."
 include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
+skip = ["archive", "tmp-*"]
 if_empty = "allow"
 
 [target.location.work]
 path = "/srv/projects"
+skip = ["archive"]
 
 [companion.guidelines]
 path = "review-guidelines"
@@ -107,7 +109,7 @@ TOML の各 field とより大きな例は `docs/CONFIGURATION.md`、CLI option 
 
 ## インストール
 
-Python 3.11 以降を使用します。現在のリリースは `0.7.0` です。
+Python 3.11 以降を使用します。現在のリリースは `0.8.0` です。
 
 ```console
 pip install dirpluck

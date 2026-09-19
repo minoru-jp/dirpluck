@@ -51,7 +51,7 @@ This notation applies to filesystem-location fields such as Target-location `pat
 
 ## Target
 
-Use a Target when the same selection rules should be applied to source directories selected at runtime.
+Use a Target when the same selection rules should be applied to source directories selected at runtime. A Target is always one direct child directory of its resolution base.
 
 ```toml
 [target]
@@ -59,42 +59,53 @@ description = "The submission currently being reviewed."
 include = ["documents", "metadata.json"]
 include_if_exists = ["attachments"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
+skip = ["archive", "tmp-*", "*-old", "*scratch*"]
 ```
 
-The Target itself does not fix a source path. Without a locating namespace, positional Target arguments continue to resolve from the current working directory.
+The Target itself does not fix a source path. A positional `NAME` selects the direct child `cwd/NAME`. `[target].skip` controls which cwd child directory names are eligible to become Targets.
 
 ```console
-dirpluck submissions/acme submissions/contoso
+dirpluck acme contoso
 ```
 
-When the Configuration workspace should be separated from the Target material, define named Target locations under the Target.
+`skip` is distinct from selection `exclude`: `skip` prevents an entire directory from becoming a Target, while `exclude` removes matching entries from inside a Target after the Target has been selected. Skip patterns match the direct child directory name, case-sensitively, using the same limited name forms as exclusion patterns:
+
+- `name` — exact;
+- `name*` — prefix;
+- `*name` — suffix;
+- `*name*` — substring.
+
+A bare `*`, path separators, `foo*bar`, `?`, character classes, `!`, and backslashes are not accepted in `skip`. An empty `skip = []` is allowed.
+
+When the Configuration workspace should be separated from the Target material, define named Target locations under the Target. Each location may have its own `skip` rules.
 
 ```toml
 [target.location.work]
 path = "/srv/work"
+skip = ["archive", "tmp-*"]
 
 [target.location.oss]
 path = "../external-projects"
 ```
 
-A location name is used as the first segment of a positional Target argument.
+Use `LOCATION/NAME` to select one direct child of a named location.
 
 ```console
 dirpluck work/acme
 dirpluck oss/example
 ```
 
-`work/acme` locates `acme` relative to the `work` location. If the first segment does not match a defined location, the whole argument is resolved relative to the current working directory. If a location name collides with a directory in the current working directory, prefix the argument with `./`, as in `./work/acme`, to explicitly bypass location lookup.
+There is no fallback from `LOCATION/NAME` to cwd. If `work` is not a defined Target location, `work/acme` is an error. Multi-level references such as `work/team/acme`, `./acme`, and absolute positional Target paths are also rejected.
 
-To use every directory immediately below a location as a Target, specify only the location name with a trailing `/`.
+To use every eligible directory immediately below a location as a Target, specify only the location name with a trailing `/`.
 
 ```console
 dirpluck work/
 ```
 
-This expands each direct child directory of `work` into an independent Target and does not recurse. Because `work/` is explicit location-expansion syntax, an undefined `work` location is an error and does not fall back to the current working directory.
+This expands each non-skipped direct child directory of `work` into an independent Target and does not recurse. An undefined location or a location with no eligible direct child directories is an error.
 
-A relative location `path` is resolved from the execution root of the Configuration layer that owns the Target definition; an absolute `path` refers directly to a host-filesystem location. See [SPECIFICATION.md](SPECIFICATION.md) for exact Target-reference resolution, location boundaries, and archive-path rules.
+A relative location `path` is resolved from the execution root of the Configuration layer that owns the Target definition; an absolute `path` refers directly to a host-filesystem location. See [SPECIFICATION.md](SPECIFICATION.md) for exact Target-reference resolution, `skip` matching, location boundaries, and archive-path rules.
 
 Do not supply positional Target arguments for a Configuration with no Target.
 
@@ -213,7 +224,7 @@ include = ["documents", "metadata.json", "records"]
 ```
 
 ```console
-dirpluck submissions/acme --case audit
+dirpluck acme --case audit
 ```
 
 A Case is not a delta from the base selection. Write every include, exclude, and Shared-pattern reference needed by the Case in the Case itself.
@@ -302,6 +313,7 @@ if_empty = "allow"
 
 [target.location.projects]
 path = "/srv/projects"
+skip = ["archive"]
 
 [companion.guidelines]
 path = "review-guidelines"

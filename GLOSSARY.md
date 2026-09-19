@@ -16,7 +16,7 @@ A source definition whose common selection rules are applied to source directori
 
 ## Target location
 
-A named directory used as a base for locating Targets at invocation time.
+A named directory whose direct child directories can be selected as Targets at invocation time.
 
 ## Case
 

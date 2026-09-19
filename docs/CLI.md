@@ -13,19 +13,19 @@ dirpluck --version
 When the selected Effective Configuration contains a Target, supply one or more positional `TARGET` arguments. When it has no Target, do not supply positional arguments.
 
 ```console
-dirpluck projects/example
-dirpluck projects/a projects/b
+dirpluck example
+dirpluck project-a project-b
 dirpluck --config snapshot
 ```
 
-A positional `TARGET` is not always a raw filesystem path. If the Effective Target defines a named location and the argument's first segment matches that name, the Target is resolved from that location. Arguments that do not use a location are resolved from the current working directory. The same runtime resolution applies when the Target definition originated in an imported Configuration.
+A positional `TARGET` names one direct child directory of either the current working directory or a named Target location. The accepted forms are `NAME`, `LOCATION/NAME`, and `LOCATION/`. Targets are deliberately one level deep; nested Target references are not accepted. The same runtime resolution applies when the Target definition originated in an imported Configuration.
 
 ## Select a Configuration
 
 By default, `dirpluck` uses `dirpluck.toml`. Select another Configuration with `--config NAME`; the `.toml` suffix may be omitted.
 
 ```console
-dirpluck projects/example --config review
+dirpluck example --config review
 ```
 
 Root Configuration discovery checks only the current working directory and `./dirpluck/`. The same filename in both locations is treated as ambiguous.
@@ -42,32 +42,28 @@ dirpluck --configs
 
 When a Configuration has a Target, the same Target selection is applied independently to every source directory resolved from a positional `TARGET` argument.
 
-Without a named location, Targets are resolved from the current working directory.
+A single name selects one direct child directory of the current working directory. `[target].skip` can make matching child directories ineligible as Targets.
 
 ```console
-dirpluck submissions/acme submissions/contoso
+dirpluck acme contoso
 ```
 
-When `[target.location.<name>]` is defined, an argument whose first segment matches the location name is resolved from that location.
+When `[target.location.<name>]` is defined, `LOCATION/NAME` selects one direct child directory of that location. `[target.location.<name>].skip` applies only to that location.
 
 ```console
 dirpluck work/acme
-dirpluck work/team/project
+dirpluck oss/example
 ```
 
-If a location name collides with a directory in the current working directory, use `./` to explicitly request cwd-relative resolution.
+`LOCATION/NAME` always means named-location resolution. If `LOCATION` is not defined, the command fails; it does not fall back to `cwd/LOCATION/NAME`. Nested references such as `work/team/project`, `./project`, and absolute positional paths are not accepted.
 
-```console
-dirpluck ./work/acme
-```
-
-To select every directory immediately below a location, specify only the location name with a trailing `/`.
+To select every eligible directory immediately below a location, specify only the location name with a trailing `/`.
 
 ```console
 dirpluck work/
 ```
 
-`work/` expands only the direct child directories of the `work` location; it does not recurse. This syntax explicitly requests location expansion, so an undefined `work` location is an error rather than a fallback to the current working directory.
+`work/` expands only the direct child directories of the `work` location, applies that location's `skip` rules, and does not recurse. An undefined location or an expansion with no eligible Targets is an error.
 
 A Configuration without a Target can run using only fixed sources such as Companions.
 
@@ -75,14 +71,14 @@ A Configuration without a Target can run using only fixed sources such as Compan
 dirpluck --config project-snapshot
 ```
 
-For Target-location authoring, see [CONFIGURATION.md](CONFIGURATION.md). For exact location lookup, filesystem boundaries, and archive-path rules, see [SPECIFICATION.md](SPECIFICATION.md).
+For Target-location and `skip` authoring, see [CONFIGURATION.md](CONFIGURATION.md). For exact Target-reference resolution and archive-path rules, see [SPECIFICATION.md](SPECIFICATION.md).
 
 ## Case
 
 Select one named Case with `--case NAME`.
 
 ```console
-dirpluck projects/example --case audit
+dirpluck example --case audit
 ```
 
 One Case may be supplied per run. How that Case applies to Targets and Companions is defined in [SPECIFICATION.md](SPECIFICATION.md).
@@ -92,7 +88,7 @@ One Case may be supplied per run. How that Case applies to Targets and Companion
 `--dry-run` prints the resolved ZIP contents as a tree without creating an archive file.
 
 ```console
-dirpluck projects/example --dry-run
+dirpluck example --dry-run
 ```
 
 It is useful after changing a Configuration or workspace and before writing an archive. The major planning steps are shared with a normal run; only the write is omitted. Exact dry-run semantics are in [SPECIFICATION.md](SPECIFICATION.md).
@@ -104,7 +100,7 @@ The generated Archive README is a compact content index. By default it records o
 Use `--paths` only when the resolved source directories should also be included in the index.
 
 ```console
-dirpluck projects/example --paths
+dirpluck example --paths
 ```
 
 `--paths` adds the resolved source directory to each index row. This can preserve local filesystem information, including absolute paths, in the Archive. Check whether that information is appropriate before using the option for an Archive that will be distributed externally.

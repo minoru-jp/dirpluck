@@ -16,7 +16,7 @@ For example, a review package can combine proposal material, research results, a
 
 Use a Target when the same selection rules should be applied to different projects, submissions, cases, or similar subjects. The Target selection stays in the Configuration while the concrete source directory is selected when `dirpluck` runs.
 
-By default, Targets are located from the current working directory. When the Configuration workspace and the Target material should live in different places, define a named Target location and select through a logical reference such as `work/project`. `work/` selects every direct child directory of that location as a Target.
+By default, Targets are direct child directories of the current working directory. When the Configuration workspace and the Target material should live in different places, define a named Target location and select a direct child through a logical reference such as `work/project`. `work/` selects every eligible direct child directory of that location as a Target. Targets are deliberately one level deep: directories inside a Target are not themselves Target candidates.
 
 Stable guidelines, templates, and reference material can remain as Companions in the same archive. This lets the Configuration workspace, runtime Targets, and fixed reference material live independently.
 
@@ -53,10 +53,12 @@ The following Configuration combines a runtime Target with fixed review guidelin
 description = "The project currently under review."
 include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
+skip = ["archive", "tmp-*"]
 if_empty = "allow"
 
 [target.location.work]
 path = "/srv/projects"
+skip = ["archive"]
 
 [companion.guidelines]
 path = "review-guidelines"
@@ -77,7 +79,7 @@ For all Configuration fields and a larger example, see [docs/CONFIGURATION.md](d
 
 ## Installation
 
-Python 3.11 or later is required. The current release is `0.7.0`.
+Python 3.11 or later is required. The current release is `0.8.0`.
 
 ```console
 pip install dirpluck

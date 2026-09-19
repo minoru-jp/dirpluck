@@ -53,10 +53,10 @@ class BuilderTests(unittest.TestCase):
         (project / "notes.txt").write_text("not selected\n", encoding="utf-8")
         return project
 
-    def test_target_and_companion_preserve_cwd_relative_filesystem_paths(self):
+    def test_target_and_companion_preserve_base_relative_filesystem_paths(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            self._project(root, "a/common", "a")
+            self._project(root, "common", "a")
             self._project(root, "b/common", "b")
             config = self._config(root, '''
                 [target]
@@ -67,10 +67,10 @@ class BuilderTests(unittest.TestCase):
                 description = "Companion."
                 include = ["src"]
             ''')
-            output = build_archive(config, BuildRequest.create("a/common"), cwd=root)
+            output = build_archive(config, BuildRequest.create("common"), cwd=root)
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
-            self.assertIn("a/common/src/module.py", names)
+            self.assertIn("common/src/module.py", names)
             self.assertIn("b/common/src/module.py", names)
 
     def test_companion_parent_path_outside_base_uses_resolved_directory_name(self):
@@ -266,27 +266,28 @@ class BuilderTests(unittest.TestCase):
                 [target]
                 description = "Target."
                 include = ["src"]
+
+                [target.location.here]
+                path = "."
             ''')
             with self.assertRaises(SelectionError):
                 resolve_sources(
                     config,
-                    BuildRequest.create("project", "./project"),
+                    BuildRequest.create("project", "here/project"),
                     cwd=root,
                 )
 
-    def test_target_may_be_current_working_directory_and_keeps_basename(self):
+    def test_target_cannot_be_current_working_directory(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "src").mkdir()
-            (root / "src" / "main.py").write_text("x", encoding="utf-8")
             config = self._config(root, '''
                 [target]
                 description = "Target cwd."
                 include = ["src"]
             ''')
-            output = build_archive(config, BuildRequest.create("."), cwd=root)
-            with zipfile.ZipFile(output) as archive:
-                self.assertIn(f"{root.name}/src/main.py", archive.namelist())
+            with self.assertRaisesRegex(SelectionError, "direct child"):
+                resolve_sources(config, BuildRequest.create("."), cwd=root)
 
     def test_include_star_matches_files_and_directories_at_fixed_depth(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1745,6 +1746,7 @@ class BuilderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "framework").mkdir()
+            (root / "project").mkdir()
             config = self._config(root, '''
                 [target]
                 description = "Default."
@@ -1766,7 +1768,7 @@ class BuilderTests(unittest.TestCase):
                 if_empty = "allow"
             ''')
             with self.assertRaisesRegex(ConfigurationError, "not defined by target"):
-                plan_archive(config, BuildRequest.create("."), cwd=root)
+                plan_archive(config, BuildRequest.create("project"), cwd=root)
 
     def test_source_less_effective_configuration_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1930,11 +1932,11 @@ class BuilderTests(unittest.TestCase):
             self.assertIn("data/src/a.txt", names)
             self.assertIn("data/docs/b.txt", names)
 
-    def test_target_location_resolves_target_outside_cwd_without_exposing_location_name(self):
+    def test_target_location_resolves_direct_child_outside_cwd_without_exposing_location_name(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
             root = Path(temp)
             projects = Path(other) / "projects"
-            target = projects / "team" / "app"
+            target = projects / "app"
             (target / "src").mkdir(parents=True)
             (target / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
             config = self._config(root, f'''
@@ -1945,53 +1947,55 @@ class BuilderTests(unittest.TestCase):
                 [target.location.work]
                 path = {projects.as_posix()!r}
             ''')
-            sources = resolve_sources(config, BuildRequest.create("work/team/app"), cwd=root)
+            sources = resolve_sources(config, BuildRequest.create("work/app"), cwd=root)
             target_source = next(source for source in sources if source.kind == "target")
             self.assertEqual(target_source.directory, target.resolve())
-            self.assertEqual(target_source.archive_root, "team/app")
-            plan = plan_archive(config, BuildRequest.create("work/team/app"), cwd=root)
-            self.assertIn("team/app/src/main.py", plan.entries)
+            self.assertEqual(target_source.archive_root, "app")
+            plan = plan_archive(config, BuildRequest.create("work/app"), cwd=root)
+            self.assertIn("app/src/main.py", plan.entries)
             self.assertFalse(any(path.startswith("work/") for path in plan.entries))
 
-    def test_unknown_location_prefix_falls_back_to_cwd_relative_target(self):
+    def test_cwd_target_must_be_direct_child(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             target = root / "team" / "app"
             (target / "src").mkdir(parents=True)
-            (target / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
             config = self._config(root, '''
                 [target]
                 description = "Application."
                 include = ["src"]
-
-                [target.location.work]
-                path = "somewhere-else"
             ''')
-            source = resolve_sources(config, BuildRequest.create("team/app"), cwd=root)[0]
-            self.assertEqual(source.directory, target.resolve())
-            self.assertEqual(source.archive_root, "team/app")
+            with self.assertRaisesRegex(SelectionError, "target location 'team' is not defined"):
+                resolve_sources(config, BuildRequest.create("team/app"), cwd=root)
 
-    def test_explicit_dot_slash_bypasses_matching_target_location(self):
+    def test_target_location_target_must_be_direct_child(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
             root = Path(temp)
-            cwd_target = root / "work" / "app"
-            external_target = Path(other) / "app"
-            (cwd_target / "src").mkdir(parents=True)
-            (external_target / "src").mkdir(parents=True)
+            projects = Path(other) / "projects"
+            target = projects / "team" / "app"
+            (target / "src").mkdir(parents=True)
             config = self._config(root, f'''
                 [target]
                 description = "Application."
                 include = ["src"]
 
                 [target.location.work]
-                path = {Path(other).as_posix()!r}
+                path = {projects.as_posix()!r}
             ''')
-            location_source = resolve_sources(config, BuildRequest.create("work/app"), cwd=root)[0]
-            cwd_source = resolve_sources(config, BuildRequest.create("./work/app"), cwd=root)[0]
-            self.assertEqual(location_source.directory, external_target.resolve())
-            self.assertEqual(location_source.archive_root, "app")
-            self.assertEqual(cwd_source.directory, cwd_target.resolve())
-            self.assertEqual(cwd_source.archive_root, "work/app")
+            with self.assertRaisesRegex(SelectionError, "NAME, LOCATION/NAME, or LOCATION/"):
+                resolve_sources(config, BuildRequest.create("work/team/app"), cwd=root)
+
+    def test_dot_slash_target_reference_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "project" / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [target]
+                description = "Application."
+                include = ["src"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "direct child"):
+                resolve_sources(config, BuildRequest.create("./project"), cwd=root)
 
     def test_location_expansion_selects_only_direct_child_directories(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
@@ -2034,26 +2038,8 @@ class BuilderTests(unittest.TestCase):
             ''')
             with self.assertRaisesRegex(SelectionError, "not defined"):
                 resolve_sources(config, BuildRequest.create("other/"), cwd=root)
-            with self.assertRaisesRegex(SelectionError, "no direct child directories"):
+            with self.assertRaisesRegex(SelectionError, "no eligible direct child directories"):
                 resolve_sources(config, BuildRequest.create("work/"), cwd=root)
-
-    def test_location_relative_target_cannot_escape_location_boundary(self):
-        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
-            root = Path(temp)
-            base = Path(other) / "projects"
-            base.mkdir()
-            outside = Path(other) / "outside"
-            (outside / "src").mkdir(parents=True)
-            config = self._config(root, f'''
-                [target]
-                description = "Project."
-                include = ["src"]
-
-                [target.location.work]
-                path = {base.as_posix()!r}
-            ''')
-            with self.assertRaisesRegex(SelectionError, "outside its Target resolution base"):
-                resolve_sources(config, BuildRequest.create("work/../outside"), cwd=root)
 
     def test_location_expansion_rejects_directory_symlink_outside_boundary(self):
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
@@ -2077,6 +2063,80 @@ class BuilderTests(unittest.TestCase):
                 path = "projects"
             ''')
             with self.assertRaisesRegex(SelectionError, "symbolic link outside"):
+                resolve_sources(config, BuildRequest.create("work/"), cwd=root)
+
+    def test_target_skip_filters_cwd_targets_and_explicit_references(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in ("app", "archive", "tmp-one", "old-backup", "scratch-zone"):
+                (root / name / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [target]
+                description = "Project."
+                include = ["src"]
+                skip = ["archive", "tmp-*", "*-backup", "*scratch*"]
+            ''')
+            source = resolve_sources(config, BuildRequest.create("app"), cwd=root)[0]
+            self.assertEqual(source.archive_root, "app")
+            for name in ("archive", "tmp-one", "old-backup", "scratch-zone"):
+                with self.subTest(name=name), self.assertRaisesRegex(SelectionError, r"\[target\]\.skip"):
+                    resolve_sources(config, BuildRequest.create(name), cwd=root)
+
+    def test_location_skip_filters_expansion_and_explicit_references(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            for name in ("alpha", "archive", "tmp-one", "old-backup", "scratch-zone"):
+                (projects / name / "src").mkdir(parents=True)
+            config = self._config(root, f'''
+                [target]
+                description = "Project."
+                include = ["src"]
+
+                [target.location.work]
+                path = {projects.as_posix()!r}
+                skip = ["archive", "tmp-*", "*-backup", "*scratch*"]
+            ''')
+            sources = resolve_sources(config, BuildRequest.create("work/"), cwd=root)
+            self.assertEqual([source.archive_root for source in sources if source.kind == "target"], ["alpha"])
+            for name in ("archive", "tmp-one", "old-backup", "scratch-zone"):
+                with self.subTest(name=name), self.assertRaisesRegex(SelectionError, r"target\.location\.work.*skip"):
+                    resolve_sources(config, BuildRequest.create(f"work/{name}"), cwd=root)
+
+    def test_cwd_and_location_skip_rules_are_independent(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            (root / "archive" / "src").mkdir(parents=True)
+            projects = Path(other) / "projects"
+            (projects / "local" / "src").mkdir(parents=True)
+            config = self._config(root, f'''
+                [target]
+                description = "Project."
+                include = ["src"]
+                skip = ["local"]
+
+                [target.location.work]
+                path = {projects.as_posix()!r}
+                skip = ["archive"]
+            ''')
+            self.assertEqual(resolve_sources(config, BuildRequest.create("archive"), cwd=root)[0].archive_root, "archive")
+            self.assertEqual(resolve_sources(config, BuildRequest.create("work/local"), cwd=root)[0].archive_root, "local")
+
+    def test_location_expansion_errors_when_all_direct_children_are_skipped(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            (projects / "archive" / "src").mkdir(parents=True)
+            config = self._config(root, f'''
+                [target]
+                description = "Project."
+                include = ["src"]
+
+                [target.location.work]
+                path = {projects.as_posix()!r}
+                skip = ["archive"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "no eligible direct child directories"):
                 resolve_sources(config, BuildRequest.create("work/"), cwd=root)
 
     def test_absolute_positional_target_reference_is_rejected_even_if_it_exists(self):

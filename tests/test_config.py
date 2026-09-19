@@ -1216,6 +1216,71 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.target.locations["work"].path, "../projects")
             self.assertEqual(config.target.locations["external"].path, root.as_posix())
 
+    def test_target_and_location_skip_patterns_are_parsed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [target]
+                description = "Default."
+                include = ["src"]
+                skip = ["archive", "tmp-*", "*-backup", "*scratch*"]
+
+                [target.location.work]
+                path = "../projects"
+                skip = ["vendor", "old-*"]
+            '''))
+            self.assertEqual(
+                [(pattern.raw, pattern.match) for pattern in config.target.skip],
+                [("archive", "exact"), ("tmp-*", "prefix"), ("*-backup", "suffix"), ("*scratch*", "contains")],
+            )
+            self.assertEqual(
+                [pattern.raw for pattern in config.target.locations["work"].skip],
+                ["vendor", "old-*"],
+            )
+
+    def test_target_skip_may_be_explicitly_empty(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [target]
+                description = "Default."
+                include = ["src"]
+                skip = []
+
+                [target.location.work]
+                path = "projects"
+                skip = []
+            '''))
+            self.assertEqual(config.target.skip, ())
+            self.assertEqual(config.target.locations["work"].skip, ())
+
+    def test_target_skip_rejects_paths_and_richer_pattern_syntax(self):
+        invalid = ("group/archive", "archive/", r"archive\old", "*", "foo*bar", "foo?", "[foo]")
+        for pattern in invalid:
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                with self.assertRaises(ConfigurationError):
+                    load_config(self._write(root, f'''
+                        [target]
+                        description = "Default."
+                        include = ["src"]
+                        skip = [{pattern!r}]
+                    '''))
+
+    def test_target_location_skip_rejects_duplicate_patterns(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(ConfigurationError, "duplicate entries"):
+                load_config(self._write(root, '''
+                    [target]
+                    description = "Default."
+                    include = ["src"]
+
+                    [target.location.work]
+                    path = "projects"
+                    skip = ["archive", "archive"]
+                '''))
+
     def test_target_location_is_not_a_case_and_does_not_supply_selection(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

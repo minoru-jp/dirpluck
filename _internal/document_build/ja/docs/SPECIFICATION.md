@@ -71,7 +71,7 @@ CLI からルート設定ファイルを選ぶ discovery は再帰せず、proce
 
 未知の key は error とする。`[about]` は任意で、定義する場合は空でない `description` だけを持つ。各 Configuration は `[import.<name>]` を0個または1個、Target を0個または1個持てる。Target は名前付きターゲットロケーションを0個以上持てる。Companion と shared pattern も名前付きで複数定義できる。各 Configuration は `[output]` を1個持つ。
 
-`[target.location.<name>]` の `<name>` は CLI の path segment として使用できる空でない名前とし、`.`、`..`、`/`、backslash を含めない。Location は Target の一部であり、Case ごとの location は定義しない。
+`[target]` は selection field と Case / location に加えて optional `skip` を持てる。`[target.location.<name>]` は required `path` と optional `skip` を持つ。`<name>` は CLI の path segment として使用できる空でない名前とし、`.`、`..`、`/`、backslash を含めない。Location と両方の `skip` は Target definition の一部であり、Case ごとの location / skip は定義しない。
 
 Root Configuration 自身に Target / Companion がなくても、import composition 後の実効設定に Target または Companion が少なくとも1個残れば source 構成として有効である。
 
@@ -126,7 +126,7 @@ Chain の最深部を初期値とし、1 layer ずつ外側の definition を重
 - shared include patterns: 同名 pattern は outer layer が配列全体を shadow する。
 - shared exclude patterns: include とは独立した namespace で同じ規則を使う。
 
-Target / Companion の shadow は部分 merge ではない。Target は `description`、base selection、全 Case selection、全 Target location を含む definition 全体を置き換える。Companion も `path`、`description`、base selection、全 Case selection を含む definition 全体を置き換える。
+Target / Companion の shadow は部分 merge ではない。Target は `description`、base selection、全 Case selection、`[target].skip`、全 Target location と各 location の `skip` を含む definition 全体を置き換える。Companion も `path`、`description`、base selection、全 Case selection を含む definition 全体を置き換える。
 
 Selection の shared pattern reference は、source の origin layer ではなく chain 全体を重ね終えた effective namespace で解決する。Outer layer は inner source が参照する名前を提供または override できる。最終 composition 後も存在しない参照名は Configuration error とする。
 
@@ -146,32 +146,39 @@ Target がない実効設定では positional `TARGET` を受理しない。
 
 Target selection の origin Configuration は definition composition と Target location の relative `path` 基準に影響するが、runtime Target directory を Configuration file の配置から自動推定しない。Inner Configuration の Target が effective Target として残っていても、CLI positional argument から Target を選ぶ。
 
-### Target location
+### Target location と skip
 
-`[target.location.<name>]` は `path` だけを持つ。`path` は concrete directory path とし、empty string と glob を拒否する。Relative `path` は effective Target definition を所有する Configuration layer の execution root を基準に解決し、`.` と `..` を使用できる。Absolute `path` は host filesystem 上の directory を直接参照する。解決先は実在 directory でなければならない。
+`[target.location.<name>]` の `path` は concrete directory path とし、empty string と glob を拒否する。Relative `path` は effective Target definition を所有する Configuration layer の execution root を基準に解決し、`.` と `..` を使用できる。Absolute `path` は host filesystem 上の directory を直接参照する。解決先は実在 directory でなければならない。
 
-Target location は Target definition の一部であり、outer Target が inner Target を shadow した場合は location 集合も全体として置き換わる。Case selection は location 集合を変更しない。
+`[target].skip` は cwd を base として選ぶ Target、`[target.location.<name>].skip` はその location を base として選ぶ Target にだけ適用する。`skip` は Target candidate の direct child directory **name** を case-sensitive に照合し、一致した directory は明示 Target reference と location expansion の両方で Target にできない。`skip` は file selection の `exclude` とは独立し、Target directory 内部の選択結果を変更しない。
+
+対応 pattern は `name` (exact)、`name*` (prefix)、`*name` (suffix)、`*name*` (substring) の4形式とする。`*` 単体、path separator、backslash、`foo*bar` のような internal wildcard、`**`、`?`、character class、`!` を拒否する。空配列は有効とする。
+
+Target location と skip は Target definition の一部であり、outer Target が inner Target を shadow した場合は全体として置き換わる。Case selection は location / skip を変更しない。
 
 ### CLI Target reference resolution
 
-各 positional `TARGET` argument は独立して次の順序で解決する。
+各 positional `TARGET` argument は、次の3形式のいずれかだけを受理する。
 
-1. Argument が `./` で始まる場合、location lookup を行わず process cwd を基準とした明示的な cwd-relative Target reference とする。
-2. Argument が `<name>/` という「1個の non-dot segment と末尾 `/` だけ」の形なら、named-location expansion とする。`<name>` と一致する effective Target location がなければ error とし、cwd へ fallback しない。
-3. それ以外で先頭 segment が effective Target location 名と一致し、後続 relative path がある場合、その location directory を基準に後続 path を解決する。
-4. それ以外は argument 全体を process cwd を基準とする relative Target reference として解決する。
+```text
+NAME
+LOCATION/NAME
+LOCATION/
+```
 
-Absolute positional Target reference は受理しない。cwd 外の Target を選ぶ場合は Target location を定義する。
+`NAME` は process cwd 直下の directory を1個選ぶ。`LOCATION/NAME` は named Target location `LOCATION` 直下の directory `NAME` を1個選ぶ。`LOCATION/` は named-location expansion とする。
 
-cwd-relative Target は解決後も process cwd 内、location-relative Target は解決後もその location directory 内に存在しなければならない。`..` や symbolic link によって各 resolution base の外へ出る Target reference は拒否する。解決先は実在 directory でなければならない。
+`LOCATION/NAME` と `LOCATION/` の location は Effective Target に定義済みでなければならず、未定義 location を cwd-relative path として fallback しない。`work/team/project` のような多階層 reference、`./project`、`.`、`..`、absolute positional Target reference、backslash separator は受理しない。cwd 外の Target は Target location で指定する。
 
-Location prefix は locating namespace であり Target 名ではない。`work/project` の `work` が location 名でも、runtime Target は解決された `project` directory である。
+単一 Target 解決では、指定した directory entry が実在 directory であり、symlink 解決後も resolution base の**direct child**でなければならない。Base 外またはより深い階層へ解決する symbolic link は拒否する。
+
+Location prefix は locating namespace であり Target 名ではない。`work/project` の runtime Target は location `work` 自体ではなく、その直下の `project` directory である。
 
 ### Named-location expansion
 
-`<name>/` は、対応する Target location directory の直下にある directory entry を列挙し、それぞれを独立した runtime Target directory として展開する。再帰的な directory 列挙は行わず、regular file は Target にしない。
+`LOCATION/` は、対応する Target location directory の direct child directory entry を列挙し、location の `skip` に一致しないものをそれぞれ独立した runtime Target directory として展開する。再帰的な directory 列挙は行わず、regular file は Target にしない。
 
-Directory symbolic link は解決先が同じ Target location directory 内にある場合だけ Target 候補として扱い、外部へ解決する link は error とする。展開結果が0 directory の場合は error とする。
+Skip 対象 entry は Target candidate として扱わない。残った directory symbolic link は解決先が同じ Target location の direct child directory として有効な場合だけ受理し、boundary 外または深い階層へ解決する link は error とする。展開結果が0 eligible directory の場合は error とする。
 
 複数 positional `TARGET` と location expansion は同じ run で併用でき、最終的に得られた各 runtime Target directoryへ同じ effective Target selection を独立して適用する。
 
@@ -233,7 +240,7 @@ name*     prefix
 
 ルート設定ファイルの execution root は process cwd とする。各 import layer の execution root は、その layer を読み込んだ `[import.<name>].root` の解決結果とする。Execution root は relative Configuration path の resolution base であり、すべての source をその配下へ閉じ込める共通 boundary ではない。
 
-Target location を使わない runtime Target directory は process cwd 内で解決し、その Target directory 自体を selection boundary とする。Target location を使う runtime Target directory はその location directory 内で解決し、解決後の Target directory 自体を selection boundary とする。Location は Target を探す boundary であり、selected file の boundary は常に最終 Target directory である。
+Target location を使わない runtime Target directory は process cwd の direct child、Target location を使う runtime Target directory はその location directory の direct child として解決する。いずれも解決後の Target directory 自体を selection boundary とする。cwd / location は Target candidate を探す base であり、selected file の boundary は常に最終 Target directory である。
 
 Imported `configuration` は import root 内へ限定する。Companion は relative / absolute `path` から任意の実在 directory を解決でき、解決した Companion source directory 自体を selection boundary とする。Output location は source boundary に参加しない。
 
@@ -241,7 +248,7 @@ Imported `configuration` は import root 内へ限定する。Companion は rela
 
 ## 9. Archive planning
 
-cwd-relative Target の selected file は、Target definition の origin layer にかかわらず process cwd から見た filesystem relative path を ZIP 内で保持する。Target location から解決した Target の selected file は、location directory から見た filesystem relative path を ZIP 内で保持する。Logical location 名そのものは archive path へ含めない。たとえば `work/team/project` が location `work` から解決された場合、archive path は `team/project/...` であり `work/team/project/...` ではない。`work/` expansion で得た direct child も同じ規則を使う。
+cwd-relative Target の selected file は `NAME/...`、Target location から解決した Target の selected file も `NAME/...` として ZIP 内へ配置する。Target はどちらも base の direct child なので archive root は Target directory name 1 segment だけになる。Logical location 名は archive path へ含めない。たとえば `work/project` の archive root は `project/` であり `work/project/` ではない。`work/` expansion で得た Target も同じ規則を使う。
 
 Companion source directory がその Companion の relative-path resolution base 内にある場合、selected file は従来どおりその base から見た relative path を ZIP 内で保持する。Absolute path または `..` により source directory がその base 外にある場合は、解決済み source directory の最終 directory name を archive root とし、その下へ source directory からの relative path を配置する。Filesystem root 自体を Companion source として受理しないのは、この portable archive root を持たないためである。Host の absolute path、drive、UNC share 名そのものは archive path へ埋め込まない。
 
@@ -310,11 +317,11 @@ dirpluck は process 間 lock や競合調停を提供しない。同じ output 
 
 ## 11. Dry run
 
-`--dry-run` は通常実行と同じ import chain resolution、cycle detection、definition composition、Target location lookup / expansion、Target directory resolution、Case selection、file selection、archive planning を使うが、output を作成・変更しない。
+`--dry-run` は通常実行と同じ import chain resolution、cycle detection、definition composition、Target location lookup / expansion、Target direct-child resolution と skip filtering、Case selection、file selection、archive planning を使うが、output を作成・変更しない。
 
 不足する必須 `include` は `[missing]`、不足する optional pattern は `[optional missing]` と表示する。最終選択0件は policy に応じて `empty, allowed` または `empty, would error` と表示する。
 
-Multiple import、import cycle、不正 root / configuration path、不正な host absolute path、unknown location expansion、location boundary を外れる Target reference、未解決 shared pattern ref、不正 source path、Case inconsistency などは dry-run でも error とする。Import depth 自体は error / warning にしない。
+Multiple import、import cycle、不正 root / configuration path、不正な host absolute path、unknown Target location、不正な多階層 Target reference、direct-child boundary を外れる Target、未解決 shared pattern ref、不正 source path、Case inconsistency などは dry-run でも error とする。Import depth 自体は error / warning にしない。
 
 ## 12. CLI contract
 

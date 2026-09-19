@@ -10,10 +10,12 @@ description = "Materials prepared for reviewing the current project."
 description = "The project currently under review."
 include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
+skip = ["archive", "tmp-*"]
 if_empty = "allow"
 
 [target.location.work]
 path = "/srv/work"
+skip = ["archive"]
 
 [companion.guidelines]
 path = "review-guidelines"
@@ -35,7 +37,7 @@ exclude = [".git/", ".env*", "*.pem", "*.key"]
 
 This is only an example. See the bundled `TRUST.md` for the trust model and filesystem responsibilities.
 
-The concrete Target directory is selected by a positional CLI `TARGET`. `[target.location.<name>]` maps a logical prefix such as `work/project` to a filesystem directory. `work/` expands every direct child directory of the `work` location and is an error if that location is undefined. Arguments without a location prefix resolve from the current working directory; `./work/project` explicitly bypasses location lookup. A Companion fixes its directory with `path` in the Configuration. Filesystem locations use `/` as the separator, and Target-location / Companion paths may be relative or absolute. Relative paths are resolved from the corresponding Configuration execution root.
+The concrete Target is selected by a positional CLI `TARGET` and is always one direct child directory. `project` selects `cwd/project`; `work/project` selects the direct child `project` of named Target location `work`; and `work/` expands that location's eligible direct children. Undefined locations do not fall back to cwd, and nested or `./` Target references are rejected. `[target].skip` filters cwd Target names, while `[target.location.<name>].skip` filters that location. Skip patterns use exact `name`, prefix `name*`, suffix `*name`, or substring `*name*`, and are separate from selection `exclude`. A Companion fixes its directory with `path` in the Configuration. Filesystem locations use `/` as the separator, and Target-location / Companion paths may be relative or absolute. Relative paths are resolved from the corresponding Configuration execution root.
 
 Selections can use:
 

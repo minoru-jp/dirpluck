@@ -39,7 +39,7 @@ The accepted top-level structures are:
 [output]
 ```
 
-Unknown keys are errors. `[about]` is optional; when present, it contains only a non-empty `description`. Each Configuration may contain zero or one `[import.<name>]` and zero or one Target. A Target may define zero or more named Target locations. Companions and Shared patterns are also named and may have multiple definitions. Every Configuration contains one `[output]`.
+Unknown keys are errors. `[about]` is optional; when present, it contains only a non-empty `description`. Each Configuration may contain zero or one `[import.<name>]` and zero or one Target. A Target may define an optional `skip` array and zero or more named Target locations. Each Target location contains a required `path` and an optional `skip` array. Companions and Shared patterns are also named and may have multiple definitions. Every Configuration contains one `[output]`.
 
 The `<name>` in `[target.location.<name>]` must be a non-empty name usable as one CLI path segment and must not contain `.`, `..`, `/`, or a backslash. Locations belong to the Target and are not defined separately per Case.
 
@@ -96,7 +96,7 @@ For `[about].description`, resolution searches from the outermost layer inward a
 - **Shared include patterns:** an outer definition replaces an inner array with the same name.
 - **Shared exclude patterns:** the same rule applies in a namespace independent of Shared include patterns.
 
-Target and Companion shadowing is not a partial merge. A Target replacement includes its `description`, base selection, every Case selection, and every Target location. A Companion replacement includes its `path`, `description`, base selection, and every Case selection.
+Target and Companion shadowing is not a partial merge. A Target replacement includes its `description`, base selection, Target-level `skip`, every Case selection, and every Target location together with each location's `skip`. A Companion replacement includes its `path`, `description`, base selection, and every Case selection.
 
 Shared-pattern references are resolved against the effective namespace after the full chain has been composed, not only against the source definition's origin layer. An outer layer may therefore provide or override a name referenced by an inner source. A reference still missing after composition is a Configuration error.
 
@@ -116,32 +116,35 @@ When the Effective Configuration has no Target, positional `TARGET` arguments ar
 
 The origin Configuration of the Target selection affects definition composition and the base for relative Target-location paths, but it is never used to infer a runtime Target directory automatically. Even when an inner Configuration's Target survives as the effective Target, the runtime Target is selected from positional CLI arguments.
 
-### Target location
+### Target location and Target eligibility
 
-`[target.location.<name>]` contains only `path`. The value is a concrete directory path; empty strings and globs are rejected. A relative `path` is resolved from the execution root of the Configuration layer that owns the effective Target definition and may use `.` and `..`. An absolute `path` refers directly to a directory on the host filesystem. The resolved location must be an existing directory.
+`[target.location.<name>]` contains required `path` and optional `skip`. The `path` is a concrete directory path; empty strings and globs are rejected. A relative `path` is resolved from the execution root of the Configuration layer that owns the effective Target definition and may use `.` and `..`. An absolute `path` refers directly to a directory on the host filesystem. The resolved location must be an existing directory.
 
-Target locations are part of the Target definition. When an outer Target shadows an inner Target, the full location set is replaced with the rest of the Target definition. Case selection does not change the location set.
+`[target].skip` applies to Target candidates immediately below cwd. `[target.location.<name>].skip` applies only to candidates immediately below that location. A `skip` array may be empty. Its patterns are matched case-sensitively against a direct child directory name, not a path. The accepted forms are exact `name`, prefix `name*`, suffix `*name`, and substring `*name*`. A bare `*`, path separators, internal wildcard forms such as `foo*bar`, `**`, `?`, character classes, `!`, and backslashes are rejected.
+
+A directory whose name matches the applicable `skip` rules is not eligible to become a Target. This applies both to an explicitly named Target and to named-location expansion. `skip` does not alter file selection inside an eligible Target; that is the role of selection `exclude`.
+
+Target locations are part of the Target definition. When an outer Target shadows an inner Target, the Target-level `skip`, full location set, and every location's `skip` are replaced with the rest of the Target definition. Case selection does not change Target eligibility or the location set.
 
 ### CLI Target-reference resolution
 
-Each positional `TARGET` argument is resolved independently in this order:
+Each positional `TARGET` argument must use exactly one of these forms:
 
-1. If the argument begins with `./`, location lookup is skipped and the argument is treated as an explicitly cwd-relative Target reference.
-2. If the argument has exactly the form `<name>/`, meaning one non-dot segment followed by a trailing `/`, it is a named-location expansion. If the Effective Target has no location named `<name>`, resolution fails and does not fall back to cwd.
-3. Otherwise, if the first segment matches an Effective Target location name and a relative path follows it, that remaining path is resolved from the location directory.
-4. Otherwise, the entire argument is resolved relative to the process working directory.
+1. `NAME` selects the direct child directory `cwd/NAME` and applies `[target].skip`.
+2. `LOCATION/NAME` selects the direct child `NAME` of the named Target location and applies that location's `skip`. `LOCATION` must exist; there is no fallback to cwd.
+3. `LOCATION/` expands the eligible direct child directories of that named Target location.
 
-Absolute positional Target references are not accepted. To select a Target outside cwd, define a Target location.
+`NAME` and the `NAME` part of `LOCATION/NAME` each identify exactly one direct child directory. Multi-level Target references such as `team/project`, `work/team/project`, explicit-dot forms such as `./project`, absolute positional Target references, backslashes, empty Target names, and `.` / `..` Target names are rejected.
 
-A cwd-relative Target must remain inside the process working directory after resolution. A location-relative Target must remain inside its location directory. A Target reference that escapes its resolution base through `..` or a symbolic link is rejected. The resolved Target must be an existing directory.
+After resolution, the Target must be an existing directory whose real path is exactly one direct child below its resolution base. A symlink or other resolution that lands outside the base or below more than one directory level is rejected. The resolved Target directory becomes the selection boundary for files inside that Target.
 
-A location prefix is a locating namespace, not a Target name. If `work/project` uses a location named `work`, the runtime Target is the resolved `project` directory.
+A location prefix is a locating namespace, not part of the Target's archive path. If `work/project` uses a location named `work`, the runtime Target is the direct child `project`.
 
 ### Named-location expansion
 
-`<name>/` enumerates the directory entries immediately below the corresponding Target location and expands each directory into an independent runtime Target. Enumeration is not recursive, and regular files are not Targets.
+`LOCATION/` enumerates entries immediately below the corresponding Target location, removes directory names matched by that location's `skip`, and expands each remaining direct child directory into an independent runtime Target. Enumeration is not recursive, and regular files are not Targets.
 
-A directory symlink is eligible only when it resolves inside the same Target location; a link resolving outside the location is an error. An expansion that yields no Target directories is an error.
+An eligible directory symlink must resolve to exactly one direct child inside the same Target location; a link resolving outside the location or below another directory level is an error. Skipped entries are not Target candidates. An expansion that yields no eligible direct child directories is an error.
 
 Multiple positional `TARGET` arguments and location expansions may be combined in one run. The same Effective Target selection is applied independently to every runtime Target directory produced by resolution.
 
@@ -203,7 +206,7 @@ A bare `*`, `*/`, internal wildcards such as `foo*bar`, `**`, `?`, character cla
 
 The Root Configuration execution root is the process working directory. The execution root of each imported layer is the resolved `[import.<name>].root` that loaded that layer. An execution root is a resolution base for relative Configuration paths, not a universal boundary that constrains every source below it.
 
-A runtime Target that does not use a Target location is resolved inside the process working directory, and the resolved Target directory becomes its selection boundary. A runtime Target that uses a Target location is resolved inside that location directory, and the resolved Target directory again becomes its selection boundary. A location is therefore a boundary for locating Targets; the final Target directory is the boundary for selected files.
+A runtime Target without a named location is resolved as one direct child of the process working directory. A runtime Target using a Target location is resolved as one direct child of that location directory. The applicable `skip` rules are evaluated at this Target-eligibility layer. In both cases the final Target directory becomes the selection boundary for files inside the Target.
 
 Imported `configuration` remains constrained to the import root. A Companion may resolve any existing directory from a relative or absolute `path`, and the resolved Companion source directory itself becomes its selection boundary. Output locations do not participate in source boundaries.
 
@@ -211,7 +214,7 @@ Include resolution and selected files for each source are constrained to that so
 
 ## 9. Archive planning
 
-For a cwd-relative Target, selected files retain their filesystem-relative paths from the process working directory inside the ZIP, regardless of the layer where the Target definition originated. For a Target resolved through a Target location, selected files retain their filesystem-relative paths from the location directory. The logical location name itself is not included in the archive path. For example, if `work/team/project` resolves through location `work`, the archive path is `team/project/...`, not `work/team/project/...`. Direct children produced by `work/` expansion use the same rule.
+Every Target is one direct child directory of its resolution base, so its archive root is that Target directory name. For example, both cwd Target `project` and location Target `work/project` use `project/...` inside the ZIP. The logical location name is never included in the archive path. Direct children produced by `work/` expansion use the same rule.
 
 When a Companion source directory lies inside the resolution base for that Companion's relative path, selected files retain their paths relative to that base as before. When an absolute path or `..` resolves the source directory outside that base, the final directory name of the resolved source becomes the archive root, and selected files are placed below it using paths relative to the source directory. The filesystem root itself is not accepted as a Companion source because it has no portable archive root. The host absolute path, drive, or UNC share name is never embedded in the archive path.
 

@@ -9,8 +9,8 @@ dirpluck --version
 ```
 
 - Supply one or more positional `TARGET` arguments when the Effective Configuration has a Target. Supply none when it has no Target.
-- `project` resolves as `cwd/project`; `work/project` resolves from the named `work` location when that location exists. `./work/project` explicitly requests cwd-relative resolution.
-- `work/` expands all direct child directories of the named `work` location into Targets. If that location is undefined, the command fails instead of falling back to cwd.
+- `project` selects the direct child `cwd/project`; `work/project` selects the direct child `project` of named Target location `work`. An undefined location is an error; nested and `./` Target references are rejected.
+- `work/` expands all eligible direct child directories of the named `work` location into Targets, applying that location's `skip` rules. If the location is undefined or no eligible Targets remain, the command fails.
 - `--config NAME` selects a Configuration filename from the current working directory or `./dirpluck/`; `.toml` may be omitted.
 - `--case NAME` selects one named Case.
 - `--dry-run` prints the planned ZIP contents without writing an archive.
@@ -19,7 +19,7 @@ dirpluck --version
 - `--configs` lists Configurations discoverable from the current working directory and exits.
 
 ```console
-dirpluck projects/example --dry-run
+dirpluck example --dry-run
 dirpluck work/example --case audit
 dirpluck work/
 dirpluck --config snapshot

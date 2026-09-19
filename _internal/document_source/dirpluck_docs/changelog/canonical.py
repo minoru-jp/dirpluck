@@ -10,6 +10,22 @@ class CHANGELOG:
     r'''{{TERM_1}} のリリースごとの変更履歴。'''
     vocabulary_refs @= (terms.TERM_1,)
 
+    @release("0.8.0")
+    class RELEASE_13:
+        r'''Target discovery を direct-child model に単純化し、cwd / Target location ごとに Target candidate directory を `skip` できるようにする。'''
+
+        @change(CHANGED)
+        class CHANGE_1:
+            r'''CLI Target reference を `NAME`、`LOCATION/NAME`、`LOCATION/` の3形式へ限定する。cwd Target と location Target はそれぞれ resolution base の直下 directory だけを対象とし、`work/team/project` のような多階層 Target、`.`、`./project` を受理しない。`LOCATION/NAME` の location が未定義の場合は cwd-relative path へ fallback せず error とする。これにより Target の内部 directory が別の Target として再帰的に解決される状態をなくす。'''
+
+        @change(ADDED)
+        class CHANGE_2:
+            r'''`[target].skip` と `[target.location.<name>].skip` を追加する。前者は cwd 直下、後者は各 location 直下の Target candidate directory name に適用し、explicit Target reference と `LOCATION/` expansion の両方から一致 directory を除外する。Pattern は case-sensitive な exact (`name`)、prefix (`name*`)、suffix (`*name`)、substring (`*name*`) を受理し、file selection の `exclude` とは独立させる。'''
+
+        @change(CHANGED)
+        class CHANGE_3:
+            r'''Target の archive root は cwd / location のどちらから選んだ場合も direct child directory name 1 segment とし、logical location 名を archive path へ含めない。Named-location expansion は `skip` 適用後の eligible direct child directory だけを展開し、0件なら error とする。'''
+
     @release("0.7.0")
     class RELEASE_12:
         r'''Target を Configuration workspace から独立して配置できるようにし、named Target location と logical CLI reference による Target resolution を導入する。'''

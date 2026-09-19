@@ -40,10 +40,12 @@ description = "Materials prepared for reviewing the current project."
 description = "The project currently under review."
 include_if_exists = ["README.md", "src", "tests"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
+skip = ["archive", "tmp-*"]
 if_empty = "allow"
 
 [target.location.work]
 path = "/srv/work"
+skip = ["archive"]
 
 [companion.guidelines]
 path = "review-guidelines"
@@ -65,7 +67,7 @@ exclude = [".git/", ".env*", "*.pem", "*.key"]
 
 これは一例です。信頼境界と filesystem 操作の責任範囲は、同梱の `TRUST.md` を参照してください。
 
-Target の実 directory は CLI の positional `TARGET` から選びます。`[target.location.<name>]` を使うと、`name/project` のような論理 prefix を任意の filesystem directory へ対応付けられます。`name/` はその location 直下の directory をすべて Target として展開し、未定義 location では error です。Location prefix を使わない argument は cwd から解決し、`./name/project` は location lookup を避けて cwd 相対を明示します。Companion は `path` を Configuration に固定します。Configuration の filesystem location は `/` を separator として書き、Target location / Companion `path` は relative / absolute のどちらでも指定できます。Relative path は対応する Configuration execution root を基準に解決します。
+Target の実 directory は CLI positional `TARGET` から選びます。Target candidate は cwd または `[target.location.<name>]` の `path` の直下だけです。`project` は `cwd/project`、`work/project` は `work` location 直下の `project`、`work/` は `work` location 直下の eligible directory をすべて Target として展開します。多階層 Target reference と未定義 location は error です。`[target].skip` は cwd Target、`[target.location.<name>].skip` はその location の Target candidate directory 名を exact / prefix / suffix / substring pattern で除外し、明示指定にも適用します。Selection の `exclude` とは別です。Companion は `path` を Configuration に固定します。Configuration の filesystem location は `/` を separator として書き、Target location / Companion `path` は relative / absolute のどちらでも指定できます。Relative path は対応する Configuration execution root を基準に解決します。
 
 Selection では次を使えます。
 

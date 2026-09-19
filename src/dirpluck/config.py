@@ -131,11 +131,21 @@ class Selection:
 
 
 @dataclass(frozen=True)
+class TargetSkipPattern:
+    """One simple case-sensitive Target-directory name filter."""
+
+    raw: str
+    value: str
+    match: str
+
+
+@dataclass(frozen=True)
 class TargetLocation:
     """One named filesystem base used to locate runtime Targets."""
 
     name: str
     path: str
+    skip: tuple[TargetSkipPattern, ...]
 
 
 @dataclass(frozen=True)
@@ -145,6 +155,7 @@ class Target:
     default: Selection | None
     cases: Mapping[str, Selection]
     locations: Mapping[str, TargetLocation]
+    skip: tuple[TargetSkipPattern, ...]
 
 
 @dataclass(frozen=True)
@@ -337,6 +348,52 @@ def _validated_exclusions(
         _string_list(value, where, allow_empty=allow_empty) if value is not None else ()
     )
     return tuple(_parse_exclusion_pattern(raw, where) for raw in raw_patterns)
+
+
+def _parse_target_skip_pattern(raw: str, where: str) -> TargetSkipPattern:
+    if not raw:
+        raise ConfigurationError(f"{where}: skip pattern must not be empty")
+    if "/" in raw or "\\" in raw:
+        raise ConfigurationError(
+            f"{where}: skip patterns match direct child directory names, not paths: {raw!r}"
+        )
+    if any(char in raw for char in "?[]!"):
+        raise ConfigurationError(
+            f"{where}: only a leading and/or trailing '*' is supported: {raw!r}"
+        )
+
+    star_count = raw.count("*")
+    if star_count == 0:
+        match = "exact"
+        value = raw
+    elif star_count == 1 and raw.endswith("*"):
+        match = "prefix"
+        value = raw[:-1]
+    elif star_count == 1 and raw.startswith("*"):
+        match = "suffix"
+        value = raw[1:]
+    elif star_count == 2 and raw.startswith("*") and raw.endswith("*"):
+        match = "contains"
+        value = raw[1:-1]
+    else:
+        raise ConfigurationError(
+            f"{where}: '*' may appear only at the beginning, the end, or both: {raw!r}"
+        )
+
+    if not value:
+        raise ConfigurationError(f"{where}: '*' is not a valid skip pattern")
+    return TargetSkipPattern(raw=raw, value=value, match=match)
+
+
+def _validated_target_skips(
+    value: object,
+    where: str,
+) -> tuple[TargetSkipPattern, ...]:
+    raw_patterns = _string_list(value, where, allow_empty=True) if value is not None else ()
+    patterns = tuple(_parse_target_skip_pattern(raw, where) for raw in raw_patterns)
+    if len({pattern.raw for pattern in patterns}) != len(patterns):
+        raise ConfigurationError(f"{where}: duplicate skip patterns are not allowed")
+    return patterns
 
 
 def _parse_shared_pattern_table(
@@ -905,12 +962,13 @@ def _parse_target_locations(
         location_where = f"{where}.{name}"
         if not isinstance(raw_location, dict):
             raise ConfigurationError(f"{location_where}: expected a table")
-        _require_only_keys(raw_location, {"path"}, location_where)
+        _require_only_keys(raw_location, {"path", "skip"}, location_where)
         raw_path = raw_location.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{location_where}.path: expected a string")
         path = _validate_fixed_path(raw_path, f"{location_where}.path")
-        locations[name] = TargetLocation(name=name, path=path)
+        skip = _validated_target_skips(raw_location.get("skip"), f"{location_where}.skip")
+        locations[name] = TargetLocation(name=name, path=path, skip=skip)
     return MappingProxyType(locations)
 
 
@@ -936,6 +994,7 @@ def _parse_target(
             "if_empty",
             "case",
             "location",
+            "skip",
         },
         where,
     )
@@ -965,12 +1024,13 @@ def _parse_target(
     locations = _parse_target_locations(
         value.get("location"), f"{where}.location"
     )
+    skip = _validated_target_skips(value.get("skip"), f"{where}.skip")
 
     if default is None and not cases:
         raise ConfigurationError(
             f"{where}: define the default target directly or at least one [target.case.<name>]"
         )
-    return Target(default=default, cases=cases, locations=locations)
+    return Target(default=default, cases=cases, locations=locations, skip=skip)
 
 
 def _parse_companions(

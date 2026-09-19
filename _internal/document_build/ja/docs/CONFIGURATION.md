@@ -81,7 +81,7 @@ Absolute path はその場所を直接参照するため、Configuration の por
 
 ## Target
 
-Target は、実行時に選ぶ source directory へ同じ選択規則を適用するときに使います。
+Target は、実行時に選ぶ source directory へ同じ選択規則を適用するときに使います。Target candidate は cwd または named Target location の**直下の directory**です。
 
 ```toml
 [target]
@@ -89,42 +89,52 @@ description = "The submission currently being reviewed."
 include = ["documents", "metadata.json"]
 include_if_exists = ["attachments"]
 exclude = [".git/", "__pycache__/", "*.pyc"]
+skip = ["archive", "tmp-*", "*-old", "*scratch*"]
 ```
 
-Target 自体には source path を固定しません。Locating namespace を使わない CLI argument は従来どおり cwd から解決します。
+Target 自体には source path を固定しません。Location を使わない CLI argument は cwd 直下の1 directory 名です。
 
 ```console
-dirpluck submissions/acme submissions/contoso
+dirpluck acme contoso
 ```
+
+`skip` は Target candidate directory の**名前**を照合し、該当 directory を Target として扱わないための field です。`[target].skip` は cwd から選ぶ Target にだけ適用します。明示指定した Target にも適用されます。Selection の `exclude` とは別で、Target 内部の file selection は変更しません。
+
+対応する `skip` pattern は case-sensitive で、既存 exclude の名前 matching と同じ4形式です。
+
+```text
+name      exact
+name*     prefix
+*name     suffix
+*name*    substring
+```
+
+Path separator、`*` 単体、`foo*bar` のような内部 wildcard、`?`、`[]`、`!` は使いません。
 
 Configuration workspace と Target の実体を分離したい場合は、Target の下にターゲットロケーションを定義します。
 
 ```toml
 [target.location.work]
 path = "/srv/work"
+skip = ["archive", "tmp-*"]
 
 [target.location.oss]
 path = "../external-projects"
 ```
 
-Location 名は CLI argument の先頭 segment として使います。
+CLI Target reference は次の3形です。
 
 ```console
+dirpluck acme
 dirpluck work/acme
-dirpluck oss/example
-```
-
-`work/acme` は `work` location の `path` を基準に `acme` を探します。先頭 segment に一致する location がなければ argument 全体を cwd 相対として解決します。Location 名と cwd 上の directory 名が衝突する場合は `./work/acme` のように `./` を付けると location lookup を行わず cwd 相対を明示できます。
-
-Location 直下の directory をすべて Target として使う場合は、location 名だけに末尾 `/` を付けます。
-
-```console
 dirpluck work/
 ```
 
-これは `work` location 直下の directory をそれぞれ独立した Target として展開します。再帰的には列挙しません。`work/` のような location 展開で指定した名前が定義されていない場合は cwd へ fallback せず error です。
+`acme` は `cwd/acme`、`work/acme` は `work` location 直下の `acme` を選びます。`work/` は `work` location 直下の directory をそれぞれ独立した Target として展開し、`[target.location.work].skip` に一致する directory は展開しません。再帰的には列挙しません。
 
-Relative location `path` はその Target definition を所有する Configuration layer の execution root を基準に解決し、absolute `path` は host filesystem 上の場所を直接参照します。Target reference の解決、location boundary、archive path の正確な規則は `SPECIFICATION.md` を参照してください。
+`work/team/acme` のような多階層 Target reference は受理しません。`work/acme` の `work` が未定義の場合も cwd へ fallback せず error です。cwd 側で `work` directory 自体を Target にしたい場合は単に `work` と指定します。
+
+Relative location `path` はその Target definition を所有する Configuration layer の execution root を基準に解決し、absolute `path` は host filesystem 上の場所を直接参照します。Target reference、`skip`、location boundary、archive path の正確な規則は `SPECIFICATION.md` を参照してください。
 
 Target がない Configuration では positional Target argument は使いません。
 

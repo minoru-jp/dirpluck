@@ -19,6 +19,7 @@ from .config import (
     Selection,
     SharedPatterns,
     Target,
+    TargetSkipPattern,
     _materialize_selection,
     load_config,
 )
@@ -153,13 +154,37 @@ def _is_within(path: Path, root: Path) -> bool:
         return False
 
 
+def _target_name_matches(name: str, pattern: TargetSkipPattern) -> bool:
+    if pattern.match == "exact":
+        return name == pattern.value
+    if pattern.match == "prefix":
+        return name.startswith(pattern.value)
+    if pattern.match == "suffix":
+        return name.endswith(pattern.value)
+    if pattern.match == "contains":
+        return pattern.value in name
+    raise AssertionError(f"unknown Target skip match kind: {pattern.match}")
+
+
+def _target_is_skipped(name: str, patterns: tuple[TargetSkipPattern, ...]) -> bool:
+    return any(_target_name_matches(name, pattern) for pattern in patterns)
+
+
+def _validate_target_name(name: str, *, label: str) -> None:
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        raise SelectionError(
+            f"{label} must name one direct child directory: {name!r}"
+        )
+
+
 def _resolve_target_directory(
-    reference: str,
+    name: str,
     base: Path,
     *,
     label: str,
 ) -> tuple[Path, str]:
-    candidate = base / Path(reference)
+    _validate_target_name(name, label=label)
+    candidate = base / name
     try:
         resolved = candidate.resolve(strict=True)
     except FileNotFoundError as exc:
@@ -175,13 +200,10 @@ def _resolve_target_directory(
             f"{label} resolves outside its Target resolution base: {resolved}"
         ) from exc
 
-    if relative == Path("."):
-        archive_root = resolved.name
-        if not archive_root:
-            raise SelectionError(
-                f"{label} cannot use the filesystem root as the target directory"
-            )
-        return resolved, archive_root
+    if len(relative.parts) != 1:
+        raise SelectionError(
+            f"{label} must resolve to a direct child directory of its Target resolution base: {resolved}"
+        )
     return resolved, relative.as_posix()
 
 
@@ -220,10 +242,13 @@ def _location_expansion_name(reference: str) -> str | None:
 def _expand_target_location(
     name: str,
     location_root: Path,
+    skip: tuple[TargetSkipPattern, ...],
 ) -> tuple[tuple[Path, str], ...]:
     resolved_root = location_root.resolve()
     targets: list[tuple[Path, str]] = []
     for entry in sorted(location_root.iterdir(), key=lambda item: item.name):
+        if _target_is_skipped(entry.name, skip):
+            continue
         if entry.is_symlink():
             try:
                 resolved_entry = entry.resolve(strict=True)
@@ -246,7 +271,7 @@ def _expand_target_location(
 
     if not targets:
         raise SelectionError(
-            f"target location {name!r} contains no direct child directories"
+            f"target location {name!r} contains no eligible direct child directories"
         )
     return tuple(targets)
 
@@ -269,10 +294,6 @@ def _resolve_target_reference(
             f"{label} must be relative; use a Target location for Targets outside cwd: {reference!r}"
         )
 
-    if reference.startswith("./"):
-        relative = reference[2:] or "."
-        return (_resolve_target_directory(relative, cwd, label=label),)
-
     expansion = _location_expansion_name(reference)
     if expansion is not None:
         location = binding.target.locations.get(expansion)
@@ -283,27 +304,42 @@ def _resolve_target_reference(
             binding.layer.execution_root,
             name=expansion,
         )
-        return _expand_target_location(expansion, location_root)
+        return _expand_target_location(expansion, location_root, location.skip)
 
-    parts = PurePosixPath(reference).parts
-    if len(parts) >= 2:
-        location = binding.target.locations.get(parts[0])
-        if location is not None:
-            location_root = _resolve_target_location(
-                location.path,
-                binding.layer.execution_root,
-                name=parts[0],
-            )
-            relative = PurePosixPath(*parts[1:]).as_posix()
-            return (
-                _resolve_target_directory(
-                    relative,
-                    location_root,
-                    label=label,
-                ),
-            )
+    if reference.endswith("/"):
+        raise SelectionError(
+            f"{label} must use NAME, LOCATION/NAME, or LOCATION/: {reference!r}"
+        )
 
-    return (_resolve_target_directory(reference, cwd, label=label),)
+    parts = reference.split("/")
+    if len(parts) == 1:
+        name = parts[0]
+        _validate_target_name(name, label=label)
+        if _target_is_skipped(name, binding.target.skip):
+            raise SelectionError(f"{label} is skipped by [target].skip: {name!r}")
+        return (_resolve_target_directory(name, cwd, label=label),)
+
+    if len(parts) == 2 and all(parts):
+        location_name, name = parts
+        _validate_target_name(location_name, label="target location name")
+        _validate_target_name(name, label=label)
+        location = binding.target.locations.get(location_name)
+        if location is None:
+            raise SelectionError(f"target location {location_name!r} is not defined")
+        if _target_is_skipped(name, location.skip):
+            raise SelectionError(
+                f"{label} is skipped by [target.location.{location_name}].skip: {name!r}"
+            )
+        location_root = _resolve_target_location(
+            location.path,
+            binding.layer.execution_root,
+            name=location_name,
+        )
+        return (_resolve_target_directory(name, location_root, label=label),)
+
+    raise SelectionError(
+        f"{label} must use NAME, LOCATION/NAME, or LOCATION/: {reference!r}"
+    )
 
 
 def _resolve_companion_directory(

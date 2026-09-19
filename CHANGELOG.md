@@ -2,6 +2,20 @@
 
 Release history for dirpluck.
 
+## 0.8.0
+
+Simplify Target discovery to a direct-child model and add explicit rules for directories that must not become Targets.
+
+### Added
+
+- Add optional `[target].skip` and `[target.location.<name>].skip`. Skip patterns operate on direct child directory names before Target selection, using case-sensitive exact (`name`), prefix (`name*`), suffix (`*name`), or substring (`*name*`) matching. They are distinct from selection `exclude`, which operates inside an already selected Target. Explicit Target references and location expansion both honor the applicable `skip` rules.
+
+### Changed
+
+- Limit positional Target references to `NAME`, `LOCATION/NAME`, and `LOCATION/`. A Target is always exactly one direct child of cwd or of a named Target location. Multi-level Target references, `.` / `..`, `./` forms, and absolute positional Target paths are rejected. `LOCATION/NAME` requires a defined location and never falls back to cwd.
+- Apply `LOCATION/` expansion only to eligible direct child directories after that location's `skip` rules. Expansion remains non-recursive and now fails when no eligible direct child Targets remain.
+- Make every Target archive root exactly the selected direct child directory name. Logical Target-location names remain absent from Archive paths.
+
 ## 0.7.0
 
 Allow Targets to live independently from the Configuration workspace by introducing named Target locations and logical CLI Target references.

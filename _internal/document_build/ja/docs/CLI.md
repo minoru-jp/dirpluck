@@ -43,19 +43,19 @@ dirpluck --version
 選択した実効設定に対象がある場合は、1個以上の `TARGET` argument を指定します。Target がない場合は positional argument を指定しません。
 
 ```console
-dirpluck projects/example
-dirpluck projects/a projects/b
+dirpluck example
+dirpluck project-a project-b
 dirpluck --config snapshot
 ```
 
-Positional `TARGET` は常に raw filesystem path とは限りません。Effective Target に named location があり、argument の先頭 segment がその名前と一致する場合は、その location を基準に Target directory を解決します。Location を使わない argument は cwd から解決します。Target definition が import 先から来た場合も、この runtime resolution を使います。
+Positional `TARGET` は `NAME`、`LOCATION/NAME`、`LOCATION/` の3形です。Location を使わない `NAME` は cwd 直下、`LOCATION/NAME` は named location 直下の1 directory を選びます。Target definition が import 先から来た場合も、この runtime resolution を使います。
 
 ## Configuration を選ぶ
 
 既定では `dirpluck.toml` を使用します。別名の Configuration は `--config NAME` で選びます。`.toml` は省略できます。
 
 ```console
-dirpluck projects/example --config review
+dirpluck example --config review
 ```
 
 ルート設定ファイルの discovery は cwd と `./dirpluck/` の直下だけを対象にします。同じ filename が両方にある場合は ambiguous として扱います。
@@ -72,32 +72,27 @@ dirpluck --configs
 
 Target がある Configuration では、各 positional `TARGET` から解決した source directory へ同じ Target selection が独立して適用されます。
 
-Location を使わない argument は cwd から解決します。
+cwd から選ぶ場合は直下の directory 名を指定します。
 
 ```console
-dirpluck submissions/acme submissions/contoso
+dirpluck acme contoso
 ```
 
-`[target.location.<name>]` が定義されている場合、先頭 segment が location 名と一致する argument はその location から解決します。
+Named location から選ぶ場合は `<location>/<name>` を使います。
 
 ```console
 dirpluck work/acme
-dirpluck work/team/project
 ```
 
-Location 名と cwd 上の directory 名が衝突する場合は `./` で cwd 相対を明示できます。
+`work/acme` は `work` location 直下の `acme` だけを Target とします。`work` location が未定義なら error で、`cwd/work/acme` へ fallback しません。`work/team/acme` のような多階層 reference、`./acme`、absolute path は受理しません。
 
-```console
-dirpluck ./work/acme
-```
-
-Location 直下の directory をすべて Target にするには、location 名だけを末尾 `/` 付きで指定します。
+Location 直下の eligible directory をすべて Target にするには、location 名だけを末尾 `/` 付きで指定します。
 
 ```console
 dirpluck work/
 ```
 
-`work/` は `work` location 直下の directory だけを展開します。再帰列挙は行いません。この形は明示的な location expansion なので、`work` location が未定義なら cwd へ fallback せず error です。
+`work/` は direct child directory だけを展開し、再帰列挙しません。`[target.location.work].skip` に一致する directory は Target candidate から除きます。`[target].skip` は cwd Target に同じ役割を持ちます。`skip` は明示指定にも適用され、selection の `exclude` とは別です。
 
 Target がない Configuration は Companion など固定 source だけで実行できます。
 
@@ -105,14 +100,14 @@ Target がない Configuration は Companion など固定 source だけで実行
 dirpluck --config project-snapshot
 ```
 
-Location path の定義方法は `CONFIGURATION.md`、location lookup、boundary、archive path の厳密な規則は `SPECIFICATION.md` を参照してください。
+Location path と `skip` の定義方法は `CONFIGURATION.md`、Target reference、boundary、archive path の厳密な規則は `SPECIFICATION.md` を参照してください。
 
 ## Case
 
 名前付きケースを選ぶには `--case NAME` を使います。
 
 ```console
-dirpluck projects/example --case audit
+dirpluck example --case audit
 ```
 
 1回の実行で指定する Case は1個です。Target と Companion が Case をどう選ぶかは `SPECIFICATION.md` に定義しています。
@@ -122,7 +117,7 @@ dirpluck projects/example --case audit
 `--dry-run` は archive file を作らず、解決した ZIP contents を tree として表示します。
 
 ```console
-dirpluck projects/example --dry-run
+dirpluck example --dry-run
 ```
 
 Configuration や workspace を変更した後、実際に archive を書き込む前の確認に使えます。通常実行との差分は書き込みだけで、planning に使う主要な解決処理は共通です。正確な dry-run semantics は `SPECIFICATION.md` を参照してください。
@@ -134,7 +129,7 @@ Configuration や workspace を変更した後、実際に archive を書き込�
 Source filesystem path も索引へ含めたい場合だけ `--paths` を指定します。
 
 ```console
-dirpluck projects/example --paths
+dirpluck example --paths
 ```
 
 `--paths` は各索引行に解決済み source directory を追加します。Absolute path を含むローカル filesystem 情報を archive に残し得るため、外部へ配布する archive では必要性を確認して使用してください。
