@@ -26,6 +26,7 @@ def check_wheel(path: Path) -> None:
         expected_docs = {
             "dirpluck/docs/CLI.md": ROOT / "src" / "dirpluck" / "docs" / "CLI.md",
             "dirpluck/docs/CONFIGURATION.md": ROOT / "src" / "dirpluck" / "docs" / "CONFIGURATION.md",
+            "dirpluck/docs/PYTHON_API.md": ROOT / "src" / "dirpluck" / "docs" / "PYTHON_API.md",
             "dirpluck/docs/TRUST.md": ROOT / "src" / "dirpluck" / "docs" / "TRUST.md",
         }
         required = {"dirpluck/__init__.py", *expected_docs}
@@ -33,12 +34,12 @@ def check_wheel(path: Path) -> None:
         if missing:
             fail(f"wheel is missing required files: {missing}")
 
-        forbidden_prefixes = ("tests/", "tools/", "_internal/", ".github/")
+        forbidden_prefixes = ("tests/", "tools/", "devdocs/", ".github/")
         forbidden = sorted(
             name for name in names if name.startswith(forbidden_prefixes)
         )
         if forbidden:
-            fail(f"wheel contains repository-only files: {forbidden[:10]}")
+            fail(f"wheel contains files outside the wheel distribution boundary: {forbidden[:10]}")
 
         for archive_name, source in expected_docs.items():
             if archive.read(archive_name) != source.read_bytes():
@@ -81,6 +82,7 @@ def check_sdist(path: Path) -> None:
             "CHANGELOG.md",
             "docs/CLI.md",
             "docs/CONFIGURATION.md",
+            "docs/PYTHON_API.md",
             "docs/SPECIFICATION.md",
             "docs/TRUST.md",
         }
@@ -92,7 +94,7 @@ def check_sdist(path: Path) -> None:
         }
         required |= repository_files_under("tests")
         required |= repository_files_under("tools")
-        required |= repository_files_under("_internal")
+        required |= repository_files_under("devdocs")
         required |= repository_files_under("docs")
         missing = sorted(required - names)
         if missing:

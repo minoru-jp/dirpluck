@@ -1,3 +1,8 @@
-"""dirpluck CLI package."""
+"""Public Python API for dirpluck."""
 
-__version__ = "0.8.0"
+from ._application import RunResult, run
+from .errors import DirpluckError
+
+__version__ = "0.9.0"
+
+__all__ = ["DirpluckError", "RunResult", "__version__", "run"]

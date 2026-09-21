@@ -1,85 +1,168 @@
 # dirpluck
 
-`dirpluck` is a CLI tool for recording a recurring decision, "which files belong together?", in TOML and building a ZIP archive from the same declared intent later.
+`dirpluck` is a tool that records decisions about which files belong together in TOML and builds a ZIP Archive from that declaration. The CLI is the primary entry point, and the same invocation model is also available through a small Python API.
 
-Rather than copying everything around a workspace like a backup, it is intended to package only the material needed for an explicit purpose such as review, handoff, research, recurring work, or a working context shared with an LLM.
+Rather than copying everything around it like a backup, it is intended to repeatedly gather only the files needed for a particular purpose, such as review, handoff, research, recurring work, or a working context handled with an LLM.
 
 ## Where it fits
 
-### Gather fixed material from several locations
+### Gather the material you need into one Archive
 
-When files for one purpose live in different directories, they can be fixed in a Configuration as Companions. A Companion source directory does not need to live near the Configuration and may directly reference another filesystem location.
+Material spread across multiple directories can be collected into one Archive when it serves the same purpose.
 
-For example, a review package can combine proposal material, research results, and legal references, or a recurring workflow can gather the same kinds of material each time. A Configuration may consist entirely of Companions when nothing needs to vary at runtime.
+For example, a review package might bring together:
 
-### Attach stable references to a changing subject
+- the source of the project being reviewed
+- review guidelines
+- reference material
 
-Use a Target when the same selection rules should be applied to different projects, submissions, cases, or similar subjects. The Target selection stays in the Configuration while the concrete source directory is selected when `dirpluck` runs.
+You can gather only fixed material, or attach fixed material to a Target selected at runtime.
 
-By default, Targets are direct child directories of the current working directory. When the Configuration workspace and the Target material should live in different places, define a named Target location and select a direct child through a logical reference such as `work/project`. `work/` selects every eligible direct child directory of that location as a Target. Targets are deliberately one level deep: directories inside a Target are not themselves Target candidates.
+### Apply the same extraction to different Targets
 
-Stable guidelines, templates, and reference material can remain as Companions in the same archive. This lets the Configuration workspace, runtime Targets, and fixed reference material live independently.
+If you record decisions such as "collect README, `src/`, and `tests/`" or "exclude secrets and generated files" in a Configuration, you can reuse the same rules while changing the project being handled.
 
-### Reuse an extraction intent declared elsewhere
+The Scope from which a Target is selected is defined separately, so the Configuration and the actual project tree do not need to live in the same place.
 
-When a related project already has a Configuration, a Configuration import can use it as an inner layer instead of copying the same definitions into the parent Configuration.
+## Why keep it declarative
 
-Exact import ordering, shadowing, and filesystem-boundary rules live in [docs/SPECIFICATION.md](docs/SPECIFICATION.md). For the authoring forms needed to write a Configuration, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+For a one-off task, creating a ZIP by hand may be simpler.
 
-## Why keep the intent as a declaration
+`dirpluck` is useful when the same kind of decision needs to be made again later.
 
-For a one-off archive, creating a ZIP by hand may be simpler. `dirpluck` is useful when the same kind of judgment needs to be made again.
+A Configuration lets you record:
 
-A Configuration records what is required, what is optional, what should be excluded, and which fixed references belong with the package. That intent does not have to be reconstructed from shell history, conversation history, or memory. `--dry-run` can show how the current filesystem resolves before anything is written.
+- what must always be included
+- what should be included only when present
+- what should be excluded
+- which fixed material should be collected alongside the Target
 
-For LLM-assisted work, `dirpluck` prepares the material on the local filesystem as an Archive. That Archive can be uploaded to a non-local conversational LLM or placed into the workspace used by a local agent. This workflow does not assume that the LLM operates `dirpluck` itself.
+without relying on shell history, conversation history, or human memory.
 
-## Configuration and filesystem trust
+Use `--preview` to inspect what would be selected from the current filesystem before writing an Archive.
 
-When creating an Archive that will leave the local environment, review the selection before creating it. `dirpluck` does not infer which files are sensitive; explicitly exclude material that should not be collected. For example:
+When Configurations need to be shared across related uses, one Configuration can also reuse another as its base. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for authoring guidance and [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for exact composition and resolution rules.
 
-```toml
-exclude = [".git/", ".env*", "*.pem", "*.key"]
-```
+## Before sharing an Archive
 
-This is only an example; project-specific sensitive material may use different names or locations. See [docs/TRUST.md](docs/TRUST.md) for how to treat Configurations, absolute paths, overwrite behavior, and Archives that will leave the local environment.
+`dirpluck` does not infer which files contain sensitive information.
+
+Before creating an Archive that will leave the local environment, use `--preview` to review its contents and explicitly exclude anything that should not be included.
+
+For example, `.env` files, private keys, credentials, and project-specific sensitive files may use different names and locations in different projects.
+
+See [docs/TRUST.md](docs/TRUST.md) for the trust boundary around Configurations and filesystem operations, including absolute paths, overwrite behavior, and Archives intended to leave the local environment.
 
 ## A small example
 
-The following Configuration combines a runtime Target with fixed review guidelines:
+When `--config` is omitted, `dirpluck` uses `default.dirpluck` from the current working directory. Starting with this default Configuration is the simplest way to begin.
+
+Save the following as `default.dirpluck`:
 
 ```toml
-[target]
-description = "The project currently under review."
-include_if_exists = ["README.md", "src", "tests"]
-exclude = [".git/", "__pycache__/", "*.pyc"]
-skip = ["archive", "tmp-*"]
-if_empty = "allow"
+[about]
+description = "Review package for the example project."
 
-[target.location.work]
-path = "/srv/projects"
-skip = ["archive"]
+[pluck]
+description = "Project files selected for review."
+must = ["README.md", "src", "tests"]
+ignore = [".git/", "__pycache__/", "*.pyc"]
 
-[companion.guidelines]
+[always.guidelines]
 path = "review-guidelines"
-description = "Guidelines used for every review."
-include = ["*.md"]
+description = "Review guidelines shared across projects."
+must = ["*.md"]
 
 [output]
-path = "artifacts/review.zip"
-if_exists = "overwrite"
+path = "review.zip"
 ```
+
+Suppose the same directory contains these files:
+
+```text
+.
+├── default.dirpluck
+├── example/
+│   ├── README.md
+│   ├── src/
+│   │   └── main.py
+│   └── tests/
+│       └── test_main.py
+└── review-guidelines/
+    └── review.md
+```
+
+First, use `--preview` to inspect what would go into the Archive:
 
 ```console
-dirpluck work/example --dry-run
-dirpluck work/example
+dirpluck example --preview
 ```
 
-For all Configuration fields and a larger example, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md). For CLI options and Configuration discovery, see [docs/CLI.md](docs/CLI.md).
+For this example, the preview is:
+
+```text
+├── README.md
+├── example/
+│   ├── README.md
+│   ├── src/
+│   │   └── main.py
+│   └── tests/
+│       └── test_main.py
+└── review-guidelines/
+    └── review.md
+```
+
+The leading `README.md` is generated by `dirpluck` to describe the Archive contents.
+
+If the preview looks right, build the Archive with the same Target:
+
+```console
+dirpluck example
+```
+
+The `[output]` declaration creates `review.zip`. It contains the files shown by the preview together with the generated `README.md`.
+
+For this example, the generated `README.md` is:
+
+```markdown
+# Archive contents
+
+Review package for the example project.
+
+## `example/`
+
+Files: 3
+
+Project files selected for review.
+
+## `review-guidelines/`
+
+Files: 1
+
+Review guidelines shared across projects.
+```
+
+Descriptions written in the Configuration are used as human-facing context in this Archive README:
+
+- `[about].description` describes the Archive as a whole.
+- `[pluck].description` describes the source collected from the Target.
+- `[always.guidelines].description` describes the fixed `review-guidelines/` source.
+
+These `description` values are optional. Omitting a source description does not change extraction semantics.
+
+This lets a Configuration record not only what to collect, but also enough context to explain what the resulting Archive is for when that context is useful.
+
+This example selects a Target from the default Scope and places it directly at the Archive root. In larger setups, additional Scopes can separate the filesystem ranges from which Targets are selected, and a Namespace can organize sources under an explicit path inside the Archive.
+
+When the same combination of Configuration, Target, and Case is used repeatedly, an Invocation Template can store the call. A single Invocation Template can contain multiple named Invocations, so calls for purposes such as review, docs, and release can be kept in one file.
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for Configuration fields, Scope, Case, Always, Output, Namespace, and related authoring details. See [docs/CLI.md](docs/CLI.md) for CLI options, Configuration selection, and Invocation Templates.
 
 ## Installation
 
-Python 3.11 or later is required. The current release is `0.8.0`.
+The current version is **0.9.0**.
+
+Python 3.11 or later is required.
 
 ```console
 pip install dirpluck
@@ -90,17 +173,18 @@ dirpluck --version
 
 ## Documentation
 
-The documents are separated by reading purpose:
+The documentation is separated by purpose:
 
-- [GLOSSARY.md](GLOSSARY.md): the concepts used throughout the documentation.
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md): how to write TOML Configurations.
-- [docs/CLI.md](docs/CLI.md): how to operate the CLI.
-- [docs/SPECIFICATION.md](docs/SPECIFICATION.md): exact rules for resolution, matching, filesystem boundaries, archives, output, and validation.
-- [docs/TRUST.md](docs/TRUST.md): the trust boundary for Configurations and filesystem operations.
+- [GLOSSARY.md](GLOSSARY.md): meanings of the concepts used throughout the documentation.
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md): a guide for writing `.dirpluck` Configurations.
+- [docs/CLI.md](docs/CLI.md): a guide to the CLI and `.dirpluck-inv` Invocation Templates.
+- [docs/PYTHON_API.md](docs/PYTHON_API.md): the small official Python API for using the same execution model as the CLI.
+- [docs/SPECIFICATION.md](docs/SPECIFICATION.md): exact rules for Configuration composition, resolution, matching, filesystem traversal, Archives, Output, and validation.
+- [docs/TRUST.md](docs/TRUST.md): the trust boundary for Configurations and filesystem operations, and what users are responsible for reviewing.
 - [CHANGELOG.md](CHANGELOG.md): release history.
 
-The wheel includes compact `dirpluck/docs/CONFIGURATION.md` and `dirpluck/docs/CLI.md` references together with `dirpluck/docs/TRUST.md`, so the trust model remains available in an installed package. For more detail, use the documentation in the source distribution or repository.
+## License
 
-## Public interface
+`dirpluck` is released under the MIT License.
 
-The compatibility-supported public surface is the `dirpluck` CLI and the TOML Configuration format. Python modules inside the package are internal implementation unless explicitly documented as a public API.
+See [LICENSE](LICENSE) for details.

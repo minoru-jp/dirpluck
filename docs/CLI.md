@@ -2,118 +2,175 @@
 
 This document explains how to use the `dirpluck` CLI. For TOML authoring, see [CONFIGURATION.md](CONFIGURATION.md). For exact resolution and validation semantics, see [SPECIFICATION.md](SPECIFICATION.md).
 
-## Basic forms
+## Basic form
 
 ```text
-dirpluck [TARGET ...] [--config NAME] [--case NAME] [--sequence N] [--dry-run] [--paths]
-dirpluck --configs
+dirpluck [TARGET ...] [--config PATH] [--case NAME] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck -i PATH [-e NAME] [--case NAME] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
 dirpluck --version
 ```
 
-When the selected Effective Configuration contains a Target, supply one or more positional `TARGET` arguments. When it has no Target, do not supply positional arguments.
+If the selected Effective Configuration has a Pluck, supply one or more `TARGET` references. If it has no Pluck, do not supply positional arguments.
 
 ```console
 dirpluck example
-dirpluck project-a project-b
+dirpluck work/project-a work/project-b
 dirpluck --config snapshot
 ```
 
-A positional `TARGET` names one direct child directory of either the current working directory or a named Target location. The accepted forms are `NAME`, `LOCATION/NAME`, and `LOCATION/`. Targets are deliberately one level deep; nested Target references are not accepted. The same runtime resolution applies when the Target definition originated in an imported Configuration.
+A Target reference has one of four forms: `NAME`, `SCOPE/NAME`, `/`, or `SCOPE/`. Every form selects Targets from a Scope.
 
-## Select a Configuration
+## Selecting a Configuration
 
-By default, `dirpluck` uses `dirpluck.toml`. Select another Configuration with `--config NAME`; the `.toml` suffix may be omitted.
+Configuration documents use TOML syntax but the filename extension is `.dirpluck`. Only when `--config` is omitted does dirpluck automatically use `default.dirpluck` in the runtime cwd. This is the only Configuration the CLI selects implicitly.
+
+Select any other Configuration explicitly with `--config PATH`. `PATH` uses the same `/`-separator notation as a filesystem location. A relative path is resolved from the runtime cwd, while an absolute path is resolved on the host filesystem. If the path does not end in `.dirpluck`, that suffix is appended, so document names containing dots can be used directly. Use `/`, not `\`, as the CLI path separator even on Windows.
 
 ```console
 dirpluck example --config review
+dirpluck example --config configs/release-1.2
+dirpluck example --config ../shared/review.dirpluck
 ```
 
-Root Configuration discovery checks only the current working directory and `./dirpluck/`. The same filename in both locations is treated as ambiguous.
+When `--config` is supplied, dirpluck uses only the single Configuration document named by that path. It does not search another directory for a file with the same name, and it does not accept a directory and complete it with `default.dirpluck`. Configuration document paths follow the host OS's normal filesystem semantics, including paths that contain symbolic links or Windows directory junctions. dirpluck retains the selected path's absolute spelling as the document location, and relative paths inside that document are anchored to that location's directory. It does not infer Configuration candidates from file contents, automatically select or enumerate arbitrary `*.dirpluck` files, or fall back to `.toml` Configuration files.
 
-List discoverable Configurations with:
+Output is not required for `--preview`; only a normal build that writes an Archive requires the Root Configuration to declare its own Output. Base Configurations referenced through `about.base` are not selected implicitly by the CLI.
+
+## Invocation Template
+
+Reusable CLI invocations can be stored in an Invocation Template `.dirpluck-inv` document. The root `[invocation]` is the default Invocation for the file, and `[invocation.<name>]` adds named Invocation entries.
+
+```toml
+[invocation]
+config = "release"
+targets = ["work/frontend", "work/backend"]
+
+[invocation.docs]
+config = "release"
+targets = ["docs/"]
+case = "publish"
+archive_mtime = "zip-epoch"
+```
+
+`config`, `targets`, `case`, and `archive_mtime` are all optional in both the default Invocation and every named entry. A named entry is an independent Invocation, not a difference from the default Invocation, so omitted fields are not inherited from `[invocation]`. The names `config`, `targets`, `case`, and `archive_mtime` are reserved field names and cannot also be used as named Invocation entries. `targets` stores the same four Target-reference forms accepted as normal CLI positional arguments. `config` may omit the `.dirpluck` suffix, just like CLI `--config PATH`; a relative path is resolved from the directory of the selected `.dirpluck-inv` path. Template paths and Configuration paths referenced by `config` follow the host OS's normal filesystem semantics even when they contain symbolic links or Windows directory junctions. When `config` is omitted, the runtime-cwd `default.dirpluck` is used; when `targets` is omitted, the run has no positional Targets; when `case` is omitted, normal default Case semantics apply; when `archive_mtime` is omitted, the normal per-entry timestamp behavior applies.
+
+Select the Template file explicitly with `-i PATH` or `--invocation-template PATH`. `PATH` uses the same filesystem-path notation as `--config`: a relative path is resolved from the runtime cwd and an absolute path from the host filesystem. If the path does not end in `.dirpluck-inv`, that suffix is appended. Invocation Template document paths follow the host OS's normal filesystem semantics, and the directory of the selected path is the anchor for relative `config` paths inside the Template. The Invocation Template file itself has no implicit default and dirpluck does not search another directory for it.
+
+Omitting `-e` / `--entry` selects the default `[invocation]`. `-e NAME` selects `[invocation.NAME]`. A file that contains only named entries still has an implicit parent `invocation` table in TOML, so omitting `-e` selects an empty default Invocation. A completely empty document is invalid because it has no `invocation` table at all.
 
 ```console
-dirpluck --configs
+dirpluck -i release
+dirpluck -i release -e docs
+dirpluck -i invocations/release --entry docs --case audit
+dirpluck --invocation-template ../shared/release --preview
 ```
 
-`--configs` only lists candidates and cannot be combined with build options or positional `TARGET` arguments.
+An Invocation with no fields is valid. It contributes no stored execution inputs; execution uses CLI values and normal defaults. After a successful `--preview` or normal build, the CLI prints a note when the selected Invocation has no `config`, `targets`, `case`, or `archive_mtime`. This is informational rather than a warning because valid runs, such as an Always-only build, may need no stored Invocation values.
 
-## Target selection
+An Invocation Template is not a general difference-composition mechanism for stored invocations. Positional `TARGET` and `--config` cannot be combined with `-i` / `--invocation-template`. CLI `--case NAME` may override the selected Invocation's `case`, and `--archive-mtime VALUE` may override its `archive_mtime`. `--preview`, `--sequence`, `--archive-mtime`, and `--paths` remain available as runtime modifiers. `-e` / `--entry` can be used only together with `-i` / `--invocation-template`.
 
-When a Configuration has a Target, the same Target selection is applied independently to every source directory resolved from a positional `TARGET` argument.
+A `.dirpluck-inv` document is not a Configuration and cannot be referenced by `about.base`. After the selected Invocation's Configuration, Targets, Case, and Archive-entry mtime policy are resolved, execution uses normal dirpluck semantics.
 
-A single name selects one direct child directory of the current working directory. `[target].skip` can make matching child directories ineligible as Targets.
+## Specifying Targets
+
+When a Configuration has a Pluck, the same Pluck selection is applied independently to each source directory resolved from a positional `TARGET`.
+
+To select one Target from the always-present default Scope, supply only the directory name. The default Scope always uses the directory containing the Root Configuration file as its root. Moving the Configuration to another directory therefore moves the default Scope with it; define a named Scope when a different Target root is needed.
 
 ```console
 dirpluck acme contoso
 ```
 
-When `[target.location.<name>]` is defined, `LOCATION/NAME` selects one direct child directory of that location. `[target.location.<name>].skip` applies only to that location.
+To select from a named Scope, use `<scope>/<name>`.
 
 ```console
 dirpluck work/acme
-dirpluck oss/example
 ```
 
-`LOCATION/NAME` always means named-location resolution. If `LOCATION` is not defined, the command fails; it does not fall back to `cwd/LOCATION/NAME`. Nested references such as `work/team/project`, `./project`, and absolute positional paths are not accepted.
+`work/acme` selects only `acme` directly under Scope `work`. If Scope `work` is undefined, the command fails instead of falling back to another relative-path interpretation.
 
-To select every eligible directory immediately below a location, specify only the location name with a trailing `/`.
+To select every eligible directory directly under a Scope as a Target, use an expansion form.
 
 ```console
+dirpluck /
 dirpluck work/
 ```
 
-`work/` expands only the direct child directories of the `work` location, applies that location's `skip` rules, and does not recurse. An undefined location or an expansion with no eligible Targets is an error.
+`/` expands the default Scope, while `work/` expands named Scope `work`. `/` does not mean the filesystem root. Both forms expand only direct child directories and do not enumerate recursively. Directories matching the Scope's `ignore` are removed from Target candidates. A missing named-Scope path does not affect a run that does not use that Scope.
 
-A Configuration without a Target can run using only fixed sources such as Companions.
+`./`, `./acme`, `/acme`, `work/team/acme`, and absolute filesystem paths are not accepted as Target references.
+
+A Configuration without a Pluck can run using only fixed sources such as Always sources.
 
 ```console
 dirpluck --config project-snapshot
 ```
 
-For Target-location and `skip` authoring, see [CONFIGURATION.md](CONFIGURATION.md). For exact Target-reference resolution and archive-path rules, see [SPECIFICATION.md](SPECIFICATION.md).
+For Scope and `ignore` definitions, see [CONFIGURATION.md](CONFIGURATION.md). For exact Target-reference, boundary, and archive-path rules, see [SPECIFICATION.md](SPECIFICATION.md).
 
 ## Case
 
-Select one named Case with `--case NAME`.
+Select a named Case with `--case NAME`.
 
 ```console
-dirpluck example --case audit
+dirpluck acme --case audit
 ```
 
-One Case may be supplied per run. How that Case applies to Targets and Companions is defined in [SPECIFICATION.md](SPECIFICATION.md).
+Only one Case can be selected per run. [SPECIFICATION.md](SPECIFICATION.md) defines how Pluck and Always sources select Cases.
 
-## Dry run
+## Preview
 
-`--dry-run` prints the resolved ZIP contents as a tree without creating an archive file.
+`--preview` shows the resolved ZIP contents as a tree without creating an Archive file.
 
 ```console
-dirpluck example --dry-run
+dirpluck acme --preview
 ```
 
-It is useful after changing a Configuration or workspace and before writing an archive. The major planning steps are shared with a normal run; only the write is omitted. Exact dry-run semantics are in [SPECIFICATION.md](SPECIFICATION.md).
+Use it after changing a Configuration or workspace to inspect the result before writing an Archive. The difference from a normal run is the write itself; the main resolution path for the base chain, Scope and Target handling, Cases, selection, and archive planning is shared. `--preview` can be used even when the selected Root Configuration has no Output declaration. Because preview does not generate an output filename, it cannot be combined with `--sequence`. If Selection traversal excludes non-ignored entries recognized as symbolic links or Windows directory junctions, the number skipped is reported as a note after the tree; individual paths are not listed. Entries matched by `ignore` are not included in that count. See [SPECIFICATION.md](SPECIFICATION.md) and [TRUST.md](TRUST.md) for exact preview and link-like-entry semantics.
 
-## Source paths in the archive index
+## Source paths in the Archive index
 
-The generated Archive README is a compact content index. By default it records only the archive path, the selected `description`, and the number of selected files. It does not record dirpluck-specific details such as Target or Companion roles, Configuration details, the selected Case, or source filesystem paths.
+By default, the generated Archive README is a compact index in which each final Archive root is a heading followed by the selected file count and optional `description`. It does not record `dirpluck`-specific resolution information such as Scope, Pluck, Always source, Configuration, or Case, nor does it record source filesystem paths.
 
-Use `--paths` only when the resolved source directories should also be included in the index.
+Specify `--paths` only when source filesystem paths should also appear in each source section.
 
 ```console
-dirpluck example --paths
+dirpluck acme --paths
 ```
 
-`--paths` adds the resolved source directory to each index row. This can preserve local filesystem information, including absolute paths, in the Archive. Check whether that information is appropriate before using the option for an Archive that will be distributed externally.
+`--paths` adds the resolved source directory to each source section. Because this can leave local filesystem information such as absolute paths in the Archive, consider whether it is needed when the Archive will be distributed externally.
 
-## Sequence for generated output
+## Sequence for timestamp Output
 
-For a Configuration using generated output, use a positive integer `--sequence N` when the caller deliberately needs to distinguish multiple runs started in the same second.
+When a Configuration uses timestamp Output and multiple runs in the same second need to be distinguished intentionally, supply a positive integer with `--sequence N`.
 
 ```console
 dirpluck --config project-snapshot --sequence 2
 ```
 
-`--sequence` is not automatic numbering and is invalid with fixed output. Exact filename placement and collision rules are defined in [SPECIFICATION.md](SPECIFICATION.md).
+`--sequence` is not automatic numbering. It cannot be used with fixed Output. See [SPECIFICATION.md](SPECIFICATION.md) for exact filename placement and collision rules.
+
+## Archive entry mtime
+
+`--archive-mtime VALUE` assigns one common timestamp to every entry written to the ZIP. It is a runtime policy supplied by the CLI or an Invocation Template, not a field in Configuration `[output]` or `[output.timestamp]`.
+
+```console
+dirpluck example --archive-mtime 2026-01-01T00:00:00
+dirpluck -i release --archive-mtime zip-epoch
+dirpluck example --archive-mtime now
+```
+
+`VALUE` is one of:
+
+- `YYYY-MM-DDTHH:MM:SS`: a timezone-free ZIP timestamp literal in the range `1980-01-01T00:00:00` through `2107-12-31T23:59:59`.
+- `now`: sample local current time once for the run and use that one value for every entry.
+- `zip-epoch`: use ZIP's minimum timestamp, `1980-01-01T00:00:00`.
+
+ZIP timestamps have two-second precision, so an odd second is rounded down to the preceding even second. The resolved value is applied to generated `README.md`, empty-directory entries, and selected source files alike. When the option is omitted, source files keep their filesystem mtimes while entries generated by dirpluck use their generation time, matching the existing behavior.
+
+A fixed timestamp or `zip-epoch` can remove byte differences caused by entry timestamps and can therefore help produce reproducible archives. Other ZIP metadata still matters: source-file permission bits are stored in ZIP `external_attr` and can change the archive bytes. dirpluck does not normalize those permission bits, and this option does not provide a byte-for-byte reproducibility guarantee across compressor implementations, runtime versions, platforms, or other metadata. `--archive-mtime` does not change the `YYYYMMDD-HHMMSS` used in timestamp Output filenames. It is accepted with `--preview`, but preview writes no Archive, so it does not affect the preview result.
+
+An Invocation Template can store the same policy as `archive_mtime = "zip-epoch"`. When both are present, CLI `--archive-mtime` overrides the selected Invocation's value.
 
 ## Help and version
 
@@ -122,15 +179,16 @@ dirpluck --help
 dirpluck --version
 ```
 
-## Exit status and errors
+## Exit and errors
 
-Successful commands exit with status 0. CLI argument errors and `dirpluck` Configuration or build errors exit with status 2 and print the reason after `dirpluck: error:`.
+Successful execution exits with status 0. CLI argument errors and `dirpluck` validation/build errors exit with status 2 and display the reason after `dirpluck: error:`.
 
-A successful normal build prints the final output path to standard output.
+On a successful normal run that creates an Archive, the final output path is printed to standard output.
 
-## Where to go next
+## What to read next
 
-- To create or modify a Configuration, read [CONFIGURATION.md](CONFIGURATION.md).
-- To check terminology, read [../GLOSSARY.md](../GLOSSARY.md).
-- To understand the trust boundary for Configurations and filesystem operations, read [TRUST.md](TRUST.md).
-- For exact import resolution, matching, filesystem boundaries, Archive README behavior, output collisions, and validation, read [SPECIFICATION.md](SPECIFICATION.md).
+- To create or change a Configuration: [CONFIGURATION.md](CONFIGURATION.md)
+- To use the same execution model from Python: [PYTHON_API.md](PYTHON_API.md)
+- To check the meanings of terms: [../GLOSSARY.md](../GLOSSARY.md)
+- To review the trust boundary for Configurations and filesystem operations: [TRUST.md](TRUST.md)
+- To check exact rules for base composition, matching, filesystem boundaries, Archive README generation, Output collisions, and related behavior: [SPECIFICATION.md](SPECIFICATION.md)

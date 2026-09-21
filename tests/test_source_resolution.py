@@ -1,0 +1,688 @@
+from pathlib import Path
+import os
+import subprocess
+import textwrap
+import unittest
+from unittest.mock import patch
+import zipfile
+
+from _temp import resolved_temporary_directory
+from _builder_support import BuilderTestCase
+
+import dirpluck._filesystem as filesystem_module
+from dirpluck._archive import plan_archive
+from dirpluck._builder_models import BuildRequest
+from dirpluck._effective import resolve_sources
+from dirpluck.builder import build_archive
+from dirpluck.config import load_config
+from dirpluck.errors import SelectionError
+
+
+class SourceResolutionTests(BuilderTestCase):
+    def test_target_and_always_source_preserve_configuration_relative_paths(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._project(root, "common", "a")
+            self._project(root, "b/common", "b")
+            config = self._config(root, '''
+                [pluck]
+                description = "Target."
+                must = ["src"]
+                [always.other]
+                path = "b/common"
+                description = "Always source."
+                must = ["src"]
+            ''')
+            output = build_archive(config, BuildRequest.create("common"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("common/src/module.py", names)
+            self.assertIn("b/common/src/module.py", names)
+
+    def test_always_parent_path_outside_configuration_uses_resolved_directory_name(self):
+        with resolved_temporary_directory() as temp:
+            workspace = Path(temp)
+            root = workspace / "project"
+            external = workspace / "references"
+            root.mkdir()
+            external.mkdir()
+            (external / "note.txt").write_text("reference", encoding="utf-8")
+            config = self._config(root, '''
+                [always.references]
+                path = "../references"
+                description = "External references."
+                must = ["note.txt"]
+            ''')
+            sources = resolve_sources(config, BuildRequest.create())
+            self.assertEqual(len(sources), 1)
+            self.assertEqual(sources[0].directory, external.resolve())
+            self.assertEqual(sources[0].archive_root, "references")
+            plan = plan_archive(config, BuildRequest.create())
+            self.assertIn("references/note.txt", plan.entries)
+
+    def test_always_absolute_path_inside_configuration_preserves_relative_archive_root(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            companion = root / "nested" / "references"
+            companion.mkdir(parents=True)
+            (companion / "note.txt").write_text("reference", encoding="utf-8")
+            config = self._config(root, f'''
+                [always.references]
+                path = {companion.as_posix()!r}
+                description = "References."
+                must = ["note.txt"]
+            ''')
+            source = resolve_sources(config, BuildRequest.create())[0]
+            self.assertEqual(source.archive_root, "nested/references")
+
+    def test_always_absolute_path_outside_configuration_uses_resolved_directory_name(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            external = Path(other) / "references"
+            external.mkdir()
+            (external / "note.txt").write_text("reference", encoding="utf-8")
+            config = self._config(root, f'''
+                [always.references]
+                path = {external.as_posix()!r}
+                description = "References."
+                must = ["note.txt"]
+            ''')
+            source = resolve_sources(config, BuildRequest.create())[0]
+            self.assertEqual(source.directory, external.resolve())
+            self.assertEqual(source.archive_root, "references")
+            plan = plan_archive(config, BuildRequest.create())
+            self.assertIn("references/note.txt", plan.entries)
+
+    def test_named_scope_root_may_be_a_directory_symlink(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            external = Path(other) / "workspace"
+            project = external / "project"
+            (project / "src").mkdir(parents=True)
+            (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            alias = root / "work"
+            try:
+                alias.symlink_to(external, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+
+            config = self._config(root, """
+                [pluck]
+                description = "Project."
+                must = ["src"]
+
+                [scope.work]
+                path = "work"
+            """)
+            sources = resolve_sources(config, BuildRequest.create("work/project"))
+            self.assertEqual(len(sources), 1)
+            self.assertEqual(sources[0].directory, project.resolve())
+            self.assertEqual(sources[0].archive_root, "project")
+
+    def test_always_source_root_may_be_a_directory_symlink(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            external = Path(other) / "review-guidelines"
+            external.mkdir()
+            (external / "rules.md").write_text("rules\n", encoding="utf-8")
+            alias = root / "guidelines"
+            try:
+                alias.symlink_to(external, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+
+            config = self._config(root, """
+                [always.guidelines]
+                path = "guidelines"
+                description = "Guidelines."
+                must = ["rules.md"]
+            """)
+            source = resolve_sources(config, BuildRequest.create())[0]
+            self.assertEqual(source.directory, external.resolve())
+            self.assertEqual(source.archive_root, "guidelines")
+            plan = plan_archive(config, BuildRequest.create())
+            self.assertIn("guidelines/rules.md", plan.entries)
+
+    def test_always_source_root_alias_does_not_enable_nested_link_traversal(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            external = Path(other) / "review-guidelines"
+            external.mkdir()
+            (external / "rules.md").write_text("rules\n", encoding="utf-8")
+            outside = Path(other) / "outside"
+            outside.mkdir()
+            (outside / "secret.md").write_text("secret\n", encoding="utf-8")
+            nested_link = external / "external"
+            alias = root / "guidelines"
+            try:
+                nested_link.symlink_to(outside, target_is_directory=True)
+                alias.symlink_to(external, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+
+            config = self._config(root, """
+                [always.guidelines]
+                path = "guidelines"
+                description = "Guidelines."
+                must = ["rules.md"]
+                may = ["external/"]
+            """)
+            plan = plan_archive(config, BuildRequest.create())
+            self.assertIn("guidelines/rules.md", plan.entries)
+            self.assertNotIn("guidelines/external/secret.md", plan.entries)
+            self.assertEqual(plan.skipped_link_count, 1)
+
+    def test_multiple_runtime_targets_use_the_same_target_selection(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._project(root, "project-a", "a")
+            self._project(root, "project-b", "b")
+            config = self._config(root, '''
+                [pluck]
+                description = "Projects selected for review."
+                must = ["src"]
+            ''')
+            output = build_archive(
+                config,
+                BuildRequest.create("project-a", "project-b"),
+            )
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("project-a/src/module.py", names)
+            self.assertIn("project-b/src/module.py", names)
+            self.assertIn("## `project-a/`\n\nFiles: 6\n\nProjects selected for review.", readme)
+            self.assertIn("## `project-b/`\n\nFiles: 6\n\nProjects selected for review.", readme)
+            self.assertNotIn("Source:", readme)
+
+    def test_multiple_runtime_targets_use_the_same_named_case(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            for name in ("project-a", "project-b"):
+                project = root / name
+                (project / "src").mkdir(parents=True)
+                (project / "tests").mkdir()
+                (project / "src" / "main.py").write_text("src", encoding="utf-8")
+                (project / "tests" / "test_main.py").write_text("test", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                description = "Default projects."
+                must = ["src"]
+
+                [pluck.case.review]
+                description = "Projects prepared for review."
+                must = ["tests"]
+            ''')
+            output = build_archive(
+                config,
+                BuildRequest.create("project-a", "project-b", case="review"),
+            )
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("project-a/tests/test_main.py", names)
+            self.assertIn("project-b/tests/test_main.py", names)
+            self.assertNotIn("project-a/src/main.py", names)
+            self.assertNotIn("project-b/src/main.py", names)
+
+    def test_duplicate_runtime_targets_are_rejected_after_resolution(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._project(root, "project", "a")
+            config = self._config(root, '''
+                [pluck]
+                description = "Target."
+                must = ["src"]
+            ''')
+            with self.assertRaises(SelectionError):
+                resolve_sources(
+                    config,
+                    BuildRequest.create("project", "project"),
+                )
+
+    def test_target_cannot_be_current_working_directory(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "src").mkdir()
+            config = self._config(root, '''
+                [pluck]
+                description = "Target cwd."
+                must = ["src"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "direct child"):
+                resolve_sources(config, BuildRequest.create("."))
+
+    def test_pluck_case_selects_only_named_case_without_inheritance(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            (project / "src").mkdir(parents=True)
+            (project / "tests").mkdir()
+            (project / "src" / "main.py").write_text("x", encoding="utf-8")
+            (project / "tests" / "test_main.py").write_text("x", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                description = "Default source."
+                must = ["src"]
+                [pluck.case.review]
+                description = "Review tests only."
+                must = ["tests"]
+            ''')
+            output = build_archive(config, BuildRequest.create("application", case="review"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("application/tests/test_main.py", names)
+            self.assertNotIn("application/src/main.py", names)
+            self.assertIn("## `application/`\n\nFiles: 1\n\nReview tests only.", readme)
+            self.assertNotIn("Case:", readme)
+            self.assertNotIn("[target", readme)
+
+    def test_default_case_uses_pluck_table(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application" / "src"
+            project.mkdir(parents=True)
+            (project / "main.py").write_text("x", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                description = "Default source."
+                must = ["src"]
+                [pluck.case.review]
+                description = "Review."
+                must = ["tests"]
+            ''')
+            output = build_archive(config, BuildRequest.create("application"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("## `application/`\n\nFiles: 1\n\nDefault source.", readme)
+            self.assertNotIn("Case:", readme)
+            self.assertNotIn("[pluck]", readme)
+
+    def test_missing_default_requires_explicit_case(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "application" / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [pluck.case.review]
+                description = "Review."
+                must = ["src"]
+            ''')
+            with self.assertRaises(SelectionError):
+                build_archive(config, BuildRequest.create("application"))
+
+    def test_unknown_case_is_rejected(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "application" / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [pluck]
+                description = "Default."
+                must = ["src"]
+                [pluck.case.review]
+                description = "Review."
+                must = ["src"]
+            ''')
+            with self.assertRaises(SelectionError):
+                build_archive(config, BuildRequest.create("application", case="release"))
+
+    def test_always_case_overrides_selection_and_other_always_falls_back(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "application" / "src").mkdir(parents=True)
+            (root / "application" / "tests").mkdir()
+            (root / "application" / "tests" / "test_app.py").write_text("x", encoding="utf-8")
+            (root / "framework" / "src").mkdir(parents=True)
+            (root / "framework" / "tests").mkdir()
+            (root / "framework" / "src" / "core.py").write_text("x", encoding="utf-8")
+            (root / "framework" / "tests" / "test_core.py").write_text("x", encoding="utf-8")
+            (root / "guidelines").mkdir()
+            (root / "guidelines" / "README.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                description = "Default target."
+                must = ["src"]
+
+                [pluck.case.review]
+                description = "Review target."
+                must = ["tests"]
+
+                [always.framework]
+                path = "framework"
+                description = "Default framework."
+                must = ["src"]
+
+                [always.framework.case.review]
+                description = "Framework review material."
+                must = ["tests"]
+
+                [always.guidelines]
+                path = "guidelines"
+                description = "Guidelines always included."
+                must = ["README.md"]
+            ''')
+            output = build_archive(
+                config, BuildRequest.create("application", case="review")
+            )
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("application/tests/test_app.py", names)
+            self.assertIn("framework/tests/test_core.py", names)
+            self.assertNotIn("framework/src/core.py", names)
+            self.assertIn("guidelines/README.md", names)
+            self.assertIn("## `framework/`\n\nFiles: 1\n\nFramework review material.", readme)
+            self.assertIn("## `guidelines/`\n\nFiles: 1\n\nGuidelines always included.", readme)
+            self.assertNotIn("companion", readme.lower())
+
+    def test_always_only_configuration_builds_without_target_reference(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "contracts").mkdir()
+            (root / "notes").mkdir()
+            (root / "contracts" / "a.pdf").write_bytes(b"pdf")
+            (root / "notes" / "meeting.md").write_text("notes", encoding="utf-8")
+            config = self._config(root, '''
+                [always.contracts]
+                path = "contracts"
+                description = "Contracts."
+                must = ["*.pdf"]
+
+                [always.notes]
+                path = "notes"
+                description = "Notes."
+                must = ["*.md"]
+            ''')
+            output = build_archive(config, BuildRequest.create())
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertEqual(
+                names,
+                {"README.md", "contracts/a.pdf", "notes/meeting.md"},
+            )
+
+    def test_always_only_case_uses_override_and_default_fallback(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "documents" / "current").mkdir(parents=True)
+            (root / "documents" / "history").mkdir()
+            (root / "documents" / "current" / "now.md").write_text("now", encoding="utf-8")
+            (root / "documents" / "history" / "old.md").write_text("old", encoding="utf-8")
+            (root / "assets").mkdir()
+            (root / "assets" / "figure.png").write_bytes(b"png")
+            config = self._config(root, '''
+                [always.documents]
+                path = "documents"
+                description = "Current documents."
+                must = ["current"]
+
+                [always.documents.case.archive]
+                description = "Archive documents."
+                must = ["current", "history"]
+
+                [always.assets]
+                path = "assets"
+                description = "Assets."
+                must = ["*.png"]
+            ''')
+            output = build_archive(config, BuildRequest.create(case="archive"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("documents/current/now.md", names)
+            self.assertIn("documents/history/old.md", names)
+            self.assertIn("assets/figure.png", names)
+            self.assertIn("## `documents/`\n\nFiles: 2\n\nArchive documents.", readme)
+            self.assertIn("## `assets/`\n\nFiles: 1\n\nAssets.", readme)
+            self.assertNotIn("Case:", readme)
+            self.assertNotIn("companion", readme.lower())
+
+    def test_pluck_presence_and_target_reference_must_match(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "application" / "src").mkdir(parents=True)
+            target_config = self._config(root, '''
+                [pluck]
+                description = "Target."
+                must = ["src"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "TARGET is required"):
+                resolve_sources(target_config, BuildRequest.create())
+
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "documents").mkdir()
+            (root / "documents" / "a.txt").write_text("a", encoding="utf-8")
+            companion_config = self._config(root, '''
+                [always.documents]
+                path = "documents"
+                description = "Documents."
+                must = ["*.txt"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "must not be specified"):
+                resolve_sources(companion_config, BuildRequest.create("documents"))
+
+    def test_always_only_unknown_case_is_rejected(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "documents").mkdir()
+            config = self._config(root, '''
+                [always.documents]
+                path = "documents"
+                description = "Documents."
+                may = ["*.md"]
+                allow_empty = true
+
+                [always.documents.case.archive]
+                description = "Archive documents."
+                may = ["*.md"]
+                allow_empty = true
+            ''')
+            with self.assertRaisesRegex(SelectionError, "case 'review' is not defined"):
+                resolve_sources(config, BuildRequest.create(case="review"))
+
+    def test_external_always_sources_with_same_archive_root_require_namespace(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as a_temp, resolved_temporary_directory() as b_temp:
+            root = Path(temp)
+            a_docs = Path(a_temp) / "docs"
+            b_docs = Path(b_temp) / "docs"
+            a_docs.mkdir()
+            b_docs.mkdir()
+            (a_docs / "a.txt").write_text("a", encoding="utf-8")
+            (b_docs / "b.txt").write_text("b", encoding="utf-8")
+            config = self._config(root, f'''
+                [always.a]
+                path = {a_docs.as_posix()!r}
+                description = "A docs."
+                must = ["a.txt"]
+
+                [always.b]
+                path = {b_docs.as_posix()!r}
+                description = "B docs."
+                must = ["b.txt"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "both resolve to 'docs'"):
+                resolve_sources(config, BuildRequest.create())
+
+    def test_source_root_cannot_collide_with_generated_archive_readme(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            source = root / "README.md"
+            source.mkdir()
+            (source / "x.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, """
+                [always.index]
+                path = "README.md"
+                description = "Reserved root."
+                must = ["x.txt"]
+            """)
+            with self.assertRaisesRegex(SelectionError, "reserved archive root 'README.md'"):
+                resolve_sources(config, BuildRequest.create())
+
+    def test_namespace_cannot_place_source_under_generated_archive_readme(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            source = root / "docs"
+            source.mkdir()
+            (source / "x.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, """
+                [namespace."readme.MD"]
+
+                [always.docs]
+                path = "docs"
+                namespace = "readme.MD"
+                description = "Docs."
+                must = ["x.txt"]
+            """)
+            with self.assertRaisesRegex(SelectionError, "reserved archive root 'readme.MD'"):
+                resolve_sources(config, BuildRequest.create())
+
+    def test_absolute_target_reference_is_rejected(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            outside = Path(other) / "outside"
+            (outside / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [pluck]
+                description = "Target."
+                must = ["src"]
+            ''')
+            with self.assertRaises(SelectionError):
+                build_archive(config, BuildRequest.create(outside))
+
+    def test_named_scope_resolves_direct_child_without_exposing_scope_name(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            target = projects / "app"
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            config = self._config(root, f'''
+                [pluck]
+                description = "Application."
+                must = ["src"]
+
+                [scope.work]
+                path = {projects.as_posix()!r}
+            ''')
+            sources = resolve_sources(config, BuildRequest.create("work/app"))
+            target_source = next(source for source in sources if source.kind == "target")
+            self.assertEqual(target_source.directory, target.resolve())
+            self.assertEqual(target_source.archive_root, "app")
+            plan = plan_archive(config, BuildRequest.create("work/app"))
+            self.assertIn("app/src/main.py", plan.entries)
+            self.assertFalse(any(path.startswith("work/") for path in plan.entries))
+
+    def test_dot_slash_target_reference_is_rejected(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "project" / "src").mkdir(parents=True)
+            config = self._config(root, '''
+                [pluck]
+                description = "Application."
+                must = ["src"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "direct child"):
+                resolve_sources(config, BuildRequest.create("./project"))
+
+    def test_scope_expansion_selects_only_direct_child_directories(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            for name in ("alpha", "beta"):
+                (projects / name / "src").mkdir(parents=True)
+                (projects / name / "src" / f"{name}.py").write_text(name, encoding="utf-8")
+            (projects / "alpha" / "nested" / "src").mkdir(parents=True)
+            (projects / "note.txt").write_text("not a target", encoding="utf-8")
+            config = self._config(root, f'''
+                [pluck]
+                description = "Project."
+                must = ["src"]
+
+                [scope.work]
+                path = {projects.as_posix()!r}
+            ''')
+            sources = resolve_sources(config, BuildRequest.create("work/"))
+            targets = [source for source in sources if source.kind == "target"]
+            self.assertEqual([source.archive_root for source in targets], ["alpha", "beta"])
+            plan = plan_archive(config, BuildRequest.create("work/"))
+            self.assertIn("alpha/src/alpha.py", plan.entries)
+            self.assertIn("beta/src/beta.py", plan.entries)
+            self.assertFalse(any(path.startswith("alpha/nested/") for path in plan.entries))
+
+    def test_scope_expansion_requires_defined_nonempty_scope(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            projects = Path(other) / "projects"
+            projects.mkdir()
+            config = self._config(root, f'''
+                [pluck]
+                description = "Project."
+                may = ["src"]
+                allow_empty = true
+
+                [scope.work]
+                path = {projects.as_posix()!r}
+            ''')
+            with self.assertRaisesRegex(SelectionError, "not defined"):
+                resolve_sources(config, BuildRequest.create("other/"))
+            with self.assertRaisesRegex(SelectionError, "no eligible direct child directories"):
+                resolve_sources(config, BuildRequest.create("work/"))
+
+    def test_scope_expansion_skips_directory_symlinks(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            projects = root / "projects"
+            projects.mkdir()
+            real = projects / "real"
+            real.mkdir()
+            outside = Path(other) / "outside"
+            outside.mkdir()
+            link = projects / "escape"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+            config = self._config(root, """
+                [pluck]
+                description = "Project."
+                may = ["src"]
+                allow_empty = true
+
+                [scope.work]
+                path = "projects"
+            """)
+            sources = resolve_sources(config, BuildRequest.create("work/"))
+            self.assertEqual(tuple(source.archive_root for source in sources), ("real",))
+
+    @unittest.skipUnless(os.name == "nt", "Windows junction semantics are Windows-specific")
+    def test_windows_directory_junction_may_be_an_explicit_always_root(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            external = Path(other) / "review-guidelines"
+            external.mkdir()
+            (external / "rules.md").write_text("rules\n", encoding="utf-8")
+            junction = root / "guidelines"
+            created = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junction), str(external)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if created.returncode != 0:
+                self.fail(f"could not create Windows directory junction: {created.stderr or created.stdout}")
+
+            config = self._config(root, """
+                [always.guidelines]
+                path = "guidelines"
+                description = "Guidelines."
+                must = ["rules.md"]
+            """)
+            source = resolve_sources(config, BuildRequest.create())[0]
+            self.assertEqual(source.directory, external.resolve())
+            self.assertEqual(source.archive_root, "guidelines")
+            plan = plan_archive(config, BuildRequest.create())
+            self.assertIn("guidelines/rules.md", plan.entries)
+
+
+if __name__ == "__main__":
+    unittest.main()

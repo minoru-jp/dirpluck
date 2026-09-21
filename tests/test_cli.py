@@ -2,38 +2,41 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 import os
-import tempfile
 import textwrap
 import unittest
 from unittest.mock import patch
 import zipfile
+
+from _temp import resolved_temporary_directory
 
 from dirpluck import __version__
 from dirpluck.cli import main
 
 
 CONFIG = '''
-[target]
+[pluck]
 description = "Default development target."
-include = ["src"]
+must = ["src"]
 
-[target.case.review]
+[pluck.case.review]
 description = "Review target."
-include = ["tests"]
+must = ["tests"]
 
-[companion.framework]
+[scope]
+
+[always.framework]
 path = "framework"
 description = "Fixed framework."
-include = ["src"]
+must = ["src"]
 
 [output]
 path = "result.zip"
-if_exists = "error"
+overwrite = false
 '''
 
 
 class CliTests(unittest.TestCase):
-    def _workspace(self, root: Path, *, config_path: str = "dirpluck.toml") -> None:
+    def _workspace(self, root: Path, *, config_path: str = "default.dirpluck") -> None:
         app = root / "app"
         framework = root / "framework"
         (app / "src").mkdir(parents=True)
@@ -54,7 +57,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(output.getvalue().strip(), f"dirpluck {__version__}")
 
     def test_direct_invocation_uses_default_target_and_configured_output(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             previous = Path.cwd()
@@ -69,8 +72,34 @@ class CliTests(unittest.TestCase):
                 names = set(archive.namelist())
             self.assertEqual(names, {"README.md", "app/src/app.py", "framework/src/core.py"})
 
+    def test_archive_write_oserror_is_reported_without_traceback(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            stderr = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch.object(zipfile.ZipFile, "write", side_effect=PermissionError("denied")),
+                    redirect_stderr(stderr),
+                    self.assertRaises(SystemExit) as caught,
+                ):
+                    main(["app"])
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn(
+                "dirpluck: error: cannot add selected file to archive:",
+                stderr.getvalue(),
+            )
+            self.assertNotIn("Traceback", stderr.getvalue())
+            self.assertFalse((root / "result.zip").exists())
+            self.assertEqual(list(root.glob(".result.zip.*.tmp")), [])
+
     def test_multiple_target_directories_are_accepted(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             app_two = root / "app-two"
@@ -93,7 +122,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("framework/src/core.py", names)
 
     def test_case_applies_to_all_target_directories(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             app_two = root / "app-two"
@@ -116,10 +145,90 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("app/src/app.py", names)
             self.assertNotIn("app-two/src/app.py", names)
 
-    def test_default_config_can_live_in_dirpluck_directory(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_default_config_is_not_searched_in_dot_dirpluck_directory(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
-            self._workspace(root, config_path="dirpluck/dirpluck.toml")
+            config = root / ".dirpluck" / "default.dirpluck"
+            config.parent.mkdir()
+            config.write_text(CONFIG, encoding="utf-8")
+            stderr = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main([])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("configuration file was not found", stderr.getvalue())
+            self.assertIn("default.dirpluck", stderr.getvalue())
+
+    def test_explicit_dot_dirpluck_config_uses_its_own_directory_as_default_scope(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            app = root / ".dirpluck" / "app"
+            (app / "src").mkdir(parents=True)
+            (app / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
+            config = root / ".dirpluck" / "default.dirpluck"
+            config.write_text(textwrap.dedent('''
+                [pluck]
+                description = "Default development target."
+                must = ["src"]
+
+                [output]
+                path = "result.zip"
+            '''), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app", "--config", ".dirpluck/default"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / ".dirpluck" / "result.zip") as archive:
+                self.assertIn("app/src/app.py", archive.namelist())
+
+    def test_single_named_config_is_not_implicit_default(self):
+        for config_path in ("release.dirpluck", ".dirpluck/release.dirpluck"):
+            with self.subTest(config_path=config_path), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                self._workspace(root, config_path=config_path)
+                stderr = StringIO()
+                previous = Path.cwd()
+                try:
+                    os.chdir(root)
+                    with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                        main(["app"])
+                finally:
+                    os.chdir(previous)
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn(
+                    "configuration file was not found",
+                    stderr.getvalue(),
+                )
+
+    def test_legacy_dirpluck_toml_is_not_an_implicit_default(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root, config_path="dirpluck.toml")
+            stderr = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["app"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("configuration file was not found", stderr.getvalue())
+
+    def test_dot_dirpluck_default_is_not_considered_implicitly(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / ".dirpluck").mkdir()
+            (root / ".dirpluck" / "default.dirpluck").write_text(CONFIG, encoding="utf-8")
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -130,25 +239,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertTrue((root / "result.zip").is_file())
 
-    def test_duplicate_default_config_is_ambiguous(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            self._workspace(root)
-            (root / "dirpluck").mkdir()
-            (root / "dirpluck" / "dirpluck.toml").write_text(CONFIG, encoding="utf-8")
-            stderr = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn("configuration 'dirpluck.toml' is ambiguous", stderr.getvalue())
-
     def test_case_selects_named_target_case(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             previous = Path.cwd()
@@ -165,11 +257,11 @@ class CliTests(unittest.TestCase):
             self.assertIn("app/tests/test_app.py", names)
             self.assertNotIn("app/src/app.py", names)
             self.assertIn("framework/src/core.py", names)
-            self.assertIn("| app/ | Review target. | 1 |", readme)
+            self.assertIn("## `app/`\n\nFiles: 1\n\nReview target.", readme)
             self.assertNotIn("Case:", readme)
 
     def test_paths_adds_source_column_to_archive_readme(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             previous = Path.cwd()
@@ -182,12 +274,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result, 0)
             with zipfile.ZipFile(root / "result.zip") as archive:
                 readme = archive.read("README.md").decode("utf-8")
-            self.assertEqual(readme.splitlines()[2], "| Path | Description | Files | Source |")
-            self.assertIn((root / "app").resolve().as_posix(), readme)
-            self.assertIn((root / "framework").resolve().as_posix(), readme)
+            self.assertIn(f"Source: `{(root / 'app').resolve().as_posix()}`", readme)
+            self.assertIn(f"Source: `{(root / 'framework').resolve().as_posix()}`", readme)
 
     def test_unknown_case_is_rejected(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             previous = Path.cwd()
@@ -201,44 +292,20 @@ class CliTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 2)
             self.assertIn("case 'release' is not defined", stderr.getvalue())
 
-    def test_case_is_required_when_default_target_is_absent(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            (root / "app" / "src").mkdir(parents=True)
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [target.case.review]
-                description = "Review only."
-                include = ["src"]
-                [output]
-                path = "result.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-            previous = Path.cwd()
-            stderr = StringIO()
-            try:
-                os.chdir(root)
-                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn("no default [target]", stderr.getvalue())
-
-
-    def test_companion_only_configuration_runs_without_directory(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_always_only_configuration_runs_without_target(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "documents").mkdir()
             (root / "documents" / "a.md").write_text("A", encoding="utf-8")
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [companion.documents]
+            (root / "default.dirpluck").write_text(textwrap.dedent('''
+                [always.documents]
                 path = "documents"
                 description = "Documents."
-                include = ["*.md"]
+                must = ["*.md"]
 
                 [output]
                 path = "result.zip"
-                if_exists = "error"
+                overwrite = false
             '''), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -252,19 +319,19 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(set(archive.namelist()), {"README.md", "documents/a.md"})
 
     def test_directory_is_rejected_when_configuration_has_no_target(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "documents").mkdir()
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [companion.documents]
+            (root / "default.dirpluck").write_text(textwrap.dedent('''
+                [always.documents]
                 path = "documents"
                 description = "Documents."
-                include_if_exists = ["*.md"]
-                if_empty = "allow"
+                may = ["*.md"]
+                allow_empty = true
 
                 [output]
                 path = "result.zip"
-                if_exists = "error"
+                overwrite = false
             '''), encoding="utf-8")
             stderr = StringIO()
             previous = Path.cwd()
@@ -278,7 +345,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("TARGET must not be specified", stderr.getvalue())
 
     def test_directory_is_required_when_configuration_defines_target(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             stderr = StringIO()
@@ -292,8 +359,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 2)
             self.assertIn("TARGET is required", stderr.getvalue())
 
-    def test_companion_case_is_selected_and_missing_case_falls_back_to_base(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_always_case_is_selected_and_missing_case_falls_back_to_default(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "documents" / "current").mkdir(parents=True)
             (root / "documents" / "archive").mkdir()
@@ -301,24 +368,24 @@ class CliTests(unittest.TestCase):
             (root / "documents" / "archive" / "old.md").write_text("old", encoding="utf-8")
             (root / "assets").mkdir()
             (root / "assets" / "figure.txt").write_text("figure", encoding="utf-8")
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [companion.documents]
+            (root / "default.dirpluck").write_text(textwrap.dedent('''
+                [always.documents]
                 path = "documents"
                 description = "Current documents."
-                include = ["current"]
+                must = ["current"]
 
-                [companion.documents.case.archive]
+                [always.documents.case.archive]
                 description = "Archived documents."
-                include = ["current", "archive"]
+                must = ["current", "archive"]
 
-                [companion.assets]
+                [always.assets]
                 path = "assets"
                 description = "Assets."
-                include = ["*.txt"]
+                must = ["*.txt"]
 
                 [output]
                 path = "result.zip"
-                if_exists = "error"
+                overwrite = false
             '''), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -333,8 +400,8 @@ class CliTests(unittest.TestCase):
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("documents/archive/old.md", names)
             self.assertIn("assets/figure.txt", names)
-            self.assertIn("| documents/ | Archived documents. | 2 |", readme)
-            self.assertIn("| assets/ | Assets. | 1 |", readme)
+            self.assertIn("## `documents/`\n\nFiles: 2\n\nArchived documents.", readme)
+            self.assertIn("## `assets/`\n\nFiles: 1\n\nAssets.", readme)
             self.assertNotIn("companion", readme.lower())
 
     def test_case_option_cannot_be_repeated(self):
@@ -343,52 +410,6 @@ class CliTests(unittest.TestCase):
             main(["app", "--case", "review", "--case", "release"])
         self.assertEqual(caught.exception.code, 2)
         self.assertIn("--case may be specified at most once", stderr.getvalue())
-
-    def test_generated_output_accepts_explicit_sequence(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            app = root / "app" / "src"
-            app.mkdir(parents=True)
-            (app / "app.py").write_text("APP = 1\n", encoding="utf-8")
-            (root / "dirpluck.toml").write_text(textwrap.dedent("""
-                [target]
-                description = "Target."
-                include = ["src"]
-                [output]
-                directory = "snapshots"
-                prefix = "project"
-                timestamp = true
-                suffix = "review"
-            """), encoding="utf-8")
-            stdout = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with patch("dirpluck.builder._current_output_timestamp", return_value="20260916-011623"):
-                    with redirect_stdout(stdout):
-                        result = main(["app", "--sequence", "4"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(result, 0)
-            expected = root / "snapshots" / "project-20260916-011623-4-review.zip"
-            self.assertTrue(expected.is_file())
-            self.assertEqual(Path(stdout.getvalue().strip()), expected)
-
-    def test_sequence_is_rejected_for_fixed_output(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            self._workspace(root)
-            stderr = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "--sequence", "1"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn("output sequence can only be used with generated output", stderr.getvalue())
-            self.assertFalse((root / "result.zip").exists())
 
     def test_sequence_must_be_positive_integer(self):
         for value in ("0", "-1", "x"):
@@ -399,6 +420,27 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, 2)
                 self.assertIn("integer greater than or equal to 1", stderr.getvalue())
 
+    def test_archive_mtime_option_cannot_be_repeated(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main([
+                "app",
+                "--archive-mtime",
+                "zip-epoch",
+                "--archive-mtime",
+                "now",
+            ])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--archive-mtime may be specified at most once", stderr.getvalue())
+
+    def test_invalid_archive_mtime_is_reported_without_traceback(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["--archive-mtime", "1970-01-01T00:00:00", "--preview"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("archive mtime timestamp must be within", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
     def test_sequence_option_cannot_be_repeated(self):
         stderr = StringIO()
         with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
@@ -406,8 +448,91 @@ class CliTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 2)
         self.assertIn("--sequence may be specified at most once", stderr.getvalue())
 
-    def test_dry_run_prints_tree_without_creating_zip(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_preview_and_build_report_skipped_symbolic_links(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            app_link = root / "app" / "src" / "linked.py"
+            framework_link = root / "framework" / "src" / "linked.py"
+            try:
+                app_link.symlink_to(root / "app" / "tests" / "test_app.py")
+                framework_link.symlink_to(root / "app" / "tests" / "test_app.py")
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                preview_output = StringIO()
+                with redirect_stdout(preview_output):
+                    result = main(["app", "--preview"])
+                self.assertEqual(result, 0)
+                self.assertIn(
+                    "Note: 2 link-like filesystem entries (symbolic links or Windows junctions) "
+                    "were skipped and will not be archived.",
+                    preview_output.getvalue(),
+                )
+                self.assertFalse((root / "result.zip").exists())
+
+                build_output = StringIO()
+                with redirect_stdout(build_output):
+                    result = main(["app"])
+                self.assertEqual(result, 0)
+                self.assertIn(
+                    "Note: 2 link-like filesystem entries (symbolic links or Windows junctions) "
+                    "were skipped and not archived.",
+                    build_output.getvalue(),
+                )
+                with zipfile.ZipFile(root / "result.zip") as archive:
+                    names = set(archive.namelist())
+                self.assertNotIn("app/src/linked.py", names)
+                self.assertNotIn("framework/src/linked.py", names)
+            finally:
+                os.chdir(previous)
+
+    def test_ignored_symbolic_links_do_not_produce_skip_note(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            manifest = root / "default.dirpluck"
+            manifest.write_text(
+                manifest.read_text(encoding="utf-8").replace(
+                    'must = ["src"]',
+                    'must = ["src"]\nignore = ["linked.py"]',
+                ),
+                encoding="utf-8",
+            )
+            app_link = root / "app" / "src" / "linked.py"
+            framework_link = root / "framework" / "src" / "linked.py"
+            try:
+                app_link.symlink_to(root / "app" / "tests" / "test_app.py")
+                framework_link.symlink_to(root / "app" / "tests" / "test_app.py")
+            except OSError as exc:
+                self.skipTest(f"symbolic links are unavailable: {exc}")
+
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                preview_output = StringIO()
+                with redirect_stdout(preview_output):
+                    result = main(["app", "--preview"])
+                self.assertEqual(result, 0)
+                self.assertNotIn("link-like filesystem", preview_output.getvalue())
+
+                build_output = StringIO()
+                with redirect_stdout(build_output):
+                    result = main(["app"])
+                self.assertEqual(result, 0)
+                self.assertNotIn("link-like filesystem", build_output.getvalue())
+                with zipfile.ZipFile(root / "result.zip") as archive:
+                    names = set(archive.namelist())
+                self.assertNotIn("app/src/linked.py", names)
+                self.assertNotIn("framework/src/linked.py", names)
+            finally:
+                os.chdir(previous)
+
+    def test_preview_prints_tree_without_creating_zip(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             stdout = StringIO()
@@ -415,7 +540,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(stdout):
-                    result = main(["app", "--dry-run"])
+                    result = main(["app", "--preview"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -433,8 +558,8 @@ class CliTests(unittest.TestCase):
                 ]),
             )
 
-    def test_paths_can_be_combined_with_dry_run_without_changing_tree_output(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_paths_can_be_combined_with_preview_without_changing_tree_output(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             stdout = StringIO()
@@ -442,7 +567,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(stdout):
-                    result = main(["app", "--dry-run", "--paths"])
+                    result = main(["app", "--preview", "--paths"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -450,8 +575,8 @@ class CliTests(unittest.TestCase):
             self.assertIn("README.md", stdout.getvalue())
             self.assertNotIn(root.as_posix(), stdout.getvalue())
 
-    def test_dry_run_does_not_apply_existing_output_policy(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_preview_does_not_apply_existing_output_policy(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             output = root / "result.zip"
@@ -460,43 +585,37 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--dry-run"])
+                    result = main(["app", "--preview"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
             self.assertEqual(output.read_bytes(), b"existing")
 
-    def test_dry_run_marks_missing_and_optional_missing(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            (root / "app").mkdir()
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [target]
-                description = "Target."
-                include = ["src"]
-                include_if_exists = ["README.md"]
-                [output]
-                path = "result.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-            stdout = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with redirect_stdout(stdout):
-                    result = main(["app", "--dry-run"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(result, 0)
-            text = stdout.getvalue()
-            self.assertIn("README.md [optional missing]", text)
-            self.assertIn("src [missing]", text)
-            self.assertIn("target (`app/`): empty, would error", text)
+    def test_help_describes_target_reference_forms_and_preview(self):
+        stdout = StringIO()
+        with redirect_stdout(stdout), self.assertRaises(SystemExit) as caught:
+            main(["--help"])
+        self.assertEqual(caught.exception.code, 0)
+        text = stdout.getvalue()
+        normalized = " ".join(text.split())
+        self.assertIn("NAME (default Scope)", normalized)
+        self.assertIn("SCOPE/NAME (named Scope)", normalized)
+        self.assertIn("/ (all in default Scope)", normalized)
+        self.assertIn("SCOPE/ (all in named Scope)", normalized)
+        self.assertIn("--preview", text)
+        self.assertNotIn("--dry-run", text)
 
-    def test_named_config_is_searched_in_cwd(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_removed_dry_run_option_is_rejected(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["--dry-run"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("unrecognized arguments: --dry-run", stderr.getvalue())
+
+    def test_named_config_path_in_cwd_is_supported(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
-            self._workspace(root, config_path="review.toml")
+            self._workspace(root, config_path="review.dirpluck")
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -507,200 +626,219 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertTrue((root / "result.zip").is_file())
 
-    def test_named_config_is_searched_in_dirpluck_directory(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_nested_config_path_is_supported_explicitly(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
-            self._workspace(root, config_path="dirpluck/review.toml")
+            data = root / "data"
+            data.mkdir()
+            (data / "x").write_text("x", encoding="utf-8")
+            config = root / ".dirpluck" / "review.dirpluck"
+            config.parent.mkdir()
+            config.write_text(textwrap.dedent('''
+                [always.data]
+                path = "../data"
+                description = "Data."
+                must = ["x"]
+
+                [output]
+                path = "../result.zip"
+            '''), encoding="utf-8")
             previous = Path.cwd()
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--config", "review.toml"])
+                    result = main(["--config", ".dirpluck/review"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
             self.assertTrue((root / "result.zip").is_file())
 
-    def test_duplicate_named_config_is_ambiguous(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_named_config_name_may_contain_dots_without_suffix(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
-            self._workspace(root, config_path="review.toml")
-            (root / "dirpluck").mkdir()
-            (root / "dirpluck" / "review.toml").write_text(CONFIG, encoding="utf-8")
-            stderr = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "--config", "review"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn("configuration 'review.toml' is ambiguous", stderr.getvalue())
-
-    def test_config_path_is_rejected_because_discovery_scope_is_fixed(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            self._workspace(root, config_path="dirpluck/review.toml")
-            stderr = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "--config", "dirpluck/review.toml"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn("configuration name must be a filename, not a path", stderr.getvalue())
-
-    def test_configs_lists_discoverable_configs_and_ignores_pyproject(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            self._workspace(root)
-            (root / "review.toml").write_text(CONFIG, encoding="utf-8")
-            (root / "snapshot.toml").write_text(textwrap.dedent('''
-                [companion.documents]
-                path = "documents"
-                description = "Documents."
-                include = ["*.md"]
-                [output]
-                path = "snapshot.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-            (root / "pyproject.toml").write_text('[project]\nname = "example"\n', encoding="utf-8")
-            (root / "dirpluck").mkdir()
-            (root / "dirpluck" / "release.toml").write_text(CONFIG, encoding="utf-8")
-            stdout = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with redirect_stdout(stdout):
-                    result = main(["--configs"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(result, 0)
-            text = stdout.getvalue()
-            self.assertIn("dirpluck.toml  ./dirpluck.toml  [default]", text)
-            self.assertIn("review.toml  ./review.toml", text)
-            self.assertIn("snapshot.toml  ./snapshot.toml", text)
-            self.assertIn("release.toml  ./dirpluck/release.toml", text)
-            self.assertNotIn("pyproject.toml", text)
-
-    def test_configs_rejects_paths_option(self):
-        stderr = StringIO()
-        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-            main(["--configs", "--paths"])
-        self.assertEqual(caught.exception.code, 2)
-        self.assertIn("--configs cannot be combined", stderr.getvalue())
-
-    def test_configs_marks_same_filename_as_ambiguous(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            self._workspace(root, config_path="review.toml")
-            (root / "dirpluck").mkdir()
-            (root / "dirpluck" / "review.toml").write_text(CONFIG, encoding="utf-8")
-            stdout = StringIO()
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with redirect_stdout(stdout):
-                    result = main(["--configs"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(result, 0)
-            lines = [line for line in stdout.getvalue().splitlines() if line.startswith("review.toml")]
-            self.assertEqual(len(lines), 2)
-            self.assertTrue(all("ambiguous" in line for line in lines))
-
-    def test_build_subcommand_is_removed(self):
-        with self.assertRaises(SystemExit) as caught:
-            main(["build", "app"])
-        self.assertEqual(caught.exception.code, 2)
-
-    def test_removed_output_option_is_rejected(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            self._workspace(root)
-            previous = Path.cwd()
-            try:
-                os.chdir(root)
-                with self.assertRaises(SystemExit) as caught:
-                    main(["app", "-o", "out.zip"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertFalse((root / "out.zip").exists())
-
-
-    def test_import_only_configuration_runs_without_directory(self):
-        with tempfile.TemporaryDirectory() as temp:
-            workspace = Path(temp)
-            root = workspace / "root"
-            root.mkdir()
-            external = workspace / "external"
-            (external / "data").mkdir(parents=True)
-            (external / "data" / "artifact.txt").write_text("x", encoding="utf-8")
-            (external / "config.toml").write_text(textwrap.dedent('''
-                [companion.data]
-                path = "data"
-                description = "Imported data."
-                include = ["artifact.txt"]
-
-                [output]
-                path = "unused.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [import.external]
-                root = "../external"
-                configuration = "config.toml"
-
-                [output]
-                path = "result.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-
+            self._workspace(root, config_path="release-1.2.dirpluck")
             previous = Path.cwd()
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main([])
+                    result = main(["app", "--config", "release-1.2"])
             finally:
                 os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "result.zip").is_file())
 
+    def test_named_config_path_does_not_search_other_directories(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root, config_path="review.dirpluck")
+            (root / ".dirpluck").mkdir()
+            (root / ".dirpluck" / "review.dirpluck").write_text(CONFIG, encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app", "--config", "review"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "result.zip").is_file())
+
+    def test_config_path_may_include_directories(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root, config_path=".dirpluck/review.dirpluck")
+            nested = root / ".dirpluck"
+            (nested / "app" / "src").mkdir(parents=True)
+            (nested / "framework" / "src").mkdir(parents=True)
+            (nested / "app" / "src" / "app.py").write_text("APP = 2\n", encoding="utf-8")
+            (nested / "framework" / "src" / "core.py").write_text(
+                "CORE = 2\n",
+                encoding="utf-8",
+            )
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app", "--config", ".dirpluck/review"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((nested / "result.zip").is_file())
+
+    def test_invocation_template_reuses_targets_and_case(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+                case = "review"
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", "release"])
+            finally:
+                os.chdir(previous)
             self.assertEqual(result, 0)
             with zipfile.ZipFile(root / "result.zip") as archive:
-                self.assertIn("data/artifact.txt", archive.namelist())
-            self.assertFalse((external / "unused.zip").exists())
+                names = set(archive.namelist())
+            self.assertIn("app/tests/test_app.py", names)
+            self.assertNotIn("app/src/app.py", names)
 
-    def test_imported_target_definition_accepts_cli_directory(self):
-        with tempfile.TemporaryDirectory() as temp:
-            workspace = Path(temp)
-            root = workspace / "root"
-            external = workspace / "external"
-            target = root / "app"
-            (target / "src").mkdir(parents=True)
-            (target / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
-            external.mkdir()
-            (external / "config.toml").write_text(textwrap.dedent('''
-                [target]
-                description = "Reusable imported Target definition."
-                include = ["src"]
+    def test_invocation_template_name_may_contain_dots_without_suffix(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "set-2.1.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", "set-2.1"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+
+    def test_invocation_template_long_option_is_supported(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["--invocation-template", "release"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+
+    def test_invocation_template_path_may_include_directories(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            invocation = root / ".dirpluck" / "release.dirpluck-inv"
+            invocation.parent.mkdir()
+            invocation.write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", ".dirpluck/release"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+
+    def test_invocation_config_is_relative_to_invocation_document(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            data = root / "data"
+            data.mkdir()
+            (data / "x").write_text("x", encoding="utf-8")
+            dot_dir = root / ".dirpluck"
+            dot_dir.mkdir()
+            (dot_dir / "snapshot.dirpluck").write_text(textwrap.dedent("""
+                [always.data]
+                path = "../data"
+                description = "Data."
+                must = ["x"]
 
                 [output]
-                path = "unused.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [import.external]
-                root = "../external"
-                configuration = "config.toml"
+                path = "../snapshot.zip"
+            """), encoding="utf-8")
+            (dot_dir / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                config = "snapshot"
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", ".dirpluck/release"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "snapshot.zip").is_file())
 
-                [output]
-                path = "result.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
+    def test_invocation_without_config_uses_cwd_default_configuration(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            invocation = root / ".dirpluck" / "release.dirpluck-inv"
+            invocation.parent.mkdir()
+            invocation.write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", ".dirpluck/release"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "result.zip").is_file())
 
+    def test_invocation_template_does_not_apply_implicitly(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "default.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["missing"]
+            """), encoding="utf-8")
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -708,53 +846,346 @@ class CliTests(unittest.TestCase):
                     result = main(["app"])
             finally:
                 os.chdir(previous)
-
             self.assertEqual(result, 0)
-            with zipfile.ZipFile(root / "result.zip") as archive:
-                self.assertIn("app/src/app.py", archive.namelist())
-            self.assertFalse((external / "unused.zip").exists())
 
-    def test_configs_lists_import_only_root_configuration(self):
-        with tempfile.TemporaryDirectory() as temp:
+    def test_named_invocation_entry_is_selected_with_entry_option(self):
+        with resolved_temporary_directory() as temp:
             root = Path(temp)
-            (root / "review.toml").write_text(textwrap.dedent('''
-                [import.external]
-                root = ".."
-                configuration = "external/config.toml"
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
 
-                [output]
-                path = "result.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
+                [invocation.review]
+                targets = ["app"]
+                case = "review"
+            """), encoding="utf-8")
             previous = Path.cwd()
-            stdout = StringIO()
             try:
                 os.chdir(root)
-                with redirect_stdout(stdout):
-                    result = main(["--configs"])
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", "release", "-e", "review"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
-            self.assertIn("review.toml", stdout.getvalue())
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                names = set(archive.namelist())
+            self.assertIn("app/tests/test_app.py", names)
+            self.assertNotIn("app/src/app.py", names)
+
+    def test_entry_long_option_is_supported(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation.review]
+                targets = ["app"]
+                case = "review"
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", "release", "--entry", "review"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+
+    def test_entry_requires_invocation_template(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["--entry", "review"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--entry requires --invocation-template", stderr.getvalue())
+
+    def test_unknown_invocation_entry_is_reported(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text("[invocation]\n", encoding="utf-8")
+            stderr = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["-i", "release", "-e", "missing"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("invocation entry was not found: missing", stderr.getvalue())
+
+    def test_implicit_empty_default_invocation_is_valid_and_noted(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "data").mkdir()
+            (root / "data" / "x").write_text("x", encoding="utf-8")
+            (root / "default.dirpluck").write_text(textwrap.dedent("""
+                [always.data]
+                path = "data"
+                description = "Data."
+                must = ["x"]
+
+                [output]
+                path = "result.zip"
+            """), encoding="utf-8")
+            (root / "library.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation.named]
+                targets = ["unused"]
+            """), encoding="utf-8")
+            stdout = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["-i", "library"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "result.zip").is_file())
+            self.assertIn("selected Invocation provides no config, targets, case, or archive_mtime", stdout.getvalue())
+
+    def test_empty_invocation_is_noted_in_preview(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "data").mkdir()
+            (root / "data" / "x").write_text("x", encoding="utf-8")
+            (root / "default.dirpluck").write_text(textwrap.dedent("""
+                [always.data]
+                path = "data"
+                description = "Data."
+                must = ["x"]
+            """), encoding="utf-8")
+            (root / "library.dirpluck-inv").write_text("[invocation]\n", encoding="utf-8")
+            stdout = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["-i", "library", "--preview"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertIn("README.md", stdout.getvalue())
+            self.assertIn("selected Invocation provides no config, targets, case, or archive_mtime", stdout.getvalue())
+
+    def test_invocation_template_rejects_target_override(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["-i", "release", "app"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("TARGET arguments cannot be combined", stderr.getvalue())
+
+    def test_invocation_template_accepts_case_when_template_omits_case(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", "release", "--case", "review"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                names = set(archive.namelist())
+            self.assertIn("app/tests/test_app.py", names)
+            self.assertNotIn("app/src/app.py", names)
+
+    def test_cli_case_overrides_invocation_template_case(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+                case = "missing"
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", "release", "--case", "review"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                names = set(archive.namelist())
+            self.assertIn("app/tests/test_app.py", names)
+            self.assertNotIn("app/src/app.py", names)
+
+    def test_invocation_template_rejects_config_override(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["-i", "release", "--config", "other"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--config cannot be combined", stderr.getvalue())
+
+    def test_invocation_template_allows_preview_runtime_modifier(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+            """), encoding="utf-8")
+            stdout = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["-i", "release", "--preview"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertIn("README.md", stdout.getvalue())
+            self.assertFalse((root / "result.zip").exists())
+
+    def test_invocation_template_allows_paths_runtime_modifier(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+                [invocation]
+                targets = ["app"]
+            """), encoding="utf-8")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["-i", "release", "--paths"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("Source", readme)
+            self.assertIn(str((root / "app").resolve()), readme)
+
+    def test_invocation_template_allows_sequence_runtime_modifier(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            data = root / "data"
+            data.mkdir()
+            (data / "x").write_text("x", encoding="utf-8")
+            (root / "default.dirpluck").write_text(textwrap.dedent("""
+                [always.data]
+                path = "data"
+                description = "Data."
+                must = ["x"]
+
+                [output.timestamp]
+                path = "artifacts/"
+                prefix = "snapshot"
+            """), encoding="utf-8")
+            (root / "release.dirpluck-inv").write_text("[invocation]\n", encoding="utf-8")
+            stdout = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["-i", "release", "--sequence", "7"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            output = Path(stdout.getvalue().splitlines()[0])
+            self.assertTrue(output.is_file())
+            self.assertRegex(output.name, r"^snapshot-\d{8}-\d{6}-7\.zip$")
+
+    def test_entry_may_be_specified_at_most_once(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["-i", "release", "-e", "one", "-e", "two"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--entry may be specified at most once", stderr.getvalue())
+
+    def test_invocation_template_may_be_specified_at_most_once(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["-i", "release", "-i", "other"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--invocation-template may be specified at most once", stderr.getvalue())
+
+    def test_preview_accepts_root_configuration_without_output(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "data").mkdir()
+            (root / "data" / "x").write_text("x", encoding="utf-8")
+            (root / "default.dirpluck").write_text(textwrap.dedent("""
+                [always.data]
+                path = "data"
+                description = "Data."
+                must = ["x"]
+            """), encoding="utf-8")
+            stdout = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["--preview"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertIn("README.md", stdout.getvalue())
+            self.assertIn("└── x", stdout.getvalue())
+            self.assertFalse(any(root.glob("*.zip")))
+
+    def test_preview_rejects_sequence(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["--preview", "--sequence", "1"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--sequence cannot be combined with --preview", stderr.getvalue())
+
+    def test_removed_configs_option_is_rejected(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["--configs"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("unrecognized arguments: --configs", stderr.getvalue())
+
+    def test_build_subcommand_is_removed(self):
+        with self.assertRaises(SystemExit) as caught:
+            main(["build", "app"])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_removed_output_option_is_rejected(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            previous = Path.cwd()
+            stderr = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["app", "-o", "out.zip"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertFalse((root / "out.zip").exists())
 
     def test_cli_preserves_location_expansion_trailing_slash(self):
-        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as other:
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
             root = Path(temp)
             projects = Path(other) / "projects"
             for name in ("alpha", "beta"):
                 (projects / name / "src").mkdir(parents=True)
                 (projects / name / "src" / f"{name}.py").write_text(name, encoding="utf-8")
-            (root / "dirpluck.toml").write_text(textwrap.dedent(f'''
-                [target]
+            (root / "default.dirpluck").write_text(textwrap.dedent(f'''
+                [pluck]
                 description = "Projects."
-                include = ["src"]
+                must = ["src"]
 
-                [target.location.work]
+                [scope.work]
                 path = {projects.as_posix()!r}
 
                 [output]
                 path = "result.zip"
-                if_exists = "error"
+                overwrite = false
             '''), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -768,56 +1199,6 @@ class CliTests(unittest.TestCase):
                 names = set(archive.namelist())
             self.assertIn("alpha/src/alpha.py", names)
             self.assertIn("beta/src/beta.py", names)
-
-    def test_cli_rejects_nested_cwd_target_reference(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            (root / "team" / "app" / "src").mkdir(parents=True)
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [target]
-                description = "Project."
-                include = ["src"]
-
-                [output]
-                path = "result.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-            previous = Path.cwd()
-            stderr = StringIO()
-            try:
-                os.chdir(root)
-                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["team/app"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn("target location 'team' is not defined", stderr.getvalue())
-
-    def test_cli_target_skip_rejects_explicit_target(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            (root / "archive" / "src").mkdir(parents=True)
-            (root / "dirpluck.toml").write_text(textwrap.dedent('''
-                [target]
-                description = "Project."
-                include = ["src"]
-                skip = ["archive"]
-
-                [output]
-                path = "result.zip"
-                if_exists = "error"
-            '''), encoding="utf-8")
-            previous = Path.cwd()
-            stderr = StringIO()
-            try:
-                os.chdir(root)
-                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["archive"])
-            finally:
-                os.chdir(previous)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn("[target].skip", stderr.getvalue())
-
 
 if __name__ == "__main__":
     unittest.main()

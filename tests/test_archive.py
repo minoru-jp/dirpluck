@@ -1,0 +1,304 @@
+from pathlib import Path
+import os
+import subprocess
+import textwrap
+import unittest
+from unittest.mock import patch
+import zipfile
+
+from _temp import resolved_temporary_directory
+from _builder_support import BuilderTestCase
+
+import dirpluck._filesystem as filesystem_module
+from dirpluck._builder_models import BuildRequest
+from dirpluck._effective import resolve_sources
+from dirpluck.builder import build_archive
+from dirpluck.config import load_config
+from dirpluck.errors import SelectionError
+
+
+class ArchiveTests(BuilderTestCase):
+    def test_build_archive_clamps_pre_1980_source_timestamp(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            source = root / "input.txt"
+            source.write_text("payload\n", encoding="utf-8")
+            os.utime(source, (0, 0))
+            config = self._config(root, """
+                [always.input]
+                path = "."
+                description = "Input."
+                must = ["input.txt"]
+            """)
+
+            output = build_archive(config, BuildRequest.create())
+
+            with zipfile.ZipFile(output) as archive:
+                entry = next(name for name in archive.namelist() if name.endswith("/input.txt"))
+                info = archive.getinfo(entry)
+                self.assertEqual(info.date_time[:3], (1980, 1, 1))
+                self.assertEqual(archive.read(entry), b"payload\n")
+
+    def test_build_archive_wraps_source_write_oserror_and_removes_temporary_file(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            source = root / "input.txt"
+            source.write_text("payload\n", encoding="utf-8")
+            config = self._config(root, """
+                [always.input]
+                path = "."
+                description = "Input."
+                must = ["input.txt"]
+            """)
+
+            with patch.object(zipfile.ZipFile, "write", side_effect=PermissionError("denied")):
+                with self.assertRaisesRegex(SelectionError, "cannot add selected file to archive"):
+                    build_archive(config, BuildRequest.create())
+
+            self.assertFalse((root / "out.zip").exists())
+            self.assertEqual(list(root.glob(".out.zip.*.tmp")), [])
+
+    def test_archive_readme_includes_effective_about_description(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            target = root / "application"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, '''
+                [about]
+                description = "Materials prepared for an authentication review."
+
+                [pluck]
+                description = "Application sources."
+                must = ["file.txt"]
+            ''')
+            output = build_archive(config, BuildRequest.create("application"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertTrue(
+                readme.startswith(
+                    "# Archive contents\n\n"
+                    "Materials prepared for an authentication review.\n\n"
+                    "## `application/`\n\n"
+                    "Files: 1\n\n"
+                    "Application sources.\n"
+                )
+            )
+
+    def test_duplicate_archive_roots_from_target_and_always_are_rejected(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "shikumi-devdoc"
+            (project / "src").mkdir(parents=True)
+            (project / "dist").mkdir()
+            (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl").write_bytes(b"wheel")
+            config = self._config(root, '''
+                [pluck]
+                description = "The project currently being changed."
+                must = ["src"]
+                [always.devdoc]
+                path = "shikumi-devdoc"
+                description = "The current built distribution used as a reference."
+                must = ["dist/shikumi_devdoc-*.whl"]
+            ''')
+            with self.assertRaisesRegex(SelectionError, "distinct archive roots"):
+                resolve_sources(config, BuildRequest.create("shikumi-devdoc"))
+
+    def test_namespace_keeps_colliding_source_roots_distinct_and_is_explained_in_readme(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "shikumi-devdoc"
+            (project / "src").mkdir(parents=True)
+            (project / "dist").mkdir()
+            (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl").write_bytes(b"wheel")
+            config = self._config(root, '''
+                [namespace.reference]
+
+                [pluck]
+                description = "The project currently being changed."
+                must = ["src"]
+
+                [always.devdoc]
+                path = "shikumi-devdoc"
+                namespace = "reference"
+                description = "The current built distribution used as a reference."
+                must = ["dist/shikumi_devdoc-*.whl"]
+            ''')
+            output = build_archive(config, BuildRequest.create("shikumi-devdoc"))
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("shikumi-devdoc/src/main.py", names)
+            self.assertIn(
+                "reference/shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl",
+                names,
+            )
+            self.assertIn("archive-only directory prefix", readme)
+            self.assertIn("## `reference/shikumi-devdoc/`", readme)
+            self.assertIn("Namespace: `reference/`; Source root: `shikumi-devdoc/`", readme)
+            self.assertIn("The current built distribution used as a reference.", readme)
+            self.assertIn(
+                "## `shikumi-devdoc/`\n\nFiles: 1\n\n"
+                "The project currently being changed.",
+                readme,
+            )
+
+    def test_archive_readme_hides_source_paths_by_default(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            (root / "application" / "src").mkdir(parents=True)
+            (root / "application" / "src" / "main.py").write_text("x", encoding="utf-8")
+            outside = Path(other) / "reference"
+            outside.mkdir()
+            (outside / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, f'''
+                [pluck]
+                description = "Application sources."
+                must = ["src"]
+
+                [always.reference]
+                path = {outside.as_posix()!r}
+                description = "Reference material."
+                must = ["guide.md"]
+            ''')
+            output = build_archive(config, BuildRequest.create("application"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("## `application/`", readme)
+            self.assertIn("## `reference/`", readme)
+            self.assertNotIn("Source:", readme)
+            self.assertNotIn(root.as_posix(), readme)
+            self.assertNotIn(outside.as_posix(), readme)
+
+    def test_archive_readme_paths_option_includes_resolved_source_paths(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            target = root / "application"
+            (target / "src").mkdir(parents=True)
+            (target / "src" / "main.py").write_text("x", encoding="utf-8")
+            outside = Path(other) / "reference"
+            outside.mkdir()
+            (outside / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, f'''
+                [pluck]
+                description = "Application sources."
+                must = ["src"]
+
+                [always.reference]
+                path = {outside.as_posix()!r}
+                description = "Reference material."
+                must = ["guide.md"]
+            ''')
+            output = build_archive(
+                config,
+                BuildRequest.create("application", paths=True),
+            )
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn(f"Source: `{target.resolve().as_posix()}`", readme)
+            self.assertIn(f"Source: `{outside.resolve().as_posix()}`", readme)
+            self.assertNotIn("Configuration", readme)
+            self.assertNotIn("Pluck", readme)
+            self.assertNotIn("Always", readme)
+
+    def test_archive_readme_omits_description_when_no_source_has_description(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            target = root / "application"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, """
+                [pluck]
+                must = ["file.txt"]
+
+                [always.docs]
+                path = "docs"
+                must = ["guide.md"]
+            """)
+            output = build_archive(config, BuildRequest.create("application"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertEqual(
+                readme,
+                "# Archive contents\n\n"
+                "## `application/`\n\n"
+                "Files: 1\n\n"
+                "## `docs/`\n\n"
+                "Files: 1\n",
+            )
+
+    def test_archive_readme_preserves_multiline_source_description_as_section_body(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            target = root / "application"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                description = "Primary review material.\n\nPay attention to compatibility | public API changes."
+                must = ["file.txt"]
+            """)
+            output = build_archive(config, BuildRequest.create("application"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn(
+                "## `application/`\n\nFiles: 1\n\n"
+                "Primary review material.\n\n"
+                "Pay attention to compatibility | public API changes.",
+                readme,
+            )
+            self.assertNotIn("| Path |", readme)
+
+    def test_archive_readme_shows_description_only_for_sources_that_define_it(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            target = root / "application"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, """
+                [pluck]
+                must = ["file.txt"]
+
+                [always.docs]
+                path = "docs"
+                description = "Review guidance."
+                must = ["guide.md"]
+            """)
+            output = build_archive(config, BuildRequest.create("application"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("## `application/`\n\nFiles: 1", readme)
+            self.assertIn("## `docs/`\n\nFiles: 1\n\nReview guidance.", readme)
+
+    def test_archive_readme_namespace_metadata_does_not_require_description(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(root, """
+                [namespace.reference]
+
+                [always.docs]
+                path = "docs"
+                namespace = "reference"
+                must = ["guide.md"]
+            """)
+            output = build_archive(config, BuildRequest.create())
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("## `reference/docs/`", readme)
+            self.assertIn("Files: 1", readme)
+            self.assertIn("Namespace: `reference/`; Source root: `docs/`", readme)
+
+
+if __name__ == "__main__":
+    unittest.main()

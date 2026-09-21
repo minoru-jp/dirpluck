@@ -7,7 +7,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-OUTPUT = ROOT / "_internal" / "document_source" / "context.json"
+OUTPUT = ROOT / "devdocs" / "config" / "context.json"
 
 
 def current_version() -> str:
