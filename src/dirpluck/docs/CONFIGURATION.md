@@ -61,6 +61,8 @@ A Namespace is always applied when referenced. For example, a Target with source
 
 An Always source fixes its `path` in the Configuration. Filesystem locations use `/` as the separator; even on Windows, backslash is not a path separator in Configuration notation. Relative paths are resolved from the directory containing the Configuration file in which the field is written. Absolute paths may also be specified. Explicit named-Scope and Always root locations may contain symbolic links or Windows directory junctions, but automatic Target discovery and Selection traversal below the resolved root do not follow link-like entries. `about.base`, which references another Configuration document, also follows the host OS's normal filesystem semantics, and a relative reference is anchored to the directory of the selected Configuration path.
 
+Always sources and Targets are selected independently. If the same physical file is selected by both and maps to different Archive paths, both entries are included; a Target-side `ignore` does not suppress the Always source. The Archive `README.md` records the Target-side Archive root and overlap count in an Always source section when their actually selected files physically overlap.
+
 Selections can use:
 
 - `description`: an optional non-empty string, including multi-line text, shown in the Archive README section for that source or selection.
@@ -81,7 +83,7 @@ Use another Configuration as a base with:
 base = "../base/base.dirpluck"
 ```
 
-Output is optional. A Base Configuration and a Root Configuration used only with `--preview` may omit it. A normal build that writes an Archive requires the Root Configuration to directly declare either fixed mode or timestamp mode. Output from a Base Configuration is not inherited. Fixed mode specifies the complete filename, and `overwrite` defaults to `false`. Generated Archive files use normal new-file permission semantics, so POSIX systems apply the process `umask`; overwriting does not inherit the existing file mode.
+Output is optional. A Base Configuration and a Root Configuration used with `--preview` or Runtime Output may omit it. A normal build without Runtime Output requires the Root Configuration to directly declare either fixed mode or timestamp mode. Output from a Base Configuration is not inherited. Fixed mode specifies the complete filename, and `overwrite` defaults to `false`. Generated Archive files use normal new-file permission semantics, so POSIX systems apply the process `umask`; overwriting does not inherit the existing file mode. With automatic Runtime Output from CLI `--here` / `--output` or Python `output=`, a Root `[output.timestamp]` contributes its `prefix` / `suffix` naming rule, but not its configured `path`.
 
 ```toml
 [output]

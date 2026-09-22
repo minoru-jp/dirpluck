@@ -35,6 +35,7 @@ def _render_archive_readme(
     about_description: str | None,
     sources: tuple[ResolvedSource, ...],
     selection_counts: Mapping[str, int],
+    target_overlaps: Mapping[str, tuple[tuple[str, int], ...]],
 ) -> str:
     uses_namespace = any(source.namespace is not None for source in sources)
     lines = ["# Archive contents", ""]
@@ -61,6 +62,14 @@ def _render_archive_readme(
             )
         if request.paths:
             lines.append(f"Source: {_markdown_code_span(source.directory.as_posix())}")
+        for target_root, count in target_overlaps.get(source.key, ()):
+            unit = "file" if count == 1 else "files"
+            verb = "is" if count == 1 else "are"
+            target = f"{target_root.rstrip('/')}/"
+            lines.append(
+                f"Target overlap: {count} selected {unit} {verb} also included under "
+                f"{_markdown_code_span(target)}."
+            )
         if source.description is not None:
             lines.extend(["", source.description])
         lines.append("")
@@ -78,7 +87,7 @@ def plan_archive(
     effective, sources = _resolve_execution(config, request)
 
     archive_entries: dict[str, Path] = {}
-    physical_entries: dict[Path, str] = {}
+    selected_physical_entries: dict[str, set[Path]] = {}
     missing_entries: list[str] = []
     optional_missing_entries: list[str] = []
     empty_selections: list[EmptySelectionStatus] = []
@@ -89,6 +98,7 @@ def plan_archive(
         result = select_files(source, allow_missing=allow_missing)
         skipped_links.update(result.skipped_links)
         selection_counts[source.key] = len(result.files)
+        selected_physical_entries[source.key] = {file.resolve() for file in result.files}
         missing_entries.extend(f"{source.archive_root}/{relative}" for relative in result.missing)
         optional_missing_entries.extend(f"{source.archive_root}/{relative}" for relative in result.optional_missing)
 
@@ -111,20 +121,34 @@ def plan_archive(
             previous = archive_entries.get(arcname)
             if previous is not None and previous.resolve() != source_resolved:
                 raise SelectionError(f"multiple files resolve to the same archive path {arcname!r}: {previous} and {file}")
-            previous_arcname = physical_entries.get(source_resolved)
-            if previous_arcname is not None and previous_arcname != arcname:
-                raise SelectionError(
-                    f"the same physical file resolves to different archive paths {previous_arcname!r} and {arcname!r}: {file}"
-                )
             archive_entries[arcname] = file
-            physical_entries[source_resolved] = arcname
 
     empty_directories = sorted({
         status.archive_root
         for status in empty_selections
         if status.allow_empty and not any(arcname.startswith(f"{status.archive_root}/") for arcname in archive_entries)
     })
-    readme = _render_archive_readme(request, effective.about_description, sources, selection_counts)
+    targets = tuple(source for source in sources if source.kind == "target")
+    target_overlaps: dict[str, tuple[tuple[str, int], ...]] = {}
+    for source in sources:
+        if source.kind != "always":
+            continue
+        overlaps: list[tuple[str, int]] = []
+        source_entries = selected_physical_entries[source.key]
+        for target in targets:
+            count = len(source_entries & selected_physical_entries[target.key])
+            if count:
+                overlaps.append((target.archive_root, count))
+        if overlaps:
+            target_overlaps[source.key] = tuple(sorted(overlaps))
+
+    readme = _render_archive_readme(
+        request,
+        effective.about_description,
+        sources,
+        selection_counts,
+        target_overlaps,
+    )
     return ArchivePlan(
         entries=MappingProxyType(dict(sorted(archive_entries.items()))),
         readme=readme,

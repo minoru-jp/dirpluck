@@ -19,33 +19,63 @@ def _current_output_timestamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def _resolve_output_path(config: Config, request: BuildRequest) -> tuple[Path, bool]:
-    output = config.output
-    if output is None:
-        raise ConfigurationError(f"{config.manifest}: the root Configuration must define [output] or [output.timestamp]")
-    base = config.manifest.parent
-    if output.generated:
-        parts: list[str] = []
-        if output.prefix is not None:
-            parts.append(output.prefix)
-        parts.append(_current_output_timestamp())
-        if request.sequence is not None:
-            parts.append(str(request.sequence))
-        if output.suffix is not None:
-            parts.append(output.suffix)
-        directory = Path(output.path)
-        if not directory.is_absolute():
-            directory = base / directory
-        candidate = directory / ("-".join(parts) + ".zip")
-        overwrite = False
+def _generated_output_filename(config: Config, request: BuildRequest) -> str:
+    """Return one timestamp filename for Configuration or runtime directory output."""
+
+    configured = config.output
+    naming = configured if configured is not None and configured.generated else None
+    parts: list[str] = []
+    if naming is not None:
+        if naming.prefix is not None:
+            parts.append(naming.prefix)
     else:
-        candidate = Path(output.path)
-        if not candidate.is_absolute():
-            candidate = base / candidate
-        overwrite = output.overwrite
+        parts.append("dirpluck")
+    parts.append(_current_output_timestamp())
+    if request.sequence is not None:
+        parts.append(str(request.sequence))
+    if naming is not None and naming.suffix is not None:
+        parts.append(naming.suffix)
+    return "-".join(parts) + ".zip"
+
+
+def _effective_output_is_generated(config: Config, request: BuildRequest) -> bool:
+    if request.output is not None:
+        return request.output.generated
+    return config.output is not None and config.output.generated
+
+
+def _resolve_output_path(config: Config, request: BuildRequest) -> tuple[Path, bool]:
+    runtime_output = request.output
+    if runtime_output is not None:
+        if runtime_output.generated:
+            candidate = runtime_output.path / _generated_output_filename(config, request)
+        else:
+            candidate = runtime_output.path
+        overwrite = request.force
+    else:
+        output = config.output
+        if output is None:
+            raise ConfigurationError(
+                f"{config.manifest}: the root Configuration must define "
+                "[output] or [output.timestamp], or the invocation must provide runtime output"
+            )
+        base = config.manifest.parent
+        if output.generated:
+            directory = Path(output.path)
+            if not directory.is_absolute():
+                directory = base / directory
+            candidate = directory / _generated_output_filename(config, request)
+            overwrite = request.force
+        else:
+            candidate = Path(output.path)
+            if not candidate.is_absolute():
+                candidate = base / candidate
+            overwrite = request.force or output.overwrite
 
     if _is_link_like(candidate):
-        raise SelectionError(f"output path must not be a symbolic link or Windows junction: {candidate}")
+        raise SelectionError(
+            f"output path must not be a symbolic link or Windows junction: {candidate}"
+        )
     candidate = candidate.resolve(strict=False)
     if candidate.exists() and candidate.is_dir():
         raise SelectionError(f"output path is a directory: {candidate}")
@@ -53,16 +83,23 @@ def _resolve_output_path(config: Config, request: BuildRequest) -> tuple[Path, b
 
 
 def _prepare_output(config: Config, request: BuildRequest) -> tuple[Path, bool]:
-    """Resolve and validate the root Output before archive planning begins."""
+    """Resolve and validate the effective Output before archive planning begins."""
 
+    if not isinstance(request.force, bool):
+        raise SelectionError("output force must be a boolean")
     if request.sequence is not None:
-        if isinstance(request.sequence, bool) or not isinstance(request.sequence, int) or request.sequence < 1:
-            raise SelectionError("output sequence must be an integer greater than or equal to 1")
-        output = config.output
-        if output is None:
-            raise ConfigurationError(f"{config.manifest}: the root Configuration must define [output] or [output.timestamp]")
-        if not output.generated:
-            raise SelectionError("output sequence can only be used with timestamp output")
+        if (
+            isinstance(request.sequence, bool)
+            or not isinstance(request.sequence, int)
+            or request.sequence < 1
+        ):
+            raise SelectionError(
+                "output sequence must be an integer greater than or equal to 1"
+            )
+        if not _effective_output_is_generated(config, request):
+            raise SelectionError(
+                "output sequence can only be used with timestamp output"
+            )
 
     output_path, overwrite = _resolve_output_path(config, request)
     if output_path.exists() and not overwrite:

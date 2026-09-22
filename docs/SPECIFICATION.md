@@ -22,7 +22,7 @@ The default Invocation and each named entry accept only `config`, `targets`, `ca
 
 When the selected Invocation omits `config`, dirpluck uses `default.dirpluck` in the runtime cwd. When it omits `targets`, the run has no positional Targets. When it omits `case`, normal default Case semantics apply. When it omits `archive_mtime`, normal Archive-entry timestamp semantics apply. If all four fields are omitted, CLI runtime values and those normal defaults are applied as usual. After a successful `--preview` or normal build in which the selected Invocation has no fields, the CLI emits a runtime note, not a warning, describing that state.
 
-When an Invocation Template is selected, positional `TARGET` and `--config` are not accepted as differences or overrides. `--case` is accepted as an override of the selected Invocation's stored `case` and takes precedence when supplied. `--archive-mtime` is likewise accepted as an override of the selected Invocation's stored `archive_mtime`. `--preview`, `--sequence`, `--archive-mtime`, and `--paths` may be combined with the Template subject to their normal constraints because they are runtime modifiers rather than differences to its other stored fields.
+When an Invocation Template is selected, positional `TARGET` and `--config` are not accepted as differences or overrides. `--case` is accepted as an override of the selected Invocation's stored `case` and takes precedence when supplied. `--archive-mtime` is likewise accepted as an override of the selected Invocation's stored `archive_mtime`. `--here`, `--output`, `--force`, `--preview`, `--sequence`, `--archive-mtime`, and `--paths` may be combined with the Template subject to their normal constraints because they are runtime modifiers rather than differences to its other stored fields.
 
 Base Configuration references do not use CLI document selection. Each Configuration names a concrete Configuration file path ending in `.dirpluck` directly in `about.base`. Base paths follow the host OS's normal filesystem semantics, and a relative base path is anchored to the directory of the referring Configuration location. A `.dirpluck-inv` document is not a Configuration and does not participate in the base chain.
 
@@ -52,13 +52,13 @@ Unknown keys are errors.
 
 Each Configuration layer may contain zero or one Pluck and zero or more named Scopes, Always sources, Shared patterns, and Namespaces. `[scope]` is an optional `ignore` / `namespace` configuration for the always-present default Scope of the Root Configuration; it is not a declaration that creates a Scope. Pluck and Always sources may contain zero or more Cases.
 
-Each Configuration may declare zero or one Output. When Output is declared, fixed Output and timestamp Output are mutually exclusive. Output is not required for schema validity, archive planning, or `--preview`. A build that actually writes an Archive requires the Root Configuration to directly declare its own Output. Output from a Base layer is not inherited by the root.
+Each Configuration may declare zero or one Output. When Output is declared, fixed Output and timestamp Output are mutually exclusive. Output is not required for schema validity, archive planning, or `--preview`. A build that actually writes an Archive requires either the Root Configuration's own Output declaration or Runtime Output. Output from a Base layer is not inherited by the root.
 
 A single Configuration layer may have no local source definition. After base composition, the Effective Configuration must contain at least one of Pluck or an Always source. The default Scope always exists for the Root Configuration, so an effective Pluck does not require a separate Scope declaration.
 
 ## 4. Filesystem path notation
 
-Filesystem locations in Configuration / Invocation Template TOML fields and CLI `--config PATH` / `-i PATH` use `/` as the path separator regardless of the host OS. Backslash is not accepted as a separator; `/` is used on Windows as well.
+Filesystem locations in Configuration / Invocation Template TOML fields, CLI `--config PATH` / `-i PATH` / `--output PATH`, and Python runtime `output` use `/` as the path separator regardless of the host OS. Backslash is not accepted as a separator; `/` is used on Windows as well.
 
 A relative filesystem path written in a Configuration is resolved from the **directory containing the Configuration file in which that field is written**. This rule applies at least to:
 
@@ -76,7 +76,7 @@ An absolute path uses `/` separators in a root form recognized by the host OS as
 
 Filesystem-location notation does not perform `~` expansion or environment-variable interpolation and does not accept globs. `.` and `..` are resolved as ordinary path components when they satisfy the field- or option-specific file or directory requirements. A Configuration or CLI document selection that uses an absolute path depends on the referenced filesystem and is not guaranteed to be portable across operating systems.
 
-Only CLI `--config PATH` and `-i PATH` use the runtime cwd as the resolution base for relative paths. A `config` path inside either the default or a named Invocation is resolved from the Template document's own directory. Runtime cwd is not used to resolve relative filesystem paths after a Configuration has been loaded.
+CLI `--config PATH`, `-i PATH`, and `--output PATH`, plus Python runtime `output`, use the runtime cwd as the resolution base for relative paths. A `config` path inside either the default or a named Invocation is resolved from the Template document's own directory. Runtime cwd is not used to resolve relative filesystem paths written inside a Configuration after it has been loaded.
 
 Paths that **select or reference Configuration / Invocation Template documents themselves** follow the host OS's normal filesystem semantics; symbolic links and Windows directory junctions are not rejected merely for appearing in the path. For the runtime-cwd `default.dirpluck`, `--config PATH`, `-i PATH`, `about.base`, and an Invocation's `config`, dirpluck keeps the selected or referenced path as a lexical absolute document location rather than replacing it with the physical path of a link target. Relative document references and relative filesystem locations written in that document are anchored to the directory of this document location. Only internal checks that need path identity, such as base-chain cycle detection, resolve aliases to a physical path so equivalent document-path aliases are recognized.
 
@@ -310,7 +310,9 @@ For a source without a Namespace, the final Archive root is the source root. For
 
 If different resolved sources in one run resolve to the same final Archive root, planning fails with an ambiguity error even when their selected files would not directly collide. `dirpluck` does not silently merge sources into one directory and does not add automatic suffixes or implicitly qualify paths with Scope or Always names. Configure a Namespace when the final Archive roots need to be distinguished.
 
-After final Archive roots are known to be unique, planning still rejects different physical files that collide at the same archive path, and rejects the same physical file when different source mappings place it at different archive paths. If the same physical file maps to the same archive path more than once, it is written once.
+After final Archive roots are known to be unique, planning still rejects different physical files that collide at the same archive path. If the same physical file maps to the same archive path more than once, it is written once. If the same physical file is selected through different resolved sources and maps to different archive paths, each archive path is written.
+
+Target and Always-source Selections are evaluated independently for each source. A physical file being present in a Target source tree does not let the Target's `ignore`, non-selection, or missing result alter the Always-source Selection. Physical overlap is determined only after each source's Selection is complete and does not merge, suppress, or invalidate either Selection result.
 
 The root-level `README.md` path is reserved for the Archive index generated by `dirpluck`. If the first component of a resolved source's final Archive root matches `README.md` case-insensitively, planning fails instead of placing a source at or below that reserved path. This applies both to Namespace-derived roots and to source roots with no Namespace.
 
@@ -318,13 +320,15 @@ An Archive README is generated as `README.md` at the Archive root. It is an inde
 
 Each resolved source is represented by one level-2 heading whose inline-code text is the final Archive root. The section records the selected file count as `Files: N`. When the Selection has a `description`, that text appears after the metadata as the section body. Descriptions are not compressed into table cells, so multi-line descriptions remain usable as section content. A source without a description has no description body.
 
+When physical files actually selected by an Always source overlap physical files actually selected by a Target, the Always source section records `Target overlap` metadata for each Target. The metadata gives the overlapping file count and that Target's final Archive root. A physical file ignored or otherwise not selected by the Target is not counted as an overlap. This metadata describes physical overlap only; it does not change Selection or Archive placement.
+
 When at least one source uses a Namespace, the README first explains that a Namespace is an Archive-only outer directory and is not part of the original source path, and that the source root is immediately below it. Each namespaced source section also records its `Namespace` and `Source root`; sources without a Namespace omit that metadata.
 
-By default, the README does not record source filesystem paths, Configuration path/table, base chain, Scope/Pluck/Always names, selected Case, or similar `dirpluck`-specific information. Only CLI `--paths` adds a `Source` value to each source section containing the resolved source directory as a `/`-separated filesystem path. `--paths` does not change archive paths or file selection.
+By default, the README does not record source filesystem paths, Configuration path/table, base chain, Scope/Pluck/Always names, selected Case, or similar `dirpluck`-specific information. Target-overlap metadata uses the Target's final Archive root rather than a Target name. Only CLI `--paths` adds a `Source` value to each source section containing the resolved source directory as a `/`-separated filesystem path. `--paths` does not change archive paths or file selection.
 
 ## 11. Output
 
-A Configuration may omit Output. A Configuration without Output may also be used as the Root for archive planning or `--preview`. A build that actually writes an Archive requires the Root Configuration to directly declare exactly one of fixed Output or timestamp Output. Base Output is not inherited as the Root Output. Runtime checks of Output filesystem state, directory creation, and Archive writing are performed only for the Root Configuration's own Output during a build.
+A Configuration may omit Output. A Configuration without Output may also be used as the Root for archive planning or `--preview`. A build that actually writes an Archive uses either the Root Configuration's own fixed / timestamp Output or Runtime Output as the effective Output. Only when Runtime Output is absent must the Root Configuration directly declare its own Output; Base Output is not inherited as the Root Output.
 
 Within a base chain, only definitions that actually declare Output participate in write-boundary overlap validation. Relative Output paths are always resolved from the directory containing the Configuration file in which that Output is written.
 
@@ -371,9 +375,29 @@ The generated filename has this fixed form:
 
 The timestamp uses process local time and is determined once at build start. Arbitrary timestamp formats, variable expansion, and naming templates are not provided.
 
-`N` is an integer of 1 or greater supplied by CLI `--sequence N`. When omitted, no number segment is emitted. `dirpluck` does not inspect existing outputs to infer a number and does not perform automatic numbering or automatic renaming. `--sequence` may be used only with timestamp Output.
+`N` is an integer of 1 or greater supplied by CLI `--sequence N` or Python API `sequence=`. When omitted, no number segment is emitted. `dirpluck` does not inspect existing outputs to infer a number and does not perform automatic numbering or automatic renaming. A sequence may be used only when the effective Output generates an automatic timestamp filename.
 
-If the generated filename already exists at the point it is checked, the run fails. Timestamp Output has no overwrite option. The generated Archive file uses the same host-OS new-file permission and mode semantics as fixed Output.
+If the generated filename already exists at the point it is checked, the run fails by default. Timestamp Output has no Configuration `overwrite` field, but runtime `--force` / `force=True` makes the effective overwrite policy true and permits replacement. The generated Archive file uses the same host-OS new-file permission and mode semantics as fixed Output.
+
+### Runtime Output
+
+CLI `--here[=FILENAME]`, `-o PATH` / `--output PATH`, and Python API `output=` specify Runtime Output for a build. When Runtime Output is present, a Configuration fixed output path or timestamp output directory is not used as the effective destination. The Root Configuration may omit Output entirely.
+
+CLI `--here` is automatic Output whose directory is the runtime cwd. `--here=FILENAME` is an exact output filename directly under the runtime cwd. `FILENAME` must not contain `/` or `\`, must not be `.` or `..`, and must be one portable filename fragment. The optional filename is accepted only in the `--here=FILENAME` form with `=`. `--here` and `--output` are mutually exclusive. `-h` remains reserved for `--help`; `--here` has no short option.
+
+CLI `--output PATH` / `-o PATH` and Python `output=PATH` use the filesystem-location notation from Section 4 and reject backslashes and globs. Relative `PATH` is resolved from the runtime cwd; an absolute `PATH` refers directly to the host filesystem. A `PATH` ending in `/` is an output directory. A `PATH` without trailing `/` is an exact output file path. dirpluck does not infer file versus directory form from existing filesystem state. In exact form, a final component of `.`, `..`, or no filename is an error. Required parent or output directories are created during a normal build.
+
+Automatic Runtime Output (`--here`, or trailing-`/` `--output` / `output=`) samples process-local time once and creates a timestamp filename. If the Root Configuration declares `[output.timestamp]`, its `prefix` / `suffix` naming rule is reused, but its configured `path` is not. Without Root timestamp Output, the fixed prefix is `dirpluck` and the filename is:
+
+```text
+dirpluck-YYYYMMDD-HHMMSS[-N].zip
+```
+
+With Root timestamp Output, the existing `[prefix-]YYYYMMDD-HHMMSS[-N][-suffix].zip` form is used in the runtime directory. Exact Runtime Output does not use Configuration `prefix` / `suffix` and its supplied filename is not modified.
+
+`--sequence N` / `sequence=` may be used with automatic Runtime Output. It is an error with exact Runtime Output. If a generated destination already exists, dirpluck does not infer a new sequence, automatically rename the file, or sample a new timestamp.
+
+Runtime Output defaults to `overwrite = false`; a Configuration fixed Output's `overwrite` value is not inherited into Runtime Output. CLI `-f` / `--force` or Python `force=True` sets the effective overwrite policy to true for either Runtime Output or Configuration Output. Without force, only Configuration fixed Output uses its own `[output].overwrite` value.
 
 ### Archive entry timestamp
 
@@ -389,7 +413,7 @@ This option fixes entry timestamps so timestamp-driven byte differences can be r
 
 ### Static writable destination
 
-Output naming maintains the invariant that the write boundary can be determined statically from the Configuration alone.
+Output naming declared by a Configuration maintains the invariant that the write boundary can be determined statically from the Configuration alone. Runtime Output is supplied per invocation and does not participate in this static write-boundary model.
 
 ```text
 fixed [output]
@@ -430,13 +454,13 @@ This validation is limited to the one base chain currently being resolved. `dirp
 
 ### Concurrent writes and input collision
 
-`dirpluck` does not provide inter-process locking or conflict arbitration. Concurrent writes to the same output path are unsupported. The existing-destination checks used by fixed Output with `overwrite = false` and by timestamp Output are not atomic no-clobber guarantees against another process. Callers that may run concurrently must choose different output destinations.
+`dirpluck` does not provide inter-process locking or conflict arbitration. Concurrent writes to the same output path are unsupported. Existing-destination checks for an effective no-overwrite Output are not atomic no-clobber guarantees against another process. Callers that may run concurrently must choose different output destinations.
 
 In either Output mode, the final output file generated by the run cannot itself be selected as an Archive input.
 
 ## 12. Preview
 
-`--preview` uses the same base-chain resolution, cycle detection, definition composition, Scope lookup and expansion, Target direct-child resolution and Scope-ignore filtering, Case selection, file selection, and archive planning as a normal run, but does not create or modify output files or directories. It can be used when the Root Configuration has no Output declaration. Because preview does not generate an output filename, `--preview` cannot be combined with `--sequence`. `--archive-mtime` is still validated in preview mode, but no Archive is written, so it does not affect the preview result.
+`--preview` uses the same base-chain resolution, cycle detection, definition composition, Scope lookup and expansion, Target direct-child resolution and Scope-ignore filtering, Case selection, file selection, and archive planning as a normal run, but does not create or modify output files or directories. It can be used when the Root Configuration has no Output declaration. Because preview does not resolve or write an Output, `--preview` cannot be combined with `--here`, `--output`, `--force`, or `--sequence`. `--archive-mtime` is still validated in preview mode, but no Archive is written, so it does not affect the preview result.
 
 A missing `must` pattern is displayed as `[missing]`; a missing `may` pattern is displayed as `[optional missing]`. A final Selection containing zero files is displayed as either `empty, allowed` or `empty, would error` according to policy.
 
@@ -456,13 +480,16 @@ dirpluck --invocation-template PATH [--entry NAME] [--case NAME]
 dirpluck ... --preview
 dirpluck ... --paths
 dirpluck ... --sequence N
+dirpluck ... --here[=FILENAME]
+dirpluck ... --output PATH
+dirpluck ... --force
 dirpluck ... --archive-mtime VALUE
 dirpluck --version
 ```
 
 If the Effective Configuration contains a Pluck, positional arguments are resolved as `TARGET` references according to Section 6. If it has no Pluck, positional `TARGET` arguments are not accepted.
 
-`--case`, `--sequence`, `--archive-mtime`, `-i` / `--invocation-template`, and `-e` / `--entry` may each be specified at most once. `-e` / `--entry` is accepted only together with an Invocation Template. When an Invocation Template is selected, positional `TARGET` and `--config` are not accepted. `--case` may be combined with an Invocation Template and overrides the selected Invocation's `case` when supplied. `--archive-mtime VALUE` may also be combined with a Template and overrides the selected Invocation's `archive_mtime`; `VALUE` follows the Archive-entry timestamp grammar in Section 11. `--sequence` accepts an integer of 1 or greater and cannot be combined with `--preview`. `--preview`, `--sequence`, `--archive-mtime`, and `--paths` may also be combined with an Invocation Template. `--paths` adds `Source` metadata to each source section in the Archive README generated by a normal build. When combined with `--preview`, no Archive is generated, so it does not add source filesystem paths to the displayed tree.
+`--case`, `--sequence`, `--archive-mtime`, `--here`, `-o` / `--output`, `-i` / `--invocation-template`, and `-e` / `--entry` may each be specified at most once. `-e` / `--entry` is accepted only together with an Invocation Template. When an Invocation Template is selected, positional `TARGET` and `--config` are not accepted. `--case` may be combined with an Invocation Template and overrides the selected Invocation's `case` when supplied. `--archive-mtime VALUE` may also be combined with a Template and overrides the selected Invocation's `archive_mtime`; `VALUE` follows the Archive-entry timestamp grammar in Section 11. `--here` and `--output` are mutually exclusive, and the optional `--here` filename is accepted only as `--here=FILENAME`. Because `--preview` does not resolve or write an Output, it cannot be combined with `--here`, `--output`, `--force`, or `--sequence`. `--sequence` accepts an integer of 1 or greater and may be used only with an effective automatic timestamp filename. `-f` / `--force` sets the effective overwrite policy to true. `--here`, `--output`, `--force`, `--preview`, `--sequence`, `--archive-mtime`, and `--paths` may also be combined with an Invocation Template. `--paths` adds `Source` metadata to each source section in the Archive README generated by a normal build. When combined with `--preview`, no Archive is generated, so it does not add source filesystem paths to the displayed tree.
 
 Argument-parsing errors and `dirpluck` Configuration/build errors exit with status 2. Successful builds and informational commands exit with status 0. A successful normal build prints the final output path to standard output. If the selected Invocation has no fields, a successful normal build prints an informational note after the output path, while `--preview` prints it after the tree; the note states that no stored Invocation inputs were provided and execution uses CLI runtime values and normal defaults.
 

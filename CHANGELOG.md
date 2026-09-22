@@ -2,6 +2,30 @@
 
 Release history for dirpluck.
 
+## 0.10.0
+
+Allow the runtime to choose the Output destination and overwrite policy so a Configuration's extraction definition can be reused while changing where an invocation writes its Archive.
+
+### Added
+
+- Add CLI `--here[=FILENAME]`, `-o PATH` / `--output PATH`, and `-f` / `--force`. `--here` uses the runtime cwd, while `--output` supplies an explicit path resolved from the runtime cwd. A trailing `/` on `--output` selects a directory and generates a timestamp filename. `--here=FILENAME` accepts only a filename directly under the cwd; use `--output` when a path is needed.
+- Add `output` and `force` to the official Python `run()` API. `output` follows the same path semantics as CLI `--output`: a trailing `/` generates an automatic timestamp filename in that directory, while a path without trailing `/` is an exact output file path. Relative `output` values are resolved from the API `cwd`.
+
+### Changed
+
+- A build with Runtime Output no longer requires an Output declaration on the Root Configuration. Exact Runtime Output keeps the supplied filename unchanged. Automatic Runtime Output reuses the Root Configuration's `[output.timestamp]` `prefix` / `suffix` naming rule when one is declared; otherwise the default name is `dirpluck-YYYYMMDD-HHMMSS.zip`. The configured output directory or fixed path is not carried into the runtime destination.
+- Extend `--sequence N` to automatic timestamp filenames produced by `--here` and trailing-`/` Runtime Output in addition to Configuration timestamp Output. Using a sequence with an exact Runtime Output is an error. Generated-name collisions do not trigger automatic numbering, renaming, or a new timestamp sample.
+- Runtime Output defaults to no-overwrite. `--force` / `force=True` makes the effective Output overwriteable and applies to both Runtime Output and Configuration fixed / timestamp Output. Runtime Output paths use `/` separators on every OS, matching Configuration path notation, and reject backslashes.
+- Reject `--preview` / `preview=True` when combined with Runtime Output (`--here`, `--output`, or `output=`), overwrite forcing (`--force` / `force=True`), or `--sequence`. Preview does not resolve or write an Output, so these runtime Output modifiers are no longer silently ignored.
+
+## 0.9.1
+
+Allow Targets and Always sources to include the same physical material in independent roles, and correct Archive planning and generated README handling for that overlap.
+
+### Fixed
+
+- Stop rejecting the same physical file when a Target and an Always source select it for different Archive paths. Target Pluck and Always-source Selection are evaluated independently, so Target-side `ignore` or non-selection does not suppress the Always source. Different physical files that collide at one archive path remain an error, while the same physical file mapped to the same archive path is still written once. When actually selected files overlap physically between an Always source and a Target, the generated Archive README records the Target-side final Archive root and overlapping file count in the Always source section.
+
 ## 0.9.0
 
 Prepare the Configuration language vocabulary and filesystem model for 1.0, moving the public Configuration surface to the new Pluck / Scope / Always / Base / Output model. Advance the Development Status to Beta.

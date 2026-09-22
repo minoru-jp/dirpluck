@@ -7,7 +7,7 @@ from canonical_documents import terms
 @vocabulary(terms)
 @title("{{TERM_1}} Python API")
 class TITLE_1:
-    r'''この文書は、{{TERM_1}} 0.9.x の公式 Python API を説明します。API は CLI と同じ実行 model を Python から利用するための最小 surface として定義し、Configuration parser や builder pipeline の低 level object を一般用途の互換性契約には含めません。'''
+    r'''この文書は、{{TERM_1}} 0.10.x の公式 Python API を説明します。API は CLI と同じ実行 model を Python から利用するための最小 surface として定義し、Configuration parser や builder pipeline の低 level object を一般用途の互換性契約には含めません。'''
     vocabulary_refs @= (terms.TERM_1,)
 
     @title("位置づけ")
@@ -16,7 +16,7 @@ class TITLE_1:
 
 CLI は人間向けの argument parsing、help、exit status、stdout / stderr formatting を担当します。Python API は `SystemExit` を通常の制御手段にせず、結果を `RunResult` で返し、期待される dirpluck error を `DirpluckError` として raise します。
 
-0.9.x では、package root から明示的に export する名前だけを公式 Python API とします。低 level module や underscore 名は implementation detail であり、Beta 中の互換性保証対象には含めません。'''
+0.10.x では、package root から明示的に export する名前だけを公式 Python API とします。低 level module や underscore 名は implementation detail であり、Beta 中の互換性保証対象には含めません。'''
 
     @title("基本形")
     class TITLE_3:
@@ -64,6 +64,8 @@ run(
     preview=False,
     paths=False,
     archive_mtime=None,
+    output=None,
+    force=False,
     cwd=None,
 )
 ```
@@ -80,12 +82,40 @@ entry         -e / --entry NAME
 preview       --preview
 paths         --paths
 archive_mtime --archive-mtime VALUE
+output        --output PATH
+force         --force
 cwd           Python API only: relative control-document path の runtime anchor
 ```
 
-`invocation` を使う場合は positional `targets` と `config` を同時に指定しません。`entry` は `invocation` と一緒にだけ使用します。`preview=True` と `sequence` は組み合わせません。`sequence` は 1 以上の integer とします。
+`invocation` を使う場合は positional `targets` と `config` を同時に指定しません。`entry` は `invocation` と一緒にだけ使用します。`preview=True` は Output を解決・書き込みしないため `sequence`、`output`、`force=True` とは組み合わせません。`sequence` は 1 以上の integer とします。`output` は CLI `--output` と同じ `/` separator の path syntax を使い、relative path は `cwd` を基準にします。`force` は boolean です。
 
 Invocation Template を選択した場合、`case` argument は保存された Case、`archive_mtime` argument は保存された `archive_mtime` を CLI と同じ規則で上書きします。Invocation の `config` が未指定なら `cwd/default.dirpluck`、`targets` が未指定なら Target なし、`case` が未指定なら通常の default Case semantics、`archive_mtime` が未指定なら従来の entry timestamp semantics を使います。'''
+
+    @title("Runtime Output")
+    class TITLE_45:
+        r'''`output` は Configuration の Output destination を invocation 単位で置き換える runtime argument です。
+
+```python
+result = dirpluck.run(
+    "example",
+    output="artifacts/context.zip",
+)
+```
+
+末尾 `/` がない `output` は exact output file path です。末尾 `/` がある場合は directory として扱い、その directory 直下へ automatic timestamp filename を生成します。
+
+```python
+result = dirpluck.run(
+    "example",
+    output="artifacts/snapshots/",
+)
+```
+
+Automatic filename は、root Configuration が `[output.timestamp]` を持つ場合にその `prefix` / `suffix` naming rule を再利用します。Configured output directory は再利用しません。Root に timestamp Output がなければ `dirpluck-YYYYMMDD-HHMMSS.zip` を使います。`sequence` は automatic timestamp filename にだけ指定できます。
+
+`output` を指定した build は root Configuration に Output declaration がなくても実行できます。Runtime Output の overwrite は既定で無効です。既存 destination を置き換える場合は `force=True` を指定します。`force=True` は Configuration の fixed / timestamp Output を使う build にも適用できます。
+
+CLI `--here` は Python API に専用 argumentを持たず、`output="./"` が同じ cwd + automatic filename、`output="context.zip"` が cwd + explicit filename に相当します。`output` path は OS にかかわらず `/` separator を使い、backslash を受理しません。'''
 
     @title("Invocation Template")
     class TITLE_5:
@@ -128,7 +158,7 @@ result = dirpluck.run(
 
     @title("Preview と RunResult")
     class TITLE_6:
-        r'''`preview=True` は Archive file を書き込まず、CLI `--preview` と同じ planning semantics を実行します。
+        r'''`preview=True` は Archive file を書き込まず、CLI `--preview` と同じ planning semantics を実行します。Output を解決・書き込みしないため、`output`、`force=True`、`sequence` とは組み合わせません。
 
 ```python
 result = dirpluck.run("example", preview=True)
@@ -165,7 +195,7 @@ Invalid Configuration、Target / Selection resolution、Invocation Template、�
 
     @title("公式 surface と互換性")
     class TITLE_8:
-        r'''0.9.x の公式 package-root export は次の4名です。
+        r'''0.10.x の公式 package-root export は次の4名です。
 
 ```python
 from dirpluck import DirpluckError, RunResult, __version__, run

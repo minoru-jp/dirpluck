@@ -5,8 +5,8 @@ This document explains how to use the `dirpluck` CLI. For TOML authoring, see [C
 ## Basic form
 
 ```text
-dirpluck [TARGET ...] [--config PATH] [--case NAME] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
-dirpluck -i PATH [-e NAME] [--case NAME] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck [TARGET ...] [--config PATH] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
 dirpluck --version
 ```
 
@@ -34,7 +34,7 @@ dirpluck example --config ../shared/review.dirpluck
 
 When `--config` is supplied, dirpluck uses only the single Configuration document named by that path. It does not search another directory for a file with the same name, and it does not accept a directory and complete it with `default.dirpluck`. Configuration document paths follow the host OS's normal filesystem semantics, including paths that contain symbolic links or Windows directory junctions. dirpluck retains the selected path's absolute spelling as the document location, and relative paths inside that document are anchored to that location's directory. It does not infer Configuration candidates from file contents, automatically select or enumerate arbitrary `*.dirpluck` files, or fall back to `.toml` Configuration files.
 
-Output is not required for `--preview`; only a normal build that writes an Archive requires the Root Configuration to declare its own Output. Base Configurations referenced through `about.base` are not selected implicitly by the CLI.
+Output is not required for `--preview`. A normal build uses either the Root Configuration's own Output declaration or CLI Runtime Output (`--here` / `--output`). Base Configurations referenced through `about.base` are not selected implicitly by the CLI.
 
 ## Invocation Template
 
@@ -67,7 +67,7 @@ dirpluck --invocation-template ../shared/release --preview
 
 An Invocation with no fields is valid. It contributes no stored execution inputs; execution uses CLI values and normal defaults. After a successful `--preview` or normal build, the CLI prints a note when the selected Invocation has no `config`, `targets`, `case`, or `archive_mtime`. This is informational rather than a warning because valid runs, such as an Always-only build, may need no stored Invocation values.
 
-An Invocation Template is not a general difference-composition mechanism for stored invocations. Positional `TARGET` and `--config` cannot be combined with `-i` / `--invocation-template`. CLI `--case NAME` may override the selected Invocation's `case`, and `--archive-mtime VALUE` may override its `archive_mtime`. `--preview`, `--sequence`, `--archive-mtime`, and `--paths` remain available as runtime modifiers. `-e` / `--entry` can be used only together with `-i` / `--invocation-template`.
+An Invocation Template is not a general difference-composition mechanism for stored invocations. Positional `TARGET` and `--config` cannot be combined with `-i` / `--invocation-template`. CLI `--case NAME` may override the selected Invocation's `case`, and `--archive-mtime VALUE` may override its `archive_mtime`. `--here`, `--output`, `--force`, `--preview`, `--sequence`, `--archive-mtime`, and `--paths` remain available as runtime modifiers, subject to their normal combination constraints. `-e` / `--entry` can be used only together with `-i` / `--invocation-template`.
 
 A `.dirpluck-inv` document is not a Configuration and cannot be referenced by `about.base`. After the selected Invocation's Configuration, Targets, Case, and Archive-entry mtime policy are resolved, execution uses normal dirpluck semantics.
 
@@ -126,7 +126,7 @@ Only one Case can be selected per run. [SPECIFICATION.md](SPECIFICATION.md) defi
 dirpluck acme --preview
 ```
 
-Use it after changing a Configuration or workspace to inspect the result before writing an Archive. The difference from a normal run is the write itself; the main resolution path for the base chain, Scope and Target handling, Cases, selection, and archive planning is shared. `--preview` can be used even when the selected Root Configuration has no Output declaration. Because preview does not generate an output filename, it cannot be combined with `--sequence`. If Selection traversal excludes non-ignored entries recognized as symbolic links or Windows directory junctions, the number skipped is reported as a note after the tree; individual paths are not listed. Entries matched by `ignore` are not included in that count. See [SPECIFICATION.md](SPECIFICATION.md) and [TRUST.md](TRUST.md) for exact preview and link-like-entry semantics.
+Use it after changing a Configuration or workspace to inspect the result before writing an Archive. The difference from a normal run is the write itself; the main resolution path for the base chain, Scope and Target handling, Cases, selection, and archive planning is shared. `--preview` can be used even when the selected Root Configuration has no Output declaration. Because preview does not resolve or write an Output, it cannot be combined with `--here`, `--output`, `--force`, or `--sequence`. If Selection traversal excludes non-ignored entries recognized as symbolic links or Windows directory junctions, the number skipped is reported as a note after the tree; individual paths are not listed. Entries matched by `ignore` are not included in that count. See [SPECIFICATION.md](SPECIFICATION.md) and [TRUST.md](TRUST.md) for exact preview and link-like-entry semantics.
 
 ## Source paths in the Archive index
 
@@ -140,15 +140,43 @@ dirpluck acme --paths
 
 `--paths` adds the resolved source directory to each source section. Because this can leave local filesystem information such as absolute paths in the Archive, consider whether it is needed when the Archive will be distributed externally.
 
+## Runtime Output
+
+A normal build can temporarily choose its Output destination from the CLI. When Runtime Output is supplied, the Configuration's fixed output path or timestamp output directory is not used as the destination.
+
+Use `--here` to write under the current runtime cwd.
+
+```console
+dirpluck acme --here
+dirpluck acme --here=context.zip
+```
+
+`--here` alone creates an automatic timestamp filename in the cwd. An explicit filename is supplied only in the `--here=FILENAME` form with `=`; directory components are not accepted. Use `--output` when a path is needed. `-h` remains the short option for `--help`, so `--here` has no short form.
+
+Use `-o PATH` / `--output PATH` to choose any runtime output path.
+
+```console
+dirpluck acme -o artifacts/context.zip
+dirpluck acme -o artifacts/snapshots/
+```
+
+A `PATH` without trailing `/` is an exact output file path. A `PATH` ending in `/` is an output directory, and an automatic timestamp filename is generated directly beneath it. dirpluck does not infer file versus directory form from existing filesystem state. `/` is the directory marker on every OS, relative paths are resolved from the runtime cwd, and backslash is not accepted as a path separator.
+
+When an automatic filename is generated, a Root Configuration with `[output.timestamp]` contributes its `prefix` / `suffix` naming rule, but not its configured output directory. Without Root timestamp Output, the default name is `dirpluck-YYYYMMDD-HHMMSS.zip`. `--sequence N` can also be used with these automatic names. It cannot be used with an exact Runtime Output filename.
+
+Runtime Output does not overwrite an existing destination by default. Use `-f` / `--force` only when an existing destination may be replaced. `--force` also applies to normal builds that use Configuration fixed or timestamp Output. A collision on an automatic filename does not trigger automatic numbering, renaming, or resampling of the timestamp.
+
+`--here` and `--output` are mutually exclusive. A Root Configuration without an Output declaration can still perform a normal build when Runtime Output is supplied.
+
 ## Sequence for timestamp Output
 
-When a Configuration uses timestamp Output and multiple runs in the same second need to be distinguished intentionally, supply a positive integer with `--sequence N`.
+When the effective Output generates an automatic timestamp filename and multiple runs in the same second need to be distinguished intentionally, supply a positive integer with `--sequence N`.
 
 ```console
 dirpluck --config project-snapshot --sequence 2
 ```
 
-`--sequence` is not automatic numbering. It cannot be used with fixed Output. See [SPECIFICATION.md](SPECIFICATION.md) for exact filename placement and collision rules.
+`--sequence` is not automatic numbering. It cannot be used with Configuration fixed Output, `--here=FILENAME`, or `--output PATH` without trailing `/`. See [SPECIFICATION.md](SPECIFICATION.md) for exact filename placement and collision rules.
 
 ## Archive entry mtime
 

@@ -145,6 +145,110 @@ class ArchiveTests(BuilderTestCase):
                 readme,
             )
 
+    def test_different_physical_files_at_same_archive_path_are_still_rejected(self):
+        with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
+            root = Path(temp)
+            project = root / "shikumi-devdoc"
+            (project / "dist").mkdir(parents=True)
+            target_wheel = project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl"
+            target_wheel.write_bytes(b"target wheel")
+
+            external = Path(other) / "dist"
+            external.mkdir()
+            (external / target_wheel.name).write_bytes(b"always wheel")
+
+            config = self._config(root, f'''
+                [namespace.shikumi-devdoc]
+
+                [pluck]
+                may = ["*"]
+
+                [always.devdoc]
+                path = {external.as_posix()!r}
+                namespace = "shikumi-devdoc"
+                must = ["*.whl"]
+            ''')
+
+            with self.assertRaisesRegex(SelectionError, "multiple files resolve to the same archive path"):
+                build_archive(config, BuildRequest.create("shikumi-devdoc"))
+
+    def test_target_and_always_may_include_same_physical_file_at_different_archive_paths(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "shikumi-devdoc"
+            (project / "src").mkdir(parents=True)
+            (project / "dist").mkdir()
+            (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            wheel = project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl"
+            wheel.write_bytes(b"wheel")
+            config = self._config(root, '''
+                [namespace.devdoc]
+
+                [pluck]
+                description = "The project currently being changed."
+                may = ["*"]
+
+                [always.devdoc]
+                path = "shikumi-devdoc/dist"
+                namespace = "devdoc"
+                description = "The built distribution used as a development tool."
+                must = ["*.whl"]
+            ''')
+
+            output = build_archive(config, BuildRequest.create("shikumi-devdoc"))
+
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl", names)
+            self.assertIn(
+                "devdoc/shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl",
+                names,
+            )
+            self.assertIn(
+                "## `devdoc/shikumi-devdoc/dist/`\n\n"
+                "Files: 1\n"
+                "Namespace: `devdoc/`; Source root: `shikumi-devdoc/dist/`\n"
+                "Target overlap: 1 selected file is also included under `shikumi-devdoc/`.\n\n"
+                "The built distribution used as a development tool.",
+                readme,
+            )
+
+    def test_target_ignore_does_not_suppress_independent_always_selection(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "shikumi-devdoc"
+            (project / "src").mkdir(parents=True)
+            (project / "dist").mkdir()
+            (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+            wheel = project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl"
+            wheel.write_bytes(b"wheel")
+            config = self._config(root, '''
+                [namespace.devdoc]
+
+                [pluck]
+                may = ["*"]
+                ignore = ["dist/"]
+
+                [always.devdoc]
+                path = "shikumi-devdoc/dist"
+                namespace = "devdoc"
+                description = "The built distribution used as a development tool."
+                must = ["*.whl"]
+            ''')
+
+            output = build_archive(config, BuildRequest.create("shikumi-devdoc"))
+
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertNotIn("shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl", names)
+            self.assertIn(
+                "devdoc/shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl",
+                names,
+            )
+            self.assertNotIn("Target overlap:", readme)
+
     def test_archive_readme_hides_source_paths_by_default(self):
         with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
             root = Path(temp)

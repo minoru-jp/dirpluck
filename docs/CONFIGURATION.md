@@ -199,6 +199,8 @@ A relative `path` is resolved from the directory containing the Configuration fi
 
 The resolved source directory itself is the selection boundary. Allowing an alias for that explicit root does not enable link traversal inside the source. Entries recognized as symbolic links or Windows directory junctions during automatic Selection traversal are not selected, and their targets are not followed.
 
+An Always source's Selection is evaluated independently of the Target Pluck. Even when the same physical file also exists under a Target, the Target's `ignore` rules and Selection result do not change the Always source's Selection. If both sources select the same physical file for different Archive paths, both entries are included. When selected files from an Always source physically overlap selected files from a Target, the generated Archive README records the Target-side Archive root and overlap count in the Always source section.
+
 Define multiple Always sources with different names. A Configuration with only Always sources and no Pluck is also valid.
 
 ## Selection
@@ -353,11 +355,11 @@ base = "../common/common.dirpluck"
 
 Relative filesystem paths in each Configuration are always resolved from the directory containing that Configuration file itself. A Scope or Always-source path inherited from a Base Configuration is not rebased to the location of an outer Configuration. The default Scope has no relative-path field and always uses the Root Configuration file's directory as its root.
 
-[SPECIFICATION.md](SPECIFICATION.md) defines composition of Pluck, Always, Scope, and Shared patterns, description resolution, cycle detection, and Output handling. A Base Configuration may omit Output. A Root Configuration used only with `--preview` may also omit Output; a normal build that writes an Archive must declare its own fixed or timestamp Output directly.
+[SPECIFICATION.md](SPECIFICATION.md) defines composition of Pluck, Always, Scope, and Shared patterns, description resolution, cycle detection, and Output handling. A Base Configuration may omit Output. A Root Configuration used with `--preview` or Runtime Output may also omit it; a normal build without Runtime Output must declare its own fixed or timestamp Output directly.
 
 ## Output
 
-Output is optional on a Configuration by itself. A Base Configuration that only provides shared definitions may omit it, and a Root Configuration used with `--preview` may also omit it. A normal build that actually writes an Archive must directly declare exactly one of two modes on the Root Configuration: fixed mode, in which the user chooses the final filename, or timestamp mode, in which `dirpluck` generates a filename from a timestamp. Output from a Base Configuration is not inherited.
+Output is optional on a Configuration by itself. A Base Configuration that only provides shared definitions may omit it, and a Root Configuration used with `--preview` or Runtime Output may also omit it. A normal build without Runtime Output must directly declare exactly one of two modes on the Root Configuration: fixed mode, in which the user chooses the final filename, or timestamp mode, in which `dirpluck` generates a filename from a timestamp. Output from a Base Configuration is not inherited.
 
 ### Fixed Output
 
@@ -388,7 +390,7 @@ The filename is generated in this form:
 [prefix-]YYYYMMDD-HHMMSS[-N][-suffix].zip
 ```
 
-`prefix` and `suffix` are specific to timestamp mode. Use CLI `--sequence N` when multiple runs in the same second need to be distinguished intentionally. A policy that gives every ZIP entry the same mtime is not a Configuration field; set it at runtime with CLI `--archive-mtime` or Invocation Template `archive_mtime`.
+`prefix` and `suffix` are specific to timestamp mode. Use CLI `--sequence N` when multiple runs in the same second need to be distinguished intentionally. When CLI `--here`, trailing-`/` `--output`, or Python `output=` requests automatic Runtime Output, these `prefix` / `suffix` values are reused as the naming rule, but the configured timestamp-output directory is not. A policy that gives every ZIP entry the same mtime is not a Configuration field; set it at runtime with CLI `--archive-mtime` or Invocation Template `archive_mtime`.
 
 ### Writable destination
 

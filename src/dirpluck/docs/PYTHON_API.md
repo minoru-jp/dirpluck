@@ -1,6 +1,6 @@
 # dirpluck Python API
 
-This document describes the official Python API for dirpluck 0.9.x. The API is intentionally small: it exposes the same execution model as the CLI without making the Configuration parser or builder pipeline part of the general compatibility contract.
+This document describes the official Python API for dirpluck 0.10.x. The API is intentionally small: it exposes the same execution model as the CLI without making the Configuration parser or builder pipeline part of the general compatibility contract.
 
 ## Positioning
 
@@ -8,7 +8,7 @@ The center of the official API is `dirpluck.run()`. It accepts the same kinds of
 
 The CLI remains responsible for human-facing argument parsing, help, exit status, and stdout / stderr formatting. The Python API does not use `SystemExit` as its normal control flow. It returns a `RunResult` and raises expected dirpluck failures as `DirpluckError` subclasses.
 
-For 0.9.x, only names explicitly exported from the package root are official Python API. Lower-level modules and underscore-prefixed names are implementation details and are not compatibility-supported during Beta.
+For 0.10.x, only names explicitly exported from the package root are official Python API. Lower-level modules and underscore-prefixed names are implementation details and are not compatibility-supported during Beta.
 
 ## Basic form
 
@@ -55,6 +55,8 @@ run(
     preview=False,
     paths=False,
     archive_mtime=None,
+    output=None,
+    force=False,
     cwd=None,
 )
 ```
@@ -71,12 +73,40 @@ entry         -e / --entry NAME
 preview       --preview
 paths         --paths
 archive_mtime --archive-mtime VALUE
+output        --output PATH
+force         --force
 cwd           Python API only: runtime anchor for relative control-document paths
 ```
 
-When `invocation` is used, positional `targets` and `config` are not supplied at the same time. `entry` is valid only together with `invocation`. `preview=True` cannot be combined with `sequence`, and `sequence` must be an integer greater than or equal to 1.
+When `invocation` is used, positional `targets` and `config` are not supplied at the same time. `entry` is valid only together with `invocation`. Because `preview=True` does not resolve or write an Output, it cannot be combined with `sequence`, `output`, or `force=True`. `sequence` must be an integer greater than or equal to 1. `output` uses the same `/`-separator path syntax as CLI `--output`, relative to `cwd`, and `force` is boolean.
 
 When an Invocation Template is selected, the `case` argument overrides the stored Case and `archive_mtime` overrides the stored `archive_mtime`, following the same rules as the corresponding CLI options. If the Invocation omits `config`, dirpluck uses `cwd/default.dirpluck`; if it omits `targets`, the run has no Targets; if it omits `case`, normal default Case semantics apply; if it omits `archive_mtime`, the normal per-entry timestamp behavior applies.
+
+## Runtime Output
+
+`output` replaces the Configuration Output destination for one invocation.
+
+```python
+result = dirpluck.run(
+    "example",
+    output="artifacts/context.zip",
+)
+```
+
+An `output` value without trailing `/` is an exact output file path. A value ending in `/` is an output directory, and dirpluck generates an automatic timestamp filename directly beneath it.
+
+```python
+result = dirpluck.run(
+    "example",
+    output="artifacts/snapshots/",
+)
+```
+
+For automatic filenames, a Root Configuration with `[output.timestamp]` contributes its `prefix` / `suffix` naming rule, but not its configured output directory. Without Root timestamp Output, the name is `dirpluck-YYYYMMDD-HHMMSS.zip`. `sequence` is valid only with an automatic timestamp filename.
+
+A build with `output` does not require an Output declaration on the Root Configuration. Runtime Output does not overwrite an existing destination by default; use `force=True` to allow replacement. `force=True` also applies when the build uses Configuration fixed or timestamp Output.
+
+CLI `--here` has no dedicated Python argument. `output="./"` is equivalent to cwd plus an automatic filename, while `output="context.zip"` is equivalent to cwd plus an explicit filename. `output` uses `/` as the path separator on every OS and rejects backslashes.
 
 ## Invocation Template
 
@@ -118,7 +148,7 @@ When supplied, the resolved timestamp is applied uniformly to generated `README.
 
 ## Preview and `RunResult`
 
-`preview=True` performs the same planning semantics as CLI `--preview` without writing an Archive file.
+`preview=True` performs the same planning semantics as CLI `--preview` without writing an Archive file. Because it does not resolve or write an Output, it cannot be combined with `output`, `force=True`, or `sequence`.
 
 ```python
 result = dirpluck.run("example", preview=True)
@@ -155,7 +185,7 @@ Invalid Configurations, Target or Selection resolution failures, Invocation Temp
 
 ## Official surface and compatibility
 
-The official package-root exports for 0.9.x are exactly:
+The official package-root exports for 0.10.x are exactly:
 
 ```python
 from dirpluck import DirpluckError, RunResult, __version__, run

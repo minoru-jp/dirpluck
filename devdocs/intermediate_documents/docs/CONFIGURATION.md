@@ -240,6 +240,8 @@ Relative `path` は、その definition が記述されている Configuration f
 
 Always source には任意で `namespace = "<name>"` を指定し、定義済みのネームスペースを Archive root の外側へ追加できます。Filesystem 上の source path や selection boundary は変わりません。
 
+Always source の Selection は Target の Pluck とは独立して評価します。同じ physical file が Target 配下にも存在していても、Target 側の `ignore` や Selection result は Always source の Selection を変更しません。両方が同じ physical file を選択し、異なる Archive path に配置する場合は両方を収録します。生成されるアーカイブREADMEでは、Always source が実際に選択した file と Target が実際に選択した file に physical overlap がある場合、その Always source section に Target 側の Archive root と重複 file 数を表示します。
+
 複数の Always source は名前を変えて定義します。Pluck を持たず Always source だけで完結する Configuration も有効です。
 
 ## Selection
@@ -394,11 +396,11 @@ base = "../common/common.dirpluck"
 
 各 Configuration に書かれた relative filesystem path は、常にその Configuration file 自身の directory を基準に解決します。Base Configuration から継承した named Scope や Always source の path を、外側 Configuration の位置へ rebase しません。Default Scope も同じ Configuration-directory model に従い、Root Configuration file の directory をそのまま root とします。
 
-Pluck、Always、Scope、Shared pattern の composition、description resolution、cycle detection、Output の扱いは `SPECIFICATION.md` に定義します。Base Configuration は Output を省略できます。Output を持たない root Configuration も `--preview` には使用でき、実際に Archive file を書き込む場合だけ自身の fixed または timestamp Output を直接宣言する必要があります。
+Pluck、Always、Scope、Shared pattern の composition、description resolution、cycle detection、Output の扱いは `SPECIFICATION.md` に定義します。Base Configuration は Output を省略できます。Output を持たない root Configuration も `--preview` に使用でき、通常 build でも CLI `--here` / `--output` または Python API `output=` で runtime Output を与えれば実行できます。Runtime Output を使わない build では root 自身の fixed または timestamp Output を直接宣言します。
 
 ## Output
 
-出力定義は optional です。共通 definition を提供する Base Configurationだけでなく、`--preview` に使う root Configuration でも Output を省略できます。実際に Archive file を書き込む通常 build では、root Configuration 自身に fixed mode または timestamp mode のどちらか一方を直接宣言する必要があります。Base の Output は継承されません。
+出力定義は optional です。共通 definition を提供する Base Configurationだけでなく、`--preview` や runtime Output を使う root Configuration でも Output を省略できます。Runtime Output を指定しない通常 build では、root Configuration 自身に fixed mode または timestamp mode のどちらか一方を直接宣言します。Base の Output は継承されません。
 
 ### Fixed output
 
@@ -429,7 +431,7 @@ Filename は次の形で生成します。
 [prefix-]YYYYMMDD-HHMMSS[-N][-suffix].zip
 ```
 
-`prefix` と `suffix` は timestamp mode 専用です。同じ秒に複数 run を意図的に区別したい場合は CLI `--sequence N` を使えます。ZIP entry 自体の mtime を統一する policy は Configuration field ではなく、CLI / Invocation Template の `--archive-mtime` / `archive_mtime` で指定します。
+`prefix` と `suffix` は timestamp mode 専用です。同じ秒に複数 run を意図的に区別したい場合は CLI `--sequence N` を使えます。CLI `--here` や末尾 `/` の `--output PATH`、Python API の末尾 `/` の `output=` で runtime directory Output を指定した場合も、root Configuration が `[output.timestamp]` を持てば `prefix` / `suffix` は automatic filename の naming rule として再利用されます。Configured `path` は runtime destination には使いません。ZIP entry 自体の mtime を統一する policy は Configuration field ではなく、CLI / Invocation Template の `--archive-mtime` / `archive_mtime` で指定します。
 
 ### Writable destination
 

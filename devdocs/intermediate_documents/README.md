@@ -202,7 +202,7 @@ Configuration の各 field、Scope、Case、Always、Output、Namespace など�
 
 ## インストール
 
-現在の version は **0.9.0** です。
+現在の version は **0.10.0** です。
 
 Python 3.11 以降を使用します。
 

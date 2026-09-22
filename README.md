@@ -160,7 +160,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for Configuration fields, Sco
 
 ## Installation
 
-The current version is **0.9.0**.
+The current version is **0.10.0**.
 
 Python 3.11 or later is required.
 

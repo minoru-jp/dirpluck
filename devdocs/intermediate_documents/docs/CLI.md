@@ -45,8 +45,8 @@
 ## 基本形
 
 ```text
-dirpluck [TARGET ...] [--config PATH] [--case NAME] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
-dirpluck -i PATH [-e NAME] [--case NAME] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck [TARGET ...] [--config PATH] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
 dirpluck --version
 ```
 
@@ -74,7 +74,7 @@ dirpluck example --config ../shared/review.dirpluck
 
 `--config` を指定した場合は、その path が表す1個の Configuration document だけを使用し、別 directory の同名 file を探索しません。Directory 自体を指定してその中の `default.dirpluck` を補うこともありません。Configuration document path は host OS の通常の filesystem semantics に従って解決し、symbolic link / Windows directory junction を含む path も control document の選択では特別に拒否しません。dirpluck は選択した path の absolute な表記を document location として保持し、その document 内の relative path はその location の directory を基準にします。dirpluck は file 内容から Configuration らしさを推論したり、任意の `*.dirpluck` file を自動選択・列挙したりしません。`.toml` file を Configuration として扱う互換 fallback もありません。
 
-Output は `--preview` には不要で、実際に Archive を書き込む通常 build の root Configuration だけが自身の Output declaration を必要とします。Configuration が `about.base` で参照する Base Configuration は CLI の自動選択対象ではありません。
+Output は `--preview` には不要です。通常 build では root Configuration 自身の Output declaration、または CLI の runtime Output (`--here` / `--output`) のどちらかを使います。Configuration が `about.base` で参照する Base Configuration は CLI の自動選択対象ではありません。
 
 ## Invocation Template
 
@@ -107,7 +107,7 @@ dirpluck --invocation-template ../shared/release --preview
 
 Field を1つも持たない Invocation も有効です。その Invocation は保存済みの実行入力を追加せず、CLI から与えた runtime value と通常の defaults を使います。成功した `--preview` または通常 build では、空の Invocation が選ばれたことを note として CLI output に表示します。これは warning ではなく、Always source だけを使う実行などが正当に成立し得る状態です。
 
-Invocation Template は保存済み invocation を一般的に差分合成する仕組みではありません。`-i` / `--invocation-template` と positional `TARGET`、`--config` は組み合わせません。`--case NAME` は選択した Invocation の `case` を実行時に上書きでき、`--archive-mtime VALUE` は Invocation の `archive_mtime` を上書きできます。`--preview`、`--sequence`、`--archive-mtime`、`--paths` も runtime modifier として併用できます。`-e` / `--entry` は `-i` / `--invocation-template` と一緒にだけ使用できます。
+Invocation Template は保存済み invocation を一般的に差分合成する仕組みではありません。`-i` / `--invocation-template` と positional `TARGET`、`--config` は組み合わせません。`--case NAME` は選択した Invocation の `case` を実行時に上書きでき、`--archive-mtime VALUE` は Invocation の `archive_mtime` を上書きできます。`--here` / `--output` / `--force`、`--preview`、`--sequence`、`--archive-mtime`、`--paths` も、それぞれ通常の組み合わせ制約に従う runtime modifier として使用できます。`-e` / `--entry` は `-i` / `--invocation-template` と一緒にだけ使用できます。
 
 `.dirpluck-inv` は Configuration ではなく、`about.base` の参照先にもなりません。選択した Invocation の Configuration / Target / Case / Archive mtime 解決後は通常の dirpluck execution と同じ semantics を使います。
 
@@ -166,7 +166,7 @@ dirpluck acme --case audit
 dirpluck acme --preview
 ```
 
-Configuration や workspace を変更した後、実際に Archive を書き込む前の確認に使えます。通常実行との差分は書き込みで、base chain、Scope / Target、Case、selection、archive planning の主要な解決処理は共通です。`--preview` は root Configuration に Output declaration がなくても使用できます。Output filename generation を行わないため `--sequence` とは組み合わせません。
+Configuration や workspace を変更した後、実際に Archive を書き込む前の確認に使えます。通常実行との差分は書き込みで、base chain、Scope / Target、Case、selection、archive planning の主要な解決処理は共通です。`--preview` は root Configuration に Output declaration がなくても使用できます。Output を解決・書き込みしないため、`--here` / `--output` / `--force` / `--sequence` とは組み合わせません。
 
 Selection traversal で non-ignored symbolic link / Windows directory junction として認識した entry を除外した場合は、tree の後に除外件数を note として表示します。個々の path は列挙しません。正確な preview semantics と link-like entry の扱いは `SPECIFICATION.md` / `TRUST.md` を参照してください。
 
@@ -182,15 +182,43 @@ dirpluck acme --paths
 
 `--paths` は各 source section に解決済み source directory を追加します。Absolute path を含む local filesystem 情報を Archive に残し得るため、外部へ配布する Archive では必要性を確認して使用してください。
 
+## Runtime Output
+
+通常 build の Output destination は CLI から一時的に指定できます。Runtime Output を指定した場合、Configuration の fixed output path / timestamp output directory は書き出し先として使用しません。
+
+現在の cwd へ書き出す場合は `--here` を使います。
+
+```console
+dirpluck acme --here
+dirpluck acme --here=context.zip
+```
+
+`--here` だけなら cwd に automatic timestamp filename を生成します。明示 filename は `--here=FILENAME` の形で `=` に続けて指定し、directory component は受理しません。Path を指定する場合は `--output` を使います。`-h` は `--help` の short option として保持し、`--here` に short option はありません。
+
+任意の runtime path へ書き出す場合は `-o PATH` / `--output PATH` を使います。
+
+```console
+dirpluck acme -o artifacts/context.zip
+dirpluck acme -o artifacts/snapshots/
+```
+
+末尾 `/` がない `PATH` は exact output file path、末尾 `/` がある `PATH` は output directory です。Directory form では automatic timestamp filename をその directory 直下へ生成します。Filesystem の既存状態から file / directory を推測せず、directory marker は OS にかかわらず `/` です。Relative `PATH` は runtime cwd を基準にします。Backslash は path separator として受理しません。
+
+Automatic filename を生成するとき、root Configuration が `[output.timestamp]` を宣言していれば、その `prefix` / `suffix` を naming rule として再利用します。Configured output directory 自体は使いません。Root に timestamp Output がなければ既定名は `dirpluck-YYYYMMDD-HHMMSS.zip` です。`--sequence N` はこの automatic filename にも使用できます。Exact filename を指定した runtime Output では `--sequence` を使えません。
+
+Runtime Output の overwrite は既定で無効です。Existing destination を置き換える場合だけ `-f` / `--force` を指定します。`--force` は Configuration の fixed / timestamp Output を使う通常 buildにも適用できます。Automatic filename が既存 destination と衝突しても、自動採番・rename・timestamp の取り直しは行いません。
+
+`--here` と `--output` は同時に指定できません。Output declaration を持たない root Configuration でも、runtime Output を指定すれば通常 build を実行できます。
+
 ## Timestamp output の sequence
 
-Timestamp output を使う Configuration で、同じ秒に複数 run を意図的に区別したい場合は正の整数 `--sequence N` を指定できます。
+Automatic timestamp filename を使う Output で、同じ秒に複数 run を意図的に区別したい場合は正の整数 `--sequence N` を指定できます。
 
 ```console
 dirpluck --config project-snapshot --sequence 2
 ```
 
-`--sequence` は自動採番ではありません。Fixed output では使えません。Filename の正確な配置と collision rules は `SPECIFICATION.md` を参照してください。
+`--sequence` は自動採番ではありません。Configuration の fixed output、`--here=FILENAME`、末尾 `/` を持たない `--output PATH` では使えません。Filename の正確な配置と collision rules は `SPECIFICATION.md` を参照してください。
 
 ## Archive entry の mtime
 

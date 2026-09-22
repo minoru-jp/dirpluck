@@ -11,6 +11,14 @@ from .config import Always, Config, Namespace, Pluck, Scope, Selection, SharedPa
 
 
 @dataclass(frozen=True)
+class RuntimeOutput:
+    """One runtime-selected exact output path or generated-name directory."""
+
+    path: Path
+    generated: bool
+
+
+@dataclass(frozen=True)
 class BuildRequest:
     """One build request with Target references and runtime archive options."""
 
@@ -19,6 +27,8 @@ class BuildRequest:
     sequence: int | None = None
     paths: bool = False
     archive_mtime: datetime | None = None
+    output: RuntimeOutput | None = None
+    force: bool = False
 
     @classmethod
     def create(
@@ -28,6 +38,8 @@ class BuildRequest:
         sequence: int | None = None,
         paths: bool = False,
         archive_mtime: datetime | None = None,
+        output: RuntimeOutput | None = None,
+        force: bool = False,
     ) -> "BuildRequest":
         return cls(
             directories=tuple(
@@ -38,6 +50,8 @@ class BuildRequest:
             sequence=sequence,
             paths=paths,
             archive_mtime=archive_mtime,
+            output=output,
+            force=force,
         )
 
 

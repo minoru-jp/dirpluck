@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import textwrap
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from _temp import resolved_temporary_directory
@@ -98,6 +99,65 @@ class PythonApiTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(output.getvalue().rstrip("\n"), result.preview_text)
 
+    def test_preview_rejects_runtime_output_and_force(self):
+        with self.assertRaises(dirpluck.DirpluckError) as output_error:
+            dirpluck.run(preview=True, output="out.zip")
+        self.assertIn("output cannot be combined with preview", str(output_error.exception))
+
+        with self.assertRaises(dirpluck.DirpluckError) as force_error:
+            dirpluck.run(preview=True, force=True)
+        self.assertIn("force cannot be combined with preview", str(force_error.exception))
+
+    def test_run_supports_runtime_output_and_force(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            output = root / "runtime.zip"
+            output.write_bytes(b"old")
+
+            result = dirpluck.run(
+                "app",
+                output="runtime.zip",
+                force=True,
+                cwd=root,
+            )
+            self.assertEqual(result.output_path, output)
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("app/src/app.py", archive.namelist())
+
+    def test_run_runtime_output_directory_uses_configuration_timestamp_naming(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            config = root / "default.dirpluck"
+            config.write_text(
+                config.read_text(encoding="utf-8").split("[output]", 1)[0]
+                + textwrap.dedent(
+                    '''
+                    [output.timestamp]
+                    path = "configured/"
+                    prefix = "api"
+                    suffix = "snapshot"
+                    '''
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dirpluck._output._current_output_timestamp",
+                return_value="20260923-022000",
+            ):
+                result = dirpluck.run(
+                    "app",
+                    output="runtime/",
+                    sequence=2,
+                    cwd=root,
+                )
+            self.assertEqual(
+                result.output_path,
+                root / "runtime" / "api-20260923-022000-2-snapshot.zip",
+            )
+
     def test_run_supports_invocation_entry_and_cli_case_override(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
@@ -148,6 +208,8 @@ class PythonApiTests(unittest.TestCase):
             ({"config": "review", "invocation": "calls"}, "config cannot be combined"),
             ({"entry": "review"}, "entry requires invocation"),
             ({"preview": True, "sequence": 1}, "sequence cannot be combined"),
+            ({"output": r"bad\path.zip"}, "backslashes are not allowed"),
+            ({"force": "yes"}, "force must be a boolean"),
         )
         for kwargs, message in cases:
             with self.subTest(kwargs=kwargs), self.assertRaisesRegex(dirpluck.DirpluckError, message):

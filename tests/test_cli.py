@@ -1141,6 +1141,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 2)
         self.assertIn("--sequence cannot be combined with --preview", stderr.getvalue())
 
+    def test_preview_rejects_runtime_output_options(self):
+        for arguments, message in (
+            (["--preview", "--here"], "--here cannot be combined with --preview"),
+            (["--preview", "--output", "out.zip"], "--output cannot be combined with --preview"),
+            (["--preview", "--force"], "--force cannot be combined with --preview"),
+        ):
+            with self.subTest(arguments=arguments):
+                stderr = StringIO()
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(arguments)
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn(message, stderr.getvalue())
+
     def test_removed_configs_option_is_rejected(self):
         stderr = StringIO()
         with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
@@ -1153,20 +1166,259 @@ class CliTests(unittest.TestCase):
             main(["build", "app"])
         self.assertEqual(caught.exception.code, 2)
 
-    def test_removed_output_option_is_rejected(self):
+    def test_output_option_selects_runtime_exact_output(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            stdout = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    result = main(["app", "-o", "artifacts/out.zip"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                stdout.getvalue().strip(),
+                str(root / "artifacts" / "out.zip"),
+            )
+            self.assertTrue((root / "artifacts" / "out.zip").is_file())
+            self.assertFalse((root / "result.zip").exists())
+
+    def test_here_uses_runtime_cwd_and_default_timestamp_name(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
             previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch(
+                        "dirpluck._output._current_output_timestamp",
+                        return_value="20260923-021500",
+                    ),
+                    redirect_stdout(StringIO()),
+                ):
+                    result = main(["app", "--here"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "dirpluck-20260923-021500.zip").is_file())
+            self.assertFalse((root / "result.zip").exists())
+
+    def test_here_accepts_explicit_filename_only_with_equals(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app", "--here=context.zip"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "context.zip").is_file())
+
             stderr = StringIO()
+            previous = Path.cwd()
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "-o", "out.zip"])
+                    main(["app", "--here=nested/context.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
-            self.assertFalse((root / "out.zip").exists())
+            self.assertIn("filename only", stderr.getvalue())
+
+    def test_output_directory_uses_default_timestamp_name(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch(
+                        "dirpluck._output._current_output_timestamp",
+                        return_value="20260923-021600",
+                    ),
+                    redirect_stdout(StringIO()),
+                ):
+                    result = main(["app", "--output", "artifacts/"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue(
+                (root / "artifacts" / "dirpluck-20260923-021600.zip").is_file()
+            )
+
+    def test_runtime_automatic_name_reuses_root_timestamp_naming(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            config = root / "default.dirpluck"
+            config.write_text(
+                config.read_text(encoding="utf-8").split("[output]", 1)[0]
+                + textwrap.dedent(
+                    '''
+                    [output.timestamp]
+                    path = "configured/"
+                    prefix = "project"
+                    suffix = "review"
+                    '''
+                ),
+                encoding="utf-8",
+            )
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch(
+                        "dirpluck._output._current_output_timestamp",
+                        return_value="20260923-021700",
+                    ),
+                    redirect_stdout(StringIO()),
+                ):
+                    result = main(
+                        ["app", "--output", "runtime/", "--sequence", "4"]
+                    )
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue(
+                (
+                    root
+                    / "runtime"
+                    / "project-20260923-021700-4-review.zip"
+                ).is_file()
+            )
+            self.assertFalse((root / "configured").exists())
+
+    def test_runtime_exact_output_does_not_reuse_timestamp_naming(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            config = root / "default.dirpluck"
+            config.write_text(
+                config.read_text(encoding="utf-8").split("[output]", 1)[0]
+                + textwrap.dedent(
+                    '''
+                    [output.timestamp]
+                    path = "configured/"
+                    prefix = "project"
+                    suffix = "review"
+                    '''
+                ),
+                encoding="utf-8",
+            )
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app", "-o", "runtime/exact.zip"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "runtime" / "exact.zip").is_file())
+
+    def test_runtime_output_allows_build_without_configuration_output(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            config = root / "default.dirpluck"
+            config.write_text(
+                config.read_text(encoding="utf-8").split("[output]", 1)[0],
+                encoding="utf-8",
+            )
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["app", "-o", "runtime.zip"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "runtime.zip").is_file())
+
+    def test_force_allows_runtime_and_configured_output_replacement(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            runtime = root / "runtime.zip"
+            runtime.write_bytes(b"old")
+            configured = root / "result.zip"
+            configured.write_bytes(b"old")
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    self.assertEqual(main(["app", "-o", "runtime.zip", "-f"]), 0)
+                    self.assertEqual(main(["app", "--force"]), 0)
+            finally:
+                os.chdir(previous)
+            with zipfile.ZipFile(runtime) as archive:
+                self.assertIn("app/src/app.py", archive.namelist())
+            with zipfile.ZipFile(configured) as archive:
+                self.assertIn("app/src/app.py", archive.namelist())
+
+    def test_runtime_output_rejects_collision_without_force(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            (root / "runtime.zip").write_bytes(b"old")
+            stderr = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["app", "-o", "runtime.zip"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("already exists", stderr.getvalue())
+            self.assertEqual((root / "runtime.zip").read_bytes(), b"old")
+
+    def test_here_and_output_are_mutually_exclusive(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            main(["--here", "-o", "out.zip"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--here cannot be combined with --output", stderr.getvalue())
+
+    def test_output_rejects_backslash_path_syntax(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            stderr = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["app", "-o", r"artifacts\out.zip"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("backslashes are not allowed", stderr.getvalue())
+
+    def test_sequence_requires_automatic_runtime_output(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            stderr = StringIO()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+                    main(["app", "-o", "out.zip", "--sequence", "2"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn(
+                "sequence can only be used with timestamp output",
+                stderr.getvalue(),
+            )
 
     def test_cli_preserves_location_expansion_trailing_slash(self):
         with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:

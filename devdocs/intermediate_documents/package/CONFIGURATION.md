@@ -95,6 +95,8 @@ Namespace を使う Archive の `README.md` は、Namespace が元 source path �
 
 Always source は `path` を Configuration に固定します。Configuration の filesystem location は `/` を separator として書き、Windows でも backslash は separator として使いません。Relative path はその field を記述した Configuration file の directoryを基準に解決します。Absolute path も指定できます。Named Scope / Always の明示 root location は symbolic link / Windows directory junction を含めることができますが、解決した root からの自動 Target discovery / Selection traversal では link-like entry をたどりません。Configuration document 自体を参照する `about.base` も host OS の通常の filesystem semantics に従い、relative reference は選択した Configuration path の directory を基準にします。
 
+Always source と Target の Selection は独立して評価します。同じ physical file が両方から選択されて異なる Archive path に配置される場合は両方を収録し、Target 側の `ignore` は Always source を抑止しません。Archive `README.md` の Always source section は、実際に選択された file が Target と physical overlap する場合に Target 側 Archive root と重複 file 数を表示します。
+
 Selection では次を使えます。
 
 - `description`: Archive README の source section で役割を説明する任意の non-empty string。複数行も使用できます。
@@ -113,7 +115,7 @@ Reusable pattern は `[shared.must]` / `[shared.may]` / `[shared.ignore]` に定
 base = "../base/base.dirpluck"
 ```
 
-Output は Configuration 単体では optional です。共通 definition を提供する Base Configurationだけでなく、`--preview` に使う root Configuration でも省略できます。実際に Archive file を書き込む通常 build では root 自身に fixed mode または timestamp mode のどちらか一方を直接宣言する必要があります。Base の Output は継承されません。Fixed mode では filename まで指定し、`overwrite` の既定は `false` です。生成する Archive file は通常の新規 file creation と同じ permission semantics に従い、POSIX では process `umask` が適用されます。Overwrite でも既存 file mode は継承しません。
+Output は Configuration 単体では optional です。共通 definition を提供する Base Configurationだけでなく、`--preview` や runtime Output を使う root Configuration でも省略できます。Runtime Output を指定しない通常 build では root 自身に fixed mode または timestamp mode のどちらか一方を直接宣言します。Base の Output は継承されません。Fixed mode では filename まで指定し、`overwrite` の既定は `false` です。生成する Archive file は通常の新規 file creation と同じ permission semantics に従い、POSIX では process `umask` が適用されます。Overwrite でも既存 file mode は継承しません。CLI `--here` / `--output` または Python API `output=` で automatic runtime output を使う場合、root の `[output.timestamp]` があれば `prefix` / `suffix` は naming rule として再利用されますが、その configured `path` は使いません。
 
 ```toml
 [output]

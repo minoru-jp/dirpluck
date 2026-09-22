@@ -22,6 +22,46 @@ def _positive_sequence(value: str) -> int:
     return number
 
 
+def _normalize_here_arguments(argv: list[str]) -> tuple[list[str], str | None, int]:
+    """Normalize --here[=FILENAME] while requiring '=' for the optional filename."""
+
+    normalized: list[str] = []
+    filename: str | None = None
+    count = 0
+    positional_only = False
+    for token in argv:
+        if positional_only:
+            normalized.append(token)
+            continue
+        if token == "--":
+            positional_only = True
+            normalized.append(token)
+            continue
+        if token == "--here":
+            count += 1
+            normalized.append("--here")
+            continue
+        if token.startswith("--here="):
+            count += 1
+            filename = token.partition("=")[2]
+            normalized.append("--here")
+            continue
+        normalized.append(token)
+    return normalized, filename, count
+
+
+def _validate_here_filename(parser: argparse.ArgumentParser, value: str) -> str:
+    if not value:
+        parser.error("--here filename must not be empty")
+    if value in {".", ".."} or "/" in value or "\\" in value:
+        parser.error("--here accepts a filename only; use --output for a path")
+    if any(char in value for char in '<>:"|?*') or any(
+        ord(char) < 32 or ord(char) == 127 for char in value
+    ):
+        parser.error("--here filename must be one portable filename")
+    return value
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dirpluck")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -83,6 +123,30 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--here",
+        action="store_true",
+        help=(
+            "write to cwd; use --here=FILENAME for an explicit filename, "
+            "otherwise use an automatic timestamp name"
+        ),
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        action="append",
+        metavar="PATH",
+        help=(
+            "runtime output path; a trailing '/' selects automatic timestamp naming "
+            "in that directory"
+        ),
+    )
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="allow the effective output archive to be replaced if it already exists",
+    )
+    parser.add_argument(
         "--preview",
         action="store_true",
         help="preview the ZIP contents as a tree without creating an archive",
@@ -97,7 +161,12 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
-    args = parser.parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    normalized_argv, here_filename, here_count = _normalize_here_arguments(raw_argv)
+    args = parser.parse_args(normalized_argv)
+
+    if here_count > 1:
+        parser.error("--here may be specified at most once")
 
     if args.case is not None and len(args.case) > 1:
         parser.error("--case may be specified at most once")
@@ -109,6 +178,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--invocation-template may be specified at most once")
     if args.entry is not None and len(args.entry) > 1:
         parser.error("--entry may be specified at most once")
+    if args.output is not None and len(args.output) > 1:
+        parser.error("--output may be specified at most once")
     selected_case = None if args.case is None else args.case[0]
     selected_sequence = None if args.sequence is None else args.sequence[0]
     selected_archive_mtime = (
@@ -118,11 +189,24 @@ def main(argv: list[str] | None = None) -> int:
         None if args.invocation_template is None else args.invocation_template[0]
     )
     selected_entry = None if args.entry is None else args.entry[0]
+    selected_output = None if args.output is None else args.output[0]
+    if args.here and selected_output is not None:
+        parser.error("--here cannot be combined with --output")
+    if args.here:
+        selected_output = (
+            "./" if here_filename is None else _validate_here_filename(parser, here_filename)
+        )
 
     # Preserve CLI-specific diagnostics while the same combinations are also
     # validated by the public Python API.
     if args.preview and selected_sequence is not None:
         parser.error("--sequence cannot be combined with --preview")
+    if args.preview and args.here:
+        parser.error("--here cannot be combined with --preview")
+    if args.preview and selected_output is not None:
+        parser.error("--output cannot be combined with --preview")
+    if args.preview and args.force:
+        parser.error("--force cannot be combined with --preview")
     if selected_entry is not None and selected_invocation is None:
         parser.error("--entry requires --invocation-template")
     if selected_invocation is not None:
@@ -142,6 +226,8 @@ def main(argv: list[str] | None = None) -> int:
             preview=args.preview,
             paths=args.paths,
             archive_mtime=selected_archive_mtime,
+            output=selected_output,
+            force=args.force,
         )
         if args.preview:
             print(result.preview_text)

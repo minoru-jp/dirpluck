@@ -42,6 +42,30 @@
 
 dirpluck のリリースごとの変更履歴。
 
+## 0.10.0
+
+Runtime から Output destination と overwrite policy を指定できるようにし、Configuration の抽出定義を保ったまま書き出し場所を invocation ごとに変更できるようにする。
+
+### Added
+
+- CLI に `--here[=FILENAME]`、`-o PATH` / `--output PATH`、`-f` / `--force` を追加する。`--here` は runtime cwd、`--output` は runtime cwd 基準の明示 path を Output として使用し、末尾 `/` の `--output` は directory 指定として timestamp filename を自動生成する。`--here=FILENAME` は cwd 直下の filename だけを受理し、path を指定する場合は `--output` を使用する。
+- 公式 Python API の `run()` に `output` と `force` を追加する。`output` は CLI `--output` と同じ path semantics を持ち、末尾 `/` なら automatic timestamp filename、末尾 `/` がなければ exact output file path とする。Relative `output` は API の `cwd` を基準に解決する。
+
+### Changed
+
+- Runtime Output が指定された build では root Configuration に Output declaration を要求しない。Exact runtime output はその filename をそのまま使い、automatic runtime output は root Configuration が `[output.timestamp]` を宣言している場合だけその `prefix` / `suffix` naming rule を再利用する。Root に timestamp Output がない場合は `dirpluck-YYYYMMDD-HHMMSS.zip` を既定名とする。Configuration 側の output directory / fixed path は runtime destination へ引き継がない。
+- `--sequence N` は Configuration timestamp output に加えて、`--here` と末尾 `/` の runtime Output が生成する automatic timestamp filename にも適用する。Exact runtime file path と組み合わせた場合は error とする。Generated name の collision に対する自動採番・自動 rename・timestamp 再取得は行わない。
+- Runtime Output の default overwrite policy は `false` とし、`--force` / `force=True` で effective Output を overwrite 可能にする。`--force` は runtime Output だけでなく Configuration の fixed / timestamp Output にも適用できる。Runtime path notation は Configuration と同じく OS にかかわらず `/` separator を使用し、backslash を受理しない。
+- `--preview` / `preview=True` は Output を解決・書き込みしないため、runtime Output を指定する `--here` / `--output` / `output=`、overwrite を要求する `--force` / `force=True`、および output filename を変更する `--sequence` との組み合わせを error とする。指定した runtime Output option を preview が暗黙に無視する挙動は行わない。
+
+## 0.9.1
+
+Target と Always source が同じ physical material を独立した役割で含められるようにし、Archive planning と生成 README の重複表現を修正する。
+
+### Fixed
+
+- Target と Always source が同じ physical file を選択して異なる Archive path へ配置する場合に ambiguity error として拒否していた制約を解除する。Target の Pluck と Always source の Selection は physical overlap の有無にかかわらず独立して評価し、Target 側の `ignore` や未選択結果によって Always source を抑止しない。同じ archive path に異なる physical file が衝突する場合は引き続き error とし、同じ archive path に同じ physical file が重なる場合は1回だけ書き込む。Always source が実際に選択した file と Target が実際に選択した file に physical overlap がある場合は、生成 Archive README の Always source section に Target 側の final Archive root と重複 file 数を表示する。
+
 ## 0.9.0
 
 1.0 に向けて Configuration language の語彙と filesystem model を整理し、公開設定面を新しい Pluck / Scope / Always / Base / Output model へ移行する。Development Status を Beta へ進める。

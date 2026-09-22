@@ -62,7 +62,7 @@ Default Invocation と各 named entry は `config`、`targets`、`case`、`archi
 
 選択した Invocation が `config` を省略した場合は runtime cwd の `default.dirpluck` を使用し、`targets` を省略した場合は positional Target を与えない実行として扱い、`case` を省略した場合は通常の default Case semantics、`archive_mtime` を省略した場合は通常の Archive entry timestamp semantics を使用する。4 field がすべて未指定でも、CLI から与えた runtime value とこれらの normal defaults を通常どおり適用する。成功した `--preview` または通常 build で field を1つも持たない Invocation が選択されていた場合は、その状態を warning ではない runtime note として CLI output に表示する。
 
-Invocation Template を使用する実行では positional `TARGET` と `--config` による差分・override を受理しない。`--case` は選択した Invocation の保存 field override として受理し、指定時はその Invocation の `case` より優先する。`--archive-mtime` も保存 field override として受理し、指定時は Invocation の `archive_mtime` より優先する。`--preview`、`--sequence`、`--archive-mtime`、`--paths` は Template の保存内容を変更しない runtime modifier として通常の制約の範囲で併用できる。
+Invocation Template を使用する実行では positional `TARGET` と `--config` による差分・override を受理しない。`--case` は選択した Invocation の保存 field override として受理し、指定時はその Invocation の `case` より優先する。`--archive-mtime` も保存 field override として受理し、指定時は Invocation の `archive_mtime` より優先する。`--here` / `--output` / `--force`、`--preview`、`--sequence`、`--archive-mtime`、`--paths` は Template の保存内容を変更しない runtime modifier として通常の制約の範囲で併用できる。
 
 基底設定ファイルの参照では CLI document selection を行わない。各 Configuration は `about.base` に `.dirpluck` extension を持つ concrete Configuration file path を直接記述する。Base path も host OS の通常の filesystem semantics に従い、relative path は参照元 Configuration location の directory を基準にする。`.dirpluck-inv` document は Configuration ではなく base chain に参加しない。
 
@@ -92,13 +92,13 @@ Invocation Template を使用する実行では positional `TARGET` と `--confi
 
 各 Configuration layer は Pluck を0個または1個、名前付き Scope、Always source、Shared pattern、ネームスペースを0個以上持てる。`[scope]` は root Configuration で常設される default Scope の optional `ignore` / `namespace` 設定であり、Scope の存在宣言ではない。Pluck / Always は Case を0個以上持てる。
 
-各 Configuration は Output を0個または1個宣言できる。Output を宣言する場合、fixed output と timestamp output は排他的である。Configuration file 単体の schema validity と Archive planning / `--preview` には Output を要求しない。実際に Archive file を書き込む build では、ルート設定ファイル自身が Output を直接宣言しなければならない。Base layer の Output は root へ継承しない。
+各 Configuration は Output を0個または1個宣言できる。Output を宣言する場合、fixed output と timestamp output は排他的である。Configuration file 単体の schema validity と Archive planning / `--preview` には Output を要求しない。Archive file を書き込む build では、ルート設定ファイル自身の Output declaration または runtime Output のどちらかを必要とする。Base layer の Output は root へ継承しない。
 
 ひとつの Configuration layer が local source definition を持たなくてもよい。Base composition 後の実効設定には Pluck または Always source の少なくとも一方が必要である。Default Scope は root Configuration に常に存在するため、Effective Pluck のために別途 Scope declaration を要求しない。
 
 ## 4. Filesystem path notation
 
-Configuration / Invocation Template の TOML で filesystem location を表す field と、CLI の `--config PATH` / `-i PATH` は、host OS に関係なく `/` を path separator として使用する。Backslash は separator として受理せず、Windows でも `/` を記述する。
+Configuration / Invocation Template の TOML で filesystem location を表す field と、CLI の `--config PATH` / `-i PATH` / `--output PATH`、Python API の runtime `output` は、host OS に関係なく `/` を path separator として使用する。Backslash は separator として受理せず、Windows でも `/` を記述する。
 
 Configuration 内の relative filesystem path は、field の種類や runtime state によって resolution base を切り替えず、**その field が記述されている Configuration file の directory**から解決する。少なくとも次の field にこの規則を適用する。
 
@@ -116,7 +116,7 @@ Absolute path は host OS が完全な absolute path として認識する root 
 
 Filesystem-location notation では `~` expansion と environment-variable interpolation を行わず、glob を受理しない。`.` と `..` は field / option 固有の file / directory 条件を満たす範囲で通常の path component として解決する。Absolute path を使用した Configuration や CLI document selection は参照先 filesystem に依存し、OS 間 portability を保証しない。
 
-CLI の `--config PATH` / `-i PATH` だけは relative path の resolution base を runtime cwd とする。Invocation Template 内の default / named Invocation の `config` は Template document 自身の directory を基準にする。Configuration 読み込み後の relative filesystem path resolution に runtime cwd を使用しない。
+CLI の `--config PATH` / `-i PATH` / `--output PATH` と Python API の runtime `output` は relative path の resolution base を runtime cwd とする。Invocation Template 内の default / named Invocation の `config` は Template document 自身の directory を基準にする。Configuration に記述された relative filesystem path resolution に runtime cwd を使用しない。
 
 Configuration / Invocation Template **document 自体を選択または参照する path** は host OS の通常の filesystem semantics に従い、symbolic link / Windows directory junction を含む path を特別に拒否しない。cwd の `default.dirpluck`、`--config PATH`、`-i PATH`、`about.base`、Invocation の `config` のいずれでも、dirpluck は選択・参照した path を symlink target の実体 path へ置き換えず、lexical な absolute document location として保持する。Relative document reference と、その document に記述された relative filesystem location はこの document location の directory を基準にする。Base-chain cycle detection のように file identity が必要な内部判定だけ、実体 path を用いて alias を同一 Configuration と認識する。
 
@@ -354,7 +354,9 @@ Always source の source root は、実体 directory ではなく Configuration 
 
 1回の実行で異なる resolved source が同じ final archive root に解決された場合は、file selection の内容が重ならなくても ambiguity error とする。dirpluck は source を同じ directory へ黙って merge せず、自動 suffix や Scope / Always 名による自動 qualification も行わない。必要な場合は Configuration で Namespace を明示して final archive root を区別する。
 
-Final archive root が一意であることを確認した後も、同じ archive path に異なる physical file が衝突する場合、または同じ physical file が異なる source mapping から異なる archive path へ解決される場合は ambiguity error とする。同じ archive path に同じ physical file が再度現れる場合は1回だけ書き込む。
+Final archive root が一意であることを確認した後、同じ archive path に異なる physical file が衝突する場合は ambiguity error とする。同じ archive path に同じ physical file が再度現れる場合は1回だけ書き込む。同じ physical file が異なる resolved source から異なる archive path へ解決されることは許可し、それぞれの archive path に書き込む。
+
+Target と Always source の Selection は source ごとに独立して評価する。ある physical file が Target の source tree に含まれていても、Target 側の `ignore`、未選択、missing result は Always source の Selection を変更しない。Physical overlap は各 source の Selection が完了した後に判定し、Selection result 自体を merge、suppress、error にしない。
 
 Archive root の root-level `README.md` は dirpluck が生成する index 用の予約 path とする。Resolved source の final archive root の先頭 component が case-insensitive に `README.md` と一致する場合は error とし、その下へ source tree を配置しない。この規則は Namespace 名だけでなく、Namespace を使わない source root にも同じように適用する。
 
@@ -362,13 +364,15 @@ Archive root にはアーカイブREADMEを `README.md` として生成する。
 
 各 resolved source は、その final archive root を inline code とした level-2 heading で1 sectionずつ表現する。Section には selected file 数を `Files: N` として記録し、selection `description` が存在する場合は、その metadata の後へ本文としてそのまま表示する。`description` を table cell へ圧縮せず、複数行を含む説明も section body として保持する。description がない source には説明本文を追加しない。
 
+Always source が実際に選択した physical file と Target が実際に選択した physical file に重複がある場合、その Always source section に Target ごとの `Target overlap` metadata を表示する。Metadata は重複 file 数と Target の final archive root を記録する。同じ physical file が Target 側で `ignore` されるなどして実際には選択されていない場合は overlap に数えない。この metadata は physical overlap の説明であり、Selection や Archive placement を変更しない。
+
 少なくとも1個の source に Namespace が適用される場合、README は source section の前に Namespace が Archive 専用の outer directory であり元 source path の一部ではないこと、source root がその直下にあることを説明する。Namespace を使う各 source section には `Namespace` と `Source root` も表示する。Namespace を使わない source にはこの metadata を追加しない。
 
-既定では source filesystem path、Configuration path / table、base chain、Scope / Pluck / Always 名、選択 Case などの dirpluck 固有情報を記録しない。CLI `--paths` が指定された場合だけ各 source section に `Source` として解決済み source directory を `/` separator の filesystem path で記録する。`--paths` は archive path や file selection を変更しない。
+既定では source filesystem path、Configuration path / table、base chain、Scope / Pluck / Always 名、選択 Case などの dirpluck 固有情報を記録しない。Target overlap metadata は Target 名ではなく final archive root を使用する。CLI `--paths` が指定された場合だけ各 source section に `Source` として解決済み source directory を `/` separator の filesystem path で記録する。`--paths` は archive path や file selection を変更しない。
 
 ## 11. Output
 
-Configuration は Output を省略できる。Output を持たない Configuration も Root として Archive planning / `--preview` に使用できる。実際に Archive file を書き込む build では、ルート設定ファイルが fixed output または timestamp output のどちらか一方を自身で直接宣言しなければならない。Base の Output は root の Output として継承しない。Output filesystem path の既存状態確認、directory 作成、Archive 書き込みを行うのは build 時の root 自身の Output だけとする。
+Configuration は Output を省略できる。Output を持たない Configuration も Root として Archive planning / `--preview` に使用できる。Archive file を書き込む build では、ルート設定ファイル自身が宣言した fixed / timestamp Output、または runtime Output のどちらかを effective Output とする。Runtime Output がない場合だけ root 自身の Output declaration を必要とし、Base の Output は root の Output として継承しない。
 
 Base chain では、実際に Output を宣言している definition だけが書き込み境界の overlap validation に参加する。Output path の relative resolution は常にその Output を記述した Configuration file の directory を基準とする。
 
@@ -415,9 +419,29 @@ Generated filename は次の固定形式とする。
 
 Timestamp は process local time を使い、build 開始時に一度だけ確定する。自由な timestamp format、variable expansion、naming template は提供しない。
 
-`N` は CLI `--sequence N` から受け取る1以上の integer とする。省略時は number segment を出力しない。Existing output を探索して番号を推測せず、自動採番・自動 rename を行わない。`--sequence` は timestamp output だけで使用できる。
+`N` は CLI `--sequence N` または Python API `sequence=` から受け取る1以上の integer とする。省略時は number segment を出力しない。Existing output を探索して番号を推測せず、自動採番・自動 rename を行わない。`sequence` は automatic timestamp filename を生成する effective Output だけで使用できる。
 
-Generated filename が確認時点で既に存在する場合は error とし、overwrite option は提供しない。Generated Archive file の permission / mode は fixed output と同じく host OS の通常の新規 file creation semantics に従う。
+Generated filename が確認時点で既に存在する場合は既定では error とする。Configuration schema に overwrite field は持たないが、runtime `--force` / `force=True` が指定された場合は effective overwrite policy を true として既存 destination を置換できる。Generated Archive file の permission / mode は fixed output と同じく host OS の通常の新規 file creation semantics に従う。
+
+### Runtime output
+
+CLI `--here[=FILENAME]`、`-o PATH` / `--output PATH`、Python API `output=` は build 時の runtime Output を指定する。Runtime Output が存在する場合、Configuration の fixed output path / timestamp output directory は effective destination として使用しない。Root Configuration に Output declaration がなくても build できる。
+
+CLI `--here` は runtime cwd を output directory とする automatic output である。`--here=FILENAME` は runtime cwd 直下の exact output filename とし、`FILENAME` に `/` または `\` を含む path form、`.`、`..`、portable filename fragment として不正な character を受理しない。Optional filename は `--here=FILENAME` の `=` form でだけ指定し、`--here` と `--output` は同時に指定できない。`-h` は `--help` に予約し、`--here` の short option は持たない。
+
+CLI `--output PATH` / `-o PATH` と Python API `output=PATH` は filesystem-location notation と同じく OS にかかわらず `/` separator を使用し、backslash / glob を受理しない。Relative `PATH` は runtime cwd、absolute `PATH` は host filesystem を基準とする。末尾 `/` がある `PATH` は output directory、末尾 `/` がない `PATH` は exact output file path とする。Filesystem の既存状態から file / directory form を推測しない。Exact form の final component が `.`, `..`、または file name を持たない形なら error とする。必要な parent / output directory は通常 build で作成する。
+
+Automatic runtime output (`--here`、末尾 `/` の `--output` / `output=`) は process local time を1回取得し、timestamp filename を生成する。Root Configuration が `[output.timestamp]` を宣言している場合、その `prefix` / `suffix` を naming rule として再利用するが、その configured `path` は使用しない。Root に timestamp Output がない場合は `dirpluck` を固定 prefix とし、filename は次の形とする。
+
+```text
+dirpluck-YYYYMMDD-HHMMSS[-N].zip
+```
+
+Root に timestamp Output がある場合は従来の `[prefix-]YYYYMMDD-HHMMSS[-N][-suffix].zip` 形式を runtime directory 上で使用する。Exact runtime output は Configuration の `prefix` / `suffix` を使用せず、指定された filename を変更しない。
+
+`--sequence N` / `sequence=` は automatic runtime output にも使用できる。Exact runtime output と組み合わせた場合は error とする。Generated destination が既に存在しても自動採番、自動 rename、timestamp 再取得を行わない。
+
+Runtime Output の overwrite policy は既定で false とし、Configuration の fixed `overwrite` value は引き継がない。CLI `-f` / `--force` または Python API `force=True` は runtime Output と Configuration Output のどちらでも effective overwrite policy を true にする。`--force` / `force=True` がない Configuration fixed output だけは `[output].overwrite` を使用する。
 
 ### Archive entry timestamp
 
@@ -433,7 +457,7 @@ ZIP timestamp は2秒粒度なので、resolved timestamp の秒が奇数なら�
 
 ### Static writable destination
 
-Output naming は、Configuration だけから書き込み境界を静的に確定できることを不変条件とする。
+Configuration が宣言する Output naming は、Configuration だけから書き込み境界を静的に確定できることを不変条件とする。Runtime Output は invocation ごとに与えるため、この static write-boundary model には参加しない。
 
 ```text
 fixed [output]
@@ -474,13 +498,13 @@ artifacts/result.zip  fixed output -> conflict
 
 ### Concurrent write と input collision
 
-dirpluck は process 間 lock や競合調停を提供しない。同じ output path への concurrent write はサポート対象外とする。Fixed output の `overwrite = false` と timestamp output の既存 destination check は、別 process に対する atomic な no-clobber guarantee ではない。並行する可能性がある呼び出し側は異なる output destination を選ぶ必要がある。
+dirpluck は process 間 lock や競合調停を提供しない。同じ output path への concurrent write はサポート対象外とする。Effective overwrite policy が false の場合に行う existing destination check は、別 process に対する atomic な no-clobber guarantee ではない。並行する可能性がある呼び出し側は異なる output destination を選ぶ必要がある。
 
-どちらの output mode でも、実行で生成する最終 output file 自身を archive input として選択することはできない。
+どの effective Output でも、実行で生成する最終 output file 自身を archive input として選択することはできない。
 
 ## 12. Preview
 
-`--preview` は通常実行と同じ base chain resolution、cycle detection、definition composition、Scope lookup / expansion、Target direct-child resolution と Scope ignore filtering、Case selection、file selection、archive planning を使うが、output file / directory を作成・変更しない。Root Configuration に Output declaration がなくても使用できる。`--preview` は output filename generation を行わないため `--sequence` と組み合わせない。`--archive-mtime` は preview でも validation するが、Archive を書き込まないため preview result には影響しない。
+`--preview` は通常実行と同じ base chain resolution、cycle detection、definition composition、Scope lookup / expansion、Target direct-child resolution と Scope ignore filtering、Case selection、file selection、archive planning を使うが、output file / directory を作成・変更しない。Root Configuration に Output declaration がなくても使用できる。`--preview` は Output を解決・書き込みしないため `--here` / `--output` / `--force` / `--sequence` と組み合わせない。`--archive-mtime` は preview でも validation するが、Archive を書かないため preview result には影響しない。
 
 不足する `must` pattern は `[missing]`、不足する `may` pattern は `[optional missing]` と表示する。最終 selection 0件は policy に応じて `empty, allowed` または `empty, would error` と表示する。
 
@@ -501,12 +525,17 @@ dirpluck ... --preview
 dirpluck ... --paths
 dirpluck ... --sequence N
 dirpluck ... --archive-mtime VALUE
+dirpluck ... --here[=FILENAME]
+dirpluck ... -o PATH
+dirpluck ... --output PATH
+dirpluck ... -f
+dirpluck ... --force
 dirpluck --version
 ```
 
 Effective Configuration に Pluck がある場合、positional argument は `TARGET` reference として6節の規則で解決する。Pluck がない場合は positional `TARGET` を受理しない。
 
-`--case`、`--sequence`、`--archive-mtime`、`-i` / `--invocation-template`、`-e` / `--entry` はそれぞれ最大1回だけ指定できる。`-e` / `--entry` は Invocation Template と一緒にだけ使用できる。Invocation Template を指定した場合は positional `TARGET` と `--config` を受理しない。`--case` は Invocation Template と併用でき、指定時は選択した Invocation の `case` を上書きする。`--archive-mtime VALUE` も Invocation Template と併用でき、指定時は選択した Invocation の `archive_mtime` を上書きする。`VALUE` は11節の Archive entry timestamp grammar に従う。`--sequence` は1以上の integer を受理し、`--preview` とは組み合わせない。`--preview`、`--sequence`、`--archive-mtime`、`--paths` も Invocation Template と併用できる。`--paths` は通常 build で生成するアーカイブREADMEの各 source section へ `Source` metadata を追加する。`--preview` と組み合わせても Archive は生成されないため、表示 tree に source filesystem path を追加しない。
+`--case`、`--sequence`、`--archive-mtime`、`--here`、`-o` / `--output`、`-i` / `--invocation-template`、`-e` / `--entry` はそれぞれ最大1回だけ指定できる。`-e` / `--entry` は Invocation Template と一緒にだけ使用できる。Invocation Template を指定した場合は positional `TARGET` と `--config` を受理しない。`--case` は Invocation Template と併用でき、指定時は選択した Invocation の `case` を上書きする。`--archive-mtime VALUE` も Invocation Template と併用でき、指定時は選択した Invocation の `archive_mtime` を上書きする。`VALUE` は11節の Archive entry timestamp grammar に従う。`--here` と `--output` は相互排他とし、`--here` の optional filename は `--here=FILENAME` の form でだけ指定する。`--preview` は Output を解決・書き込みしないため `--here` / `--output` / `--force` / `--sequence` と組み合わせない。`--sequence` は1以上の integer を受理し、automatic timestamp filename の effective Output でだけ使用する。`-f` / `--force` は effective overwrite policy を true にする。`--here` / `--output` / `--force`、`--preview`、`--sequence`、`--archive-mtime`、`--paths` は Invocation Template と併用できる。`--paths` は通常 build で生成するアーカイブREADMEの各 source section へ `Source` metadata を追加する。`--preview` と組み合わせても Archive は生成されないため、表示 tree に source filesystem path を追加しない。
 
 Argument parse error と dirpluck の Configuration / build error は status 2 で終了する。Successful build と informational command は status 0 とする。通常 build の成功時は final output path を標準出力へ表示する。Field を1つも持たない Invocation を選択した成功実行では、通常 build は output path の後、`--preview` は tree の後に、保存済み実行入力がなく CLI runtime value と normal defaults を使うことを note として表示する。
 
