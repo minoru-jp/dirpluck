@@ -6,7 +6,7 @@ This guide explains Selection authoring. Exact pattern grammar and validation ar
 
 ## Selection
 
-Pluck, Always sources, and Cases each contain an independent Selection. A Selection uses `must`, `may`, `ignore`, and optionally `allow_empty`; use `description` only when you want to attach a human-readable explanation.
+Directory-Target Pluck, Always sources, and Cases each contain an independent Selection. A Selection uses `must`, `may`, `ignore`, and optionally `allow_empty`; use `description` only when you want to attach a human-readable explanation. File Targets are atomic sources and do not contain a Selection.
 
 ### `description`
 

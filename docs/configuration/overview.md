@@ -19,7 +19,7 @@ configs/common.dirpluck
 A `.dirpluck-inv` file is a separate Invocation Template document type, not a Configuration. It does not participate in the Configuration schema or base chain. See [CLI guide](../cli/INDEX.md) for authoring and selecting Invocation Templates.
 ## Basic form
 
-A Configuration represents one final Archive intent. When Targets are selected at runtime, use `pluck` and `scope`; use `always` for sources fixed by the Configuration.
+A Configuration represents one final Archive intent. Use `scope` to declare where runtime Targets are found and which Target kind a Scope exposes. Use `pluck` for the internal Selection of directory Targets, and `always` for sources fixed by the Configuration. File Targets are selected through a Scope and do not use Pluck.
 
 ```toml
 [pluck]
@@ -40,7 +40,7 @@ must = ["*.md"]
 path = "artifacts/review.zip"
 ```
 
-`[pluck]` is the Pluck applied to Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for, and `[always.<name>]` defines Always sources. When same-named source roots need to remain distinct in the Archive, a Namespace can be used. Add Shared patterns, Cases, and a Base Configuration as needed.
+`[pluck]` is the Pluck applied to directory Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for and where `target_kind` is chosen, and `[always.<name>]` defines Always sources. When same-named source roots need to remain distinct in the Archive, a Namespace can be used. Add Shared patterns, Cases, and a Base Configuration as needed.
 ## About
 
 `[about]` declares information about the Configuration itself. It may contain `description` and `base`.

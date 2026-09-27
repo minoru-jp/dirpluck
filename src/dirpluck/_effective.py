@@ -49,9 +49,10 @@ def _target_is_ignored(name: str, patterns: tuple[TargetIgnorePattern, ...]) -> 
     return any(_target_name_matches(name, pattern) for pattern in patterns)
 
 
-def _validate_target_name(name: str, *, label: str) -> None:
+def _validate_target_name(name: str, *, label: str, target_kind: str = "directory") -> None:
     if not name or name in {".", ".."} or "/" in name or "\\" in name:
-        raise SelectionError(f"{label} must name one direct child directory: {name!r}")
+        noun = "directory" if target_kind == "directory" else "file"
+        raise SelectionError(f"{label} must name one direct child {noun}: {name!r}")
 
 
 def _resolve_target_directory(name: str, root: Path, *, label: str) -> tuple[Path, str]:
@@ -75,6 +76,43 @@ def _resolve_target_directory(name: str, root: Path, *, label: str) -> tuple[Pat
     if len(relative.parts) != 1:
         raise SelectionError(f"{label} must resolve to a direct child directory of its Scope root: {resolved}")
     return resolved, relative.as_posix()
+
+
+def _resolve_target_file(name: str, root: Path, *, label: str) -> tuple[Path, str]:
+    _validate_target_name(name, label=label, target_kind="file")
+    candidate = root / name
+    if _is_link_like(candidate):
+        raise SelectionError(
+            f"{label} is a symbolic link or Windows junction and is not a selectable Target: {candidate}"
+        )
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise SelectionError(f"{label} does not exist: {candidate}") from exc
+    if not resolved.is_file():
+        raise SelectionError(f"{label} is not a regular file: {candidate}")
+    root_resolved = root.resolve()
+    try:
+        relative = resolved.relative_to(root_resolved)
+    except ValueError as exc:
+        raise SelectionError(f"{label} resolves outside its Scope root: {resolved}") from exc
+    if len(relative.parts) != 1:
+        raise SelectionError(f"{label} must resolve to a direct child file of its Scope root: {resolved}")
+    return resolved, relative.as_posix()
+
+
+def _resolve_target_entry(
+    name: str,
+    root: Path,
+    *,
+    target_kind: str,
+    label: str,
+) -> tuple[Path, str]:
+    if target_kind == "directory":
+        return _resolve_target_directory(name, root, label=label)
+    if target_kind == "file":
+        return _resolve_target_file(name, root, label=label)
+    raise AssertionError(f"unknown Scope target kind: {target_kind}")
 
 
 def _scope_label(name: str | None) -> str:
@@ -115,19 +153,27 @@ def _expand_scope(binding: _ScopeBinding) -> tuple[tuple[Path, str], ...]:
             continue
         if _is_link_like(entry):
             continue
-        if not entry.is_dir():
-            continue
+        if scope.target_kind == "directory":
+            if not entry.is_dir():
+                continue
+        elif scope.target_kind == "file":
+            if not entry.is_file():
+                continue
+        else:
+            raise AssertionError(f"unknown Scope target kind: {scope.target_kind}")
         targets.append(
-            _resolve_target_directory(
+            _resolve_target_entry(
                 entry.name,
                 root,
+                target_kind=scope.target_kind,
                 label=f"target from {_scope_label(scope.name)}",
             )
         )
     if not targets:
-        raise SelectionError(f"{_scope_label(scope.name)} contains no eligible direct child directories")
+        if scope.target_kind == "directory":
+            raise SelectionError(f"{_scope_label(scope.name)} contains no eligible direct child directories")
+        raise SelectionError(f"{_scope_label(scope.name)} contains no eligible direct child files")
     return tuple(targets)
-
 
 def _require_scope(effective: _EffectiveConfiguration, name: str | None) -> _ScopeBinding:
     try:
@@ -143,14 +189,38 @@ def _resolve_target_reference(
     effective: _EffectiveConfiguration,
     *,
     label: str,
-) -> tuple[tuple[Path, str, str | None], ...]:
+) -> tuple[tuple[Path, str, str | None, str, str | None], ...]:
     if not reference:
         raise SelectionError(f"{label} must not be empty")
     if "\\" in reference:
         raise SelectionError(f"{label} must use '/' as the separator: {reference!r}")
 
-    def from_scope(binding: _ScopeBinding, targets: tuple[tuple[Path, str], ...]) -> tuple[tuple[Path, str, str | None], ...]:
-        return tuple((directory, source_root, binding.scope.namespace) for directory, source_root in targets)
+    def from_scope(
+        binding: _ScopeBinding,
+        targets: tuple[tuple[Path, str], ...],
+    ) -> tuple[tuple[Path, str, str | None, str, str | None], ...]:
+        scope = binding.scope
+        return tuple(
+            (path, source_root, scope.namespace, scope.target_kind, scope.description)
+            for path, source_root in targets
+        )
+
+    def one_from_scope(
+        binding: _ScopeBinding,
+        name: str,
+        *,
+        ignored_where: str,
+    ) -> tuple[tuple[Path, str, str | None, str, str | None], ...]:
+        scope = binding.scope
+        if _target_is_ignored(name, scope.ignore):
+            raise SelectionError(f"{label} is ignored by {ignored_where}.ignore: {name!r}")
+        path, source_root = _resolve_target_entry(
+            name,
+            _resolve_scope_root(binding),
+            target_kind=scope.target_kind,
+            label=label,
+        )
+        return ((path, source_root, scope.namespace, scope.target_kind, scope.description),)
 
     if reference == "/":
         binding = _require_scope(effective, None)
@@ -171,28 +241,15 @@ def _resolve_target_reference(
     if len(parts) == 1:
         name = parts[0]
         binding = _require_scope(effective, None)
-        _validate_target_name(name, label=label)
-        if _target_is_ignored(name, binding.scope.ignore):
-            raise SelectionError(f"{label} is ignored by [scope].ignore: {name!r}")
-        directory, source_root = _resolve_target_directory(
-            name, _resolve_scope_root(binding), label=label
-        )
-        return ((directory, source_root, binding.scope.namespace),)
+        return one_from_scope(binding, name, ignored_where="[scope]")
 
     if len(parts) == 2 and all(parts):
         scope_name, name = parts
         _validate_target_name(scope_name, label="Scope name")
-        _validate_target_name(name, label=label)
         binding = _require_scope(effective, scope_name)
-        if _target_is_ignored(name, binding.scope.ignore):
-            raise SelectionError(f"{label} is ignored by [scope.{scope_name}].ignore: {name!r}")
-        directory, source_root = _resolve_target_directory(
-            name, _resolve_scope_root(binding), label=label
-        )
-        return ((directory, source_root, binding.scope.namespace),)
+        return one_from_scope(binding, name, ignored_where=f"[scope.{scope_name}]")
 
     raise SelectionError(f"{label} must use NAME, SCOPE/NAME, '/', or SCOPE/: {reference!r}")
-
 
 def _archive_root(source_root: str, namespace: str | None) -> str:
     return source_root if namespace is None else f"{namespace}/{source_root}"
@@ -365,8 +422,11 @@ def _validate_always_selections(binding: _AlwaysBinding, shared: SharedPatterns)
 
 
 def _validate_effective_configuration(effective: _EffectiveConfiguration) -> None:
-    if effective.pluck is None and not effective.always:
-        raise ConfigurationError(f"{effective.root.manifest}: the resolved Configuration chain defines no Pluck or Always source")
+    has_file_scope = any(binding.scope.target_kind == "file" for binding in effective.scopes.values())
+    if effective.pluck is None and not effective.always and not has_file_scope:
+        raise ConfigurationError(
+            f"{effective.root.manifest}: the resolved Configuration chain defines no Pluck or Always source"
+        )
     _resolve_effective_scope_roots(effective)
     for scope_name, scope_binding in effective.scopes.items():
         namespace = scope_binding.scope.namespace
@@ -442,11 +502,10 @@ def _available_cases(effective: _EffectiveConfiguration) -> tuple[str, ...]:
 
 
 def _validate_request(effective: _EffectiveConfiguration, request: BuildRequest) -> None:
-    if effective.pluck is None:
-        if request.directories:
-            raise SelectionError("the effective Configuration does not define Pluck; TARGET must not be specified")
-    elif not request.directories:
+    if effective.pluck is not None and not request.directories:
         raise SelectionError("TARGET is required when the effective Configuration defines Pluck (one or more may be specified)")
+    if effective.pluck is None and not effective.always and not request.directories:
+        raise SelectionError("TARGET is required when the effective Configuration only defines file Target Scopes")
 
     if request.case is None:
         return
@@ -454,7 +513,6 @@ def _validate_request(effective: _EffectiveConfiguration, request: BuildRequest)
     if request.case not in available:
         listed = ", ".join(available) or "(none)"
         raise SelectionError(f"case {request.case!r} is not defined; available cases: {listed}")
-
 
 def _selected_pluck(binding: _PluckBinding, case: str | None, *, shared: SharedPatterns) -> Selection:
     pluck = binding.pluck
@@ -501,35 +559,52 @@ def _resolve_effective_sources(effective: _EffectiveConfiguration, request: Buil
     _validate_request(effective, request)
     resolved: list[ResolvedSource] = []
 
-    if effective.pluck is not None:
-        selection = _selected_pluck(effective.pluck, request.case, shared=effective.shared)
-        runtime_targets: list[tuple[Path, str, str | None]] = []
-        seen: set[Path] = set()
-        reference_count = len(request.directories)
-        for index, requested in enumerate(request.directories, start=1):
-            label = f"target reference {index}" if reference_count > 1 else "target reference"
-            for directory, source_root, namespace in _resolve_target_reference(requested, effective, label=label):
-                if directory in seen:
-                    raise SelectionError(f"target directories must resolve to distinct directories: {directory}")
-                seen.add(directory)
-                runtime_targets.append((directory, source_root, namespace))
-        target_count = len(runtime_targets)
-        for index, (directory, source_root, namespace) in enumerate(runtime_targets, start=1):
-            key = "target" if target_count == 1 else f"target:{index}"
-            name = None if target_count == 1 else source_root
-            resolved.append(
-                ResolvedSource(
-                    key=key,
-                    kind="target",
-                    name=name,
-                    description=selection.description,
-                    directory=directory,
-                    source_root=source_root,
-                    namespace=namespace,
-                    archive_root=_archive_root(source_root, namespace),
-                    selection=selection,
-                )
+    runtime_targets: list[tuple[Path, str, str | None, str, str | None]] = []
+    seen: set[Path] = set()
+    reference_count = len(request.directories)
+    for index, requested in enumerate(request.directories, start=1):
+        label = f"target reference {index}" if reference_count > 1 else "target reference"
+        for path, source_root, namespace, source_kind, scope_description in _resolve_target_reference(
+            requested, effective, label=label
+        ):
+            if path in seen:
+                raise SelectionError(f"targets must resolve to distinct filesystem entries: {path}")
+            seen.add(path)
+            runtime_targets.append((path, source_root, namespace, source_kind, scope_description))
+
+    directory_selection: Selection | None = None
+    if any(source_kind == "directory" for _, _, _, source_kind, _ in runtime_targets):
+        if effective.pluck is None:
+            raise SelectionError("the effective Configuration does not define Pluck; TARGET must not be specified")
+        directory_selection = _selected_pluck(effective.pluck, request.case, shared=effective.shared)
+
+    target_count = len(runtime_targets)
+    for index, (path, source_root, namespace, source_kind, scope_description) in enumerate(runtime_targets, start=1):
+        key = "target" if target_count == 1 else f"target:{index}"
+        name = None if target_count == 1 else source_root
+        if source_kind == "directory":
+            if directory_selection is None:
+                raise AssertionError("directory Target has no effective Pluck Selection")
+            selection = directory_selection
+            description = selection.description
+        else:
+            selection = None
+            description = None
+        resolved.append(
+            ResolvedSource(
+                key=key,
+                kind="target",
+                name=name,
+                description=description,
+                scope_description=scope_description,
+                source_kind=source_kind,
+                directory=path,
+                source_root=source_root,
+                namespace=namespace,
+                archive_root=_archive_root(source_root, namespace),
+                selection=selection,
             )
+        )
 
     for name, binding in effective.always.items():
         selection = _selected_always(binding, request.case, shared=effective.shared)
@@ -541,6 +616,8 @@ def _resolve_effective_sources(effective: _EffectiveConfiguration, request: Buil
                 kind="always",
                 name=name,
                 description=selection.description,
+                scope_description=None,
+                source_kind="directory",
                 directory=directory,
                 source_root=source_root,
                 namespace=namespace,
@@ -552,7 +629,6 @@ def _resolve_effective_sources(effective: _EffectiveConfiguration, request: Buil
     sources = tuple(resolved)
     _validate_resolved_archive_roots(sources)
     return sources
-
 
 def _resolve_execution(config: Config, request: BuildRequest) -> tuple[_EffectiveConfiguration, tuple[ResolvedSource, ...]]:
     effective = _compose_effective_configuration(config)

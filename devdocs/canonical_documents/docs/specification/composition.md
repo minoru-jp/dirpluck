@@ -62,7 +62,7 @@ level: MUST
 
 - Pluck: outer layer に Pluck があれば inner Pluck definition 全体を shadow する。
 - Always source: 同名 source は outer layer が definition 全体を shadow し、異なる名前は保持する。
-- Named Scope: 同名 Scope は outer layer が definition 全体を shadow し、異なる名前は保持する。Default Scope は compose せず、Runtime Target, Scope, and Case の default Scope rule に従って Root Configuration location から root を決め、root Configuration の `[scope].ignore` / `namespace` だけを使う。
+- Named Scope: 同名 Scope は outer layer が `description` / `target_kind` / `path` / `ignore` / `namespace` を含む definition 全体を shadow し、異なる名前は保持する。Default Scope は compose せず、Runtime Target, Scope, and Case の default Scope rule に従って Root Configuration location から root を決め、root Configuration の `[scope]` に書かれた `description` / `target_kind` / `ignore` / `namespace` だけを使う。
 - ネームスペース: 同名 Namespace は outer layer が definition 全体を shadow し、異なる名前は保持する。Scope / Always の Namespace reference は composition 後の effective Namespace 集合に対して解決する。
 - Shared pattern: `must` / `may` / `ignore` を独立した namespace とし、各 namespace の同名 pattern set は outer layer が配列全体を shadow する。
 

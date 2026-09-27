@@ -13,7 +13,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @canonical_source('Archive planning', filename='archive.md', order=90, placeholders=False, heading="identity")
 class SPECIFICATION_PART:
     class SPEC_095:
-        r"""Scope から解決した Target の source root は Target directory name 1 segment とする。Logical Scope name は archive path へ暗黙には含めない。"""
+        r"""Scope から解決した Target の source root は Target entry name 1 segment とする。Directory Target では directory name、file Target では file name を使用する。Logical Scope name は archive path へ暗黙には含めない。"""
         level @= MUST
         related @= (RUNTIME_TARGETS_SPEC.SECTION_502.SPEC_050,)
 
@@ -22,7 +22,7 @@ class SPECIFICATION_PART:
         level @= MUST
 
     class SPEC_097:
-        r"""{{TERM_18}}を参照しない source の final archive root は source root と同じである。Namespace を参照する source は `NAMESPACE/SOURCE_ROOT` を final archive root とし、その下へ source directory からの relative selected file path を配置する。Namespace は collision が実際に起きた場合だけ追加するのではなく、その source へ常に適用する。"""
+        r"""{{TERM_18}}を参照しない source の final archive root は source root と同じである。Namespace を参照する source は `NAMESPACE/SOURCE_ROOT` を final archive root とする。Directory source はその下へ source directory からの relative selected file path を配置する。File Target は final archive root 自体を1個の file entry として配置する。Namespace は collision が実際に起きた場合だけ追加するのではなく、その source へ常に適用する。"""
         merge @= TERMS.TERM_18
         level @= MUST
         related @= (NAMESPACE_SPEC.SPEC_063,)
@@ -33,11 +33,11 @@ class SPECIFICATION_PART:
         related @= (NAMESPACE_SPEC.SPEC_064,)
 
     class SPEC_099:
-        r"""Final archive root が一意であることを確認した後、同じ archive path に異なる physical file が衝突する場合は ambiguity error とする。同じ archive path に同じ physical file が再度現れる場合は1回だけ書き込む。同じ physical file が異なる resolved source から異なる archive path へ解決されることは許可し、それぞれの archive path に書き込む。"""
+        r"""Final archive root が一意であることを確認した後、同じ archive path に異なる physical file が衝突する場合は ambiguity error とする。同じ archive path に同じ physical file が再度現れる場合は1回だけ書き込む。同じ physical file が異なる resolved source から異なる archive path へ解決されることは許可し、それぞれの archive path に書き込む。File Target は final archive root 自体が file entry になるため、その path が別の archive file path の ancestor / descendant になる file-directory conflict も error とする。"""
         level @= MUST
 
     class SPEC_100:
-        r"""Target と Always source の Selection は source ごとに独立して評価する。ある physical file が Target の source tree に含まれていても、Target 側の `ignore`、未選択、missing result は Always source の Selection を変更しない。Physical overlap は各 source の Selection が完了した後に判定し、Selection result 自体を merge、suppress、error にしない。"""
+        r"""Directory Target の Pluck Selection と Always source の Selection は source ごとに独立して評価する。File Target は Selection を持たず atomic file 自体を source とする。ある physical file が directory Target の source tree に含まれていても、Target 側の `ignore`、未選択、missing result は Always source の Selection を変更しない。Physical overlap は各 source の最終 selected file 集合が確定した後に判定し、source ごとの result 自体を merge、suppress、error にしない。"""
         level @= MUST
         related @= (SELECTION_SPEC.SPEC_065,)
 
@@ -51,7 +51,7 @@ class SPECIFICATION_PART:
         level @= MUST
 
     class SPEC_103:
-        r"""各 resolved source は、その final archive root を inline code とした level-2 heading で1 sectionずつ表現する。Section には selected file 数を `Files: N` として記録し、selection `description` が存在する場合は、その metadata の後へ本文としてそのまま表示する。`description` を table cell へ圧縮せず、複数行を含む説明も section body として保持する。description がない source には説明本文を追加しない。"""
+        r"""各 resolved source は、その final archive root を inline code とした level-2 heading で1 sectionずつ表現する。Directory source の heading / Source root 表示は末尾 `/` を付け、file Target は file path として末尾 `/` を付けない。Section には selected file 数を `Files: N` として記録する。Target の `scope.description` が存在する場合は最初に本文として表示し、directory Target では続けて Pluck selection `description` を表示する。File Target は Pluck を使わないため `scope.description` だけを表示する。Always source は従来どおり selection `description` を表示する。各 description は metadata の後へ本文としてそのまま置き、複数行も section body として保持する。"""
         level @= MUST
 
     class SPEC_104:
@@ -65,7 +65,7 @@ class SPECIFICATION_PART:
         condition @= "少なくとも1個の source に Namespace が適用される場合"
 
     class SPEC_106:
-        r"""既定では source filesystem path、Configuration path / table、base chain、Scope / Pluck / Always 名、選択 Case などの dirpluck 固有情報を記録しない。Target overlap metadata は Target 名ではなく final archive root を使用する。CLI `--paths` が指定された場合だけ各 source section に `Source` として解決済み source directory を `/` separator の filesystem path で記録する。`--paths` は archive path や file selection を変更しない。"""
+        r"""既定では source filesystem path、Configuration path / table、base chain、Scope / Pluck / Always 名、選択 Case などの dirpluck 固有情報を記録しない。Target overlap metadata は Target 名ではなく final archive root を使用する。CLI `--paths` が指定された場合だけ各 source section に `Source` として解決済み source filesystem path を `/` separator で記録する。Directory source では directory path、file Target では file path を表示する。`--paths` は archive path や selection を変更しない。"""
         level @= MUST
         condition @= "CLI `--paths` が指定された場合"
         related @= (FILESYSTEM_SPEC.SPEC_093,)

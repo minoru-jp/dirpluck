@@ -2,7 +2,7 @@
 
 ## SPEC_037
 
-If the Effective Configuration contains a Pluck, one or more positional CLI `TARGET` references are required. If it has no Pluck, positional Target references are not accepted.
+If the Effective Configuration contains a Pluck, one or more positional CLI `TARGET` references are required, preserving the existing contract. An Effective Configuration without a Pluck may still accept positional file Target references from Scopes with `target_kind = "file"`. If it has neither Pluck nor Always sources and contains only file-kind Scopes, one or more positional Target references are required for the run.
 
 level: MUST
 
@@ -10,7 +10,7 @@ condition: depending on whether the Effective Configuration contains Pluck
 
 ## SPEC_038
 
-Each positional reference resolves one or more Targets from the effective Scopes, and the same effective Pluck selection is applied independently to each Target. Targets are not inferred automatically from the location of a Configuration file or from the origin of a Pluck definition.
+Each positional reference resolves one or more Targets from the effective Scopes. The same effective Pluck selection is applied independently to each directory Target. A file Target does not use Pluck and instead includes the regular file itself as an atomic source. Resolving a directory Target without an effective Pluck is an error. Targets are not inferred automatically from the location of a Configuration file or from the origin of a Pluck definition.
 
 level: MUST
 
@@ -20,7 +20,7 @@ title: Scope
 
 ### SPEC_039
 
-The default Scope always exists and uses the directory containing the Root Configuration file as the Scope root. No special case is based on the directory name. `[scope]` only configures the default Scope's optional `ignore` / `namespace` and has no `path`. Omitting `[scope]`, or writing an empty `[scope]`, gives the default Scope an empty `ignore` list and no Namespace reference.
+The default Scope always exists and uses the directory containing the Root Configuration file as the Scope root. No special case is based on the directory name. `[scope]` configures the default Scope's optional `description` / `target_kind` / `ignore` / `namespace` and has no `path`. `target_kind` defaults to `"directory"`. Omitting `[scope]`, or writing an empty `[scope]`, means no description, directory Targets, an empty `ignore` list, and no Namespace reference.
 
 level: MUST
 
@@ -28,7 +28,7 @@ related: [SPEC_030](composition.md#spec_030), [SPEC_032](composition.md#spec_032
 
 ### SPEC_040
 
-A named `[scope.<name>]` has a required `path` and optional `ignore` / `namespace`. `path` is a concrete directory path; empty strings and globs are rejected. A relative `path` is resolved from the definition's Configuration-file directory according to the Filesystem path notation rules, while an absolute path refers directly to a directory on the host filesystem. The explicitly configured Scope-root location may contain symbolic links or Windows directory junctions; under the host OS's normal filesystem semantics, it must resolve to an existing directory. An alias used for the Scope root itself is distinct from link-like Target candidates discovered automatically directly under that resolved root.
+A named `[scope.<name>]` has a required `path` and optional `description` / `target_kind` / `ignore` / `namespace`. `target_kind` is `"directory"` or `"file"` and defaults to `"directory"`. `path` is a concrete directory path; empty strings and globs are rejected. A relative `path` is resolved from the definition's Configuration-file directory according to the Filesystem path notation rules, while an absolute path refers directly to a directory on the host filesystem. The explicitly configured Scope-root location may contain symbolic links or Windows directory junctions; under the host OS's normal filesystem semantics, it must resolve to an existing directory. An alias used for the Scope root itself is distinct from link-like Target candidates discovered automatically directly under that resolved root. `description`, when present, is a non-empty string and does not change Target discovery or Archive placement.
 
 level: MUST
 
@@ -56,7 +56,7 @@ level: MUST
 
 ### SPEC_044
 
-`scope.ignore` matches the **name** of a direct-child Target candidate directory case-sensitively. A matching directory cannot be selected as a Target either by single-Target selection or by expansion. This is independent of file-selection `pluck.ignore` and `always.<name>.ignore`.
+`scope.ignore` matches the **name** of a direct-child Target candidate for the Scope's `target_kind` case-sensitively. In directory mode it applies to directory names; in file mode it applies to regular-file names. A matching entry cannot be selected as a Target either by single-Target selection or by expansion. This is independent of file-selection `pluck.ignore` and `always.<name>.ignore`.
 
 level: MUST
 
@@ -85,7 +85,7 @@ level: MUST
 
 ### SPEC_047
 
-`NAME` selects one directory directly under the default Scope. `SCOPE/NAME` selects directory `NAME` directly under named Scope `SCOPE`. `/` expands all Targets from the default Scope, and `SCOPE/` expands all Targets from named Scope `SCOPE`.
+`NAME` selects one direct-child entry matching the default Scope's `target_kind`. `SCOPE/NAME` selects direct-child entry `NAME` matching named Scope `SCOPE`'s `target_kind`. `/` expands all Targets from the default Scope, and `SCOPE/` expands all Targets from named Scope `SCOPE`.
 
 level: MUST
 
@@ -103,7 +103,7 @@ level: MUST
 
 ### SPEC_050
 
-For single-Target resolution, the specified entry must be an existing directory that is a **direct child** of the Scope root. An entry recognized as a symbolic link or Windows directory junction is not selectable as a Target; an explicit `NAME` or `SCOPE/NAME` that names such a link-like entry is an error.
+For single-Target resolution, the specified entry must be a **direct child** of the Scope root and must match the Scope's `target_kind`: an existing directory for `"directory"`, or an existing regular file for `"file"`. An entry recognized as a symbolic link or Windows directory junction is not selectable as a Target; an explicit `NAME` or `SCOPE/NAME` that names such a link-like entry is an error. A file in directory mode, a directory in file mode, or another special filesystem entry is also an error.
 
 level: MUST
 
@@ -121,13 +121,13 @@ title: Scope expansion
 
 ### SPEC_052
 
-`/` or `SCOPE/` enumerates direct-child directory entries of the corresponding Scope root and expands each entry not matched by the Scope's `ignore` into an independent Target. Directory enumeration is not recursive, and regular files are not Targets.
+`/` or `SCOPE/` enumerates direct-child entries of the corresponding Scope root and expands each eligible entry according to the Scope's `target_kind` and `ignore` into an independent Target. Directory mode includes only regular directories; file mode includes only regular files. Enumeration is not recursive.
 
 level: MUST
 
 ### SPEC_053
 
-Ignored entries and entries recognized as symbolic links or Windows directory junctions are not treated as Target candidates. The destination of a recognized link-like entry is not resolved and is not included in `/` or `SCOPE/` expansion. Expansion that yields zero eligible directories is an error.
+Ignored entries and entries recognized as symbolic links or Windows directory junctions are not treated as Target candidates. The destination of a recognized link-like entry is not resolved and is not included in `/` or `SCOPE/` expansion. Expansion that yields zero eligible direct children for the active `target_kind` is an error.
 
 level: MUST
 

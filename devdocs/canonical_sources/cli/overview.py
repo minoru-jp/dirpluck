@@ -25,7 +25,7 @@ class CLI_PART:
         {{example_001}}
         ```
 
-        選択した{{TERM_15}}に Pluck がある場合は、1個以上の `TARGET` reference を指定します。Pluck がない場合は positional argument を指定しません。
+        選択した{{TERM_15}}に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても file-kind Scope の file Target は positional argument から選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
 
         ```console
         {{example_002}}

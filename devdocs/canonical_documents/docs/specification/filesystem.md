@@ -24,7 +24,7 @@ level: MUST
 
 ## SPEC_089
 
-Runtime Target directory は対応する Scope root の direct child として解決する。Scope root は Target candidate を探す base であり、selected file の boundary は最終的に解決した Target directory 自体である。
+Runtime Target は対応する Scope root の direct child として解決する。`target_kind = "directory"` の Target はその directory 自体を Selection boundary とし、`target_kind = "file"` の Target は regular file 自体を atomic source として扱い、その内部への Selection traversal は行わない。Scope root は Target candidate を探す base である。
 
 level: MUST
 
@@ -36,7 +36,7 @@ level: MUST
 
 ## SPEC_091
 
-各 source の include resolution と selected file は、その source directory 内へ限定する。Archive に含める filesystem object は regular file に限定し、regular directory は traversal のためだけに扱う。Target discovery または Selection traversal で symbolic link として認識した entry は selectable entry とせず、リンク先を解決・走査せず、Archive にも含めない。Windows では directory junction も同じ link-like entry として扱う。File symlink、directory symlink、broken symlink、認識した Windows directory junction はいずれも traversal しない。FIFO、socket、device などその他の non-regular entry も Archive に含めず、directory として traversal しない。
+Directory source の include resolution と selected file は、その source directory 内へ限定する。File Target は Selection を行わず、その direct-child regular file 自体だけを Archive candidate とする。Archive に含める filesystem object は regular file に限定し、regular directory は Target root または traversal のためだけに扱う。Target discovery または Selection traversal で symbolic link として認識した entry は selectable entry とせず、リンク先を解決・走査せず、Archive にも含めない。Windows では directory junction も同じ link-like entry として扱う。File symlink、directory symlink、broken symlink、認識した Windows directory junction はいずれも traversal しない。FIFO、socket、device などその他の non-regular entry も Archive に含めず、directory として traversal しない。
 
 level: MUST
 

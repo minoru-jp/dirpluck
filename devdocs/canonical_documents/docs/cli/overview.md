@@ -42,7 +42,7 @@ dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--
 dirpluck --version
 ```
 
-選択した実効設定に Pluck がある場合は、1個以上の `TARGET` reference を指定します。Pluck がない場合は positional argument を指定しません。
+選択した実効設定に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても file-kind Scope の file Target は positional argument から選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
 
 ```console
 dirpluck example

@@ -39,13 +39,13 @@ class CONFIGURATION_PART:
 
     class SECTION_002:
         r"""
-        Configuration はひとつの最終 Archive intent を表します。実行時に選ぶ Target がある場合は `pluck` と `scope`、Configuration に固定する source は `always` で表します。
+        Configuration はひとつの最終 Archive intent を表します。実行時に選ぶ Target の探索場所と kind は `scope` で表し、directory Target の内部 Selection は `pluck`、Configuration に固定する source は `always` で表します。File Target は `scope` だけで選択でき、Pluck は適用しません。
 
         ```toml
         {{example_001}}
         ```
 
-        `[pluck]` は{{TERM_3}}へ適用する{{TERM_11}}、`[scope]` / `[scope.<name>]` は Target を探す{{TERM_16}}、`[always.<name>]` は{{TERM_5}}です。Archive 上で同名の source root を区別する必要がある場合は{{TERM_18}}を使えます。必要に応じて{{TERM_12}}、{{TERM_4}}、{{TERM_13}}を使って構成を広げます。
+        `[pluck]` は directory {{TERM_3}}へ適用する{{TERM_11}}、`[scope]` / `[scope.<name>]` は Target を探し `target_kind` を決める{{TERM_16}}、`[always.<name>]` は{{TERM_5}}です。Archive 上で同名の source root を区別する必要がある場合は{{TERM_18}}を使えます。必要に応じて{{TERM_12}}、{{TERM_4}}、{{TERM_13}}を使って構成を広げます。
         """
         title @= '基本形'
 

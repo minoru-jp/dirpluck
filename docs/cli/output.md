@@ -22,7 +22,7 @@ Specify `--paths` only when source filesystem paths should also appear in each s
 dirpluck acme --paths
 ```
 
-`--paths` adds the resolved source directory to each source section. Because this can leave local filesystem information such as absolute paths in the Archive, consider whether it is needed when the Archive will be distributed externally.
+`--paths` adds the resolved source filesystem path to each source section: a directory path for directory sources and a file path for file Targets. Because this can leave local filesystem information such as absolute paths in the Archive, consider whether it is needed when the Archive will be distributed externally.
 
 ## Runtime Output
 

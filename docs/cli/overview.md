@@ -12,7 +12,7 @@ dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--
 dirpluck --version
 ```
 
-If the selected Effective Configuration has a Pluck, supply one or more `TARGET` references. If it has no Pluck, do not supply positional arguments.
+If the selected Effective Configuration has a Pluck, continue to supply one or more `TARGET` references. Without a Pluck, positional references are still allowed for file-kind Scopes. Directory Targets require Pluck. An Always-only Configuration may still run without positional arguments.
 
 ```console
 dirpluck example

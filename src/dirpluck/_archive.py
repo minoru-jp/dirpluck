@@ -49,12 +49,16 @@ def _render_archive_readme(
         ])
 
     for source in sorted(sources, key=lambda item: (item.archive_root, item.key)):
-        archive_root = f"{source.archive_root.rstrip('/')}/"
+        archive_root = source.archive_root
+        if source.source_kind == "directory":
+            archive_root = f"{archive_root.rstrip('/')}/"
         lines.extend([f"## {_markdown_code_span(archive_root)}", ""])
         lines.append(f"Files: {selection_counts[source.key]}")
         if source.namespace is not None:
             namespace = f"{source.namespace.rstrip('/')}/"
-            source_root = f"{source.source_root.rstrip('/')}/"
+            source_root = source.source_root
+            if source.source_kind == "directory":
+                source_root = f"{source_root.rstrip('/')}/"
             lines.append(
                 "Namespace: "
                 f"{_markdown_code_span(namespace)}; "
@@ -62,16 +66,25 @@ def _render_archive_readme(
             )
         if request.paths:
             lines.append(f"Source: {_markdown_code_span(source.directory.as_posix())}")
+        target_sources = {target.archive_root: target for target in sources if target.kind == "target"}
         for target_root, count in target_overlaps.get(source.key, ()):
             unit = "file" if count == 1 else "files"
             verb = "is" if count == 1 else "are"
-            target = f"{target_root.rstrip('/')}/"
+            target = target_root
+            target_source = target_sources.get(target_root)
+            if target_source is None or target_source.source_kind == "directory":
+                target = f"{target.rstrip('/')}/"
             lines.append(
                 f"Target overlap: {count} selected {unit} {verb} also included under "
                 f"{_markdown_code_span(target)}."
             )
-        if source.description is not None:
-            lines.extend(["", source.description])
+        descriptions = tuple(
+            description
+            for description in (source.scope_description, source.description)
+            if description is not None
+        )
+        if descriptions:
+            lines.extend(["", "\n\n".join(descriptions)])
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -87,6 +100,7 @@ def plan_archive(
     effective, sources = _resolve_execution(config, request)
 
     archive_entries: dict[str, Path] = {}
+    atomic_file_paths: set[str] = set()
     selected_physical_entries: dict[str, set[Path]] = {}
     missing_entries: list[str] = []
     optional_missing_entries: list[str] = []
@@ -103,6 +117,8 @@ def plan_archive(
         optional_missing_entries.extend(f"{source.archive_root}/{relative}" for relative in result.optional_missing)
 
         if not result.files:
+            if source.selection is None:
+                raise AssertionError(f"atomic file source selected no file: {source.label}")
             empty_selections.append(
                 EmptySelectionStatus(
                     key=source.key,
@@ -115,13 +131,27 @@ def plan_archive(
                 raise SelectionError(f"{source.label} selected no files and allow_empty is false")
 
         for file in result.files:
-            relative = file.relative_to(source.directory).as_posix()
-            arcname = f"{source.archive_root}/{relative}"
+            if source.source_kind == "file":
+                arcname = source.archive_root
+            else:
+                relative = file.relative_to(source.directory).as_posix()
+                arcname = f"{source.archive_root}/{relative}"
             source_resolved = file.resolve()
             previous = archive_entries.get(arcname)
             if previous is not None and previous.resolve() != source_resolved:
                 raise SelectionError(f"multiple files resolve to the same archive path {arcname!r}: {previous} and {file}")
+            conflict_candidates = archive_entries if source.source_kind == "file" else atomic_file_paths
+            for existing in conflict_candidates:
+                if existing == arcname:
+                    continue
+                if existing.startswith(arcname + "/") or arcname.startswith(existing + "/"):
+                    raise SelectionError(
+                        "archive file/directory path conflict between "
+                        f"{existing!r} and {arcname!r}"
+                    )
             archive_entries[arcname] = file
+            if source.source_kind == "file":
+                atomic_file_paths.add(arcname)
 
     empty_directories = sorted({
         status.archive_root

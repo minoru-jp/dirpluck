@@ -25,7 +25,7 @@ class PathExclusion:
 
 @dataclass(frozen=True)
 class TargetIgnorePattern:
-    """One simple case-sensitive Target-directory name filter."""
+    """One simple case-sensitive direct-child Target name filter."""
 
     raw: str
     value: str
@@ -67,7 +67,7 @@ class Selection:
 
 @dataclass(frozen=True)
 class Pluck:
-    """The Selection definition applied to runtime Targets."""
+    """The Selection definition applied to runtime directory Targets."""
 
     default: SelectionDefinition | None
     cases: Mapping[str, SelectionDefinition]
@@ -84,6 +84,8 @@ class Scope:
 
     name: str | None
     path: str | None
+    description: str | None
+    target_kind: str
     ignore: tuple[TargetIgnorePattern, ...]
     namespace: str | None
 

@@ -26,15 +26,13 @@ class CONFIGURATION_PART:
 
     class SECTION_003:
         r"""
-        `[pluck]` は、今回の実行で選ばれた{{TERM_3}}から何を取り出すかを定義します。Source path 自体は持たず、Target は{{TERM_16}}と CLI Target reference から解決します。
+        `[pluck]` は、今回の実行で選ばれた **directory** {{TERM_3}}から何を取り出すかを定義します。Source path 自体は持たず、Target は{{TERM_16}}と CLI Target reference から解決します。`target_kind = "file"` の Scope から得た file Target は atomic source であり、Pluck は適用しません。
 
         ```toml
         {{example_003}}
         ```
 
-        同じ実行で複数 Target を選んだ場合も、各 Target へ同じ pluck selection を独立して適用します。
-
-        Pluck がない Configuration では positional Target reference を使いません。
+        同じ実行で複数 directory Target を選んだ場合も、各 directory Target へ同じ pluck selection を独立して適用します。File Target と directory Target は同じ実行で併用できます。Pluck がない Configuration でも file-kind Scope の file Target は positional Target reference から選択できますが、directory Target は選択できません。
         """
         title @= 'Pluck'
 
@@ -53,7 +51,7 @@ class CONFIGURATION_PART:
         r"""
         {{TERM_16}}は Target を探す場所です。常設の default Scope と、必要に応じて追加する名前付き Scope を使えます。
 
-        Default Scope は常に存在し、{{TERM_14}}がある directory を探索 root とします。`[scope]` table は default Scope の optional `ignore` / `namespace` を設定するために使い、`path` は書きません。`[scope]` を省略した場合、または空の `[scope]` を書いた場合は `ignore = []`、Namespace なしと同じです。Base Configuration に書いた `[scope]` は、その Configuration 自身を Root として使う場合だけ有効で、outer Root の default Scope へ継承されません。
+        Default Scope は常に存在し、{{TERM_14}}がある directory を探索 root とします。`[scope]` table は default Scope の optional `description` / `target_kind` / `ignore` / `namespace` を設定するために使い、`path` は書きません。`target_kind` は `"directory"` または `"file"` で、既定は `"directory"` です。`[scope]` を省略した場合、または空の `[scope]` を書いた場合は directory Target、description なし、`ignore = []`、Namespace なしという従来動作になります。Base Configuration に書いた `[scope]` は、その Configuration 自身を Root として使う場合だけ有効で、outer Root の default Scope へ継承されません。
 
         ```toml
         {{example_004}}
@@ -65,7 +63,7 @@ class CONFIGURATION_PART:
         {{example_005}}
         ```
 
-        `ignore` は Scope 直下で Target candidate として扱わない directory name を指定します。File selection の `pluck.ignore` とは役割が違います。
+        `target_kind = "directory"` の Scope は直下の eligible directory だけを Target candidate とし、`target_kind = "file"` の Scope は直下の eligible regular file だけを Target candidate とします。Directory と file を同じ Scope で混在 Target として扱いません。`ignore` は現在の `target_kind` に応じた direct-child Target candidate の name を除外します。File selection の `pluck.ignore` とは役割が違います。`description` はその Scope から得た Target の Archive README context として使います。
 
         CLI Target reference は Scope の有無と、1 Target / 全 Target の組み合わせとして次の4形です。
 
@@ -76,9 +74,9 @@ class CONFIGURATION_PART:
         SCOPE/      -> 名前付き Scope の全 Target
         ```
 
-        全展開は Scope 直下の eligible directory だけを対象とし、再帰しません。
+        全展開は Scope の `target_kind` に対応する direct child だけを対象とし、再帰しません。Directory mode では eligible directory、file mode では eligible regular file を展開します。
 
-        Base chain では名前付き Scope だけを名前ごとに重ね、同名 Scope は外側の Configuration が置き換え、異名 Scope は共存します。Default Scope は base から継承せず、常に root Configuration に属します。したがって Base の `[scope].ignore` / `namespace` は outer Root では使用されませんが、その Base Configuration 自身を Root として使う場合には通常どおり有効です。名前付き Scope の root は定義元 Configuration を基準にした場所のままで rebase しません。
+        Base chain では名前付き Scope だけを名前ごとに重ね、同名 Scope は `description` / `target_kind` / `path` / `ignore` / `namespace` を含む definition 全体として外側の Configuration が置き換え、異名 Scope は共存します。Default Scope は base から継承せず、常に root Configuration に属します。したがって Base の `[scope]` metadata / policy は outer Root では使用されませんが、その Base Configuration 自身を Root として使う場合には通常どおり有効です。名前付き Scope の root は定義元 Configuration を基準にした場所のままで rebase しません。
 
         Scope には任意で `namespace = "<name>"` を指定できます。これは Target の探索場所を変えず、その Scope から得た Target の Archive root に、別途定義した{{TERM_18}}を prefix として追加します。Namespace は衝突時だけ自動適用されるものではなく、指定した Scope の Target に常に適用されます。
 

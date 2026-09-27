@@ -57,17 +57,19 @@ class BuildRequest:
 
 @dataclass(frozen=True)
 class ResolvedSource:
-    """A configured Target or Always source resolved to one concrete directory."""
+    """A configured Target or Always source resolved to one concrete filesystem source."""
 
     key: str
     kind: str
     name: str | None
     description: str | None
+    scope_description: str | None
+    source_kind: str
     directory: Path
     source_root: str
     namespace: str | None
     archive_root: str
-    selection: Selection
+    selection: Selection | None
 
     @property
     def label(self) -> str:

@@ -3,6 +3,6 @@
 from ._application import RunResult, run
 from .errors import DirpluckError
 
-__version__ = "0.10.2"
+__version__ = "0.11.0"
 
 __all__ = ["DirpluckError", "RunResult", "__version__", "run"]

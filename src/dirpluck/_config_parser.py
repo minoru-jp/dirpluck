@@ -58,6 +58,16 @@ def _parse_namespaces(value: object, where: str) -> Mapping[str, Namespace]:
         namespaces[name] = Namespace(name=name)
     return MappingProxyType(namespaces)
 
+def _parse_scope_target_kind(value: object, where: str) -> str:
+    if value is None:
+        return "directory"
+    if not isinstance(value, str):
+        raise ConfigurationError(f"{where}: expected 'directory' or 'file'")
+    if value not in {"directory", "file"}:
+        raise ConfigurationError(f"{where}: expected 'directory' or 'file'")
+    return value
+
+
 def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
     if value is None:
         value = {}
@@ -65,10 +75,18 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
         raise ConfigurationError(f"{where}: expected a table")
 
     scopes: dict[str | None, Scope] = {}
+    unnamed_description: str | None = None
+    unnamed_target_kind = "directory"
     unnamed_ignore: tuple[TargetIgnorePattern, ...] = ()
     unnamed_namespace: str | None = None
 
     for raw_key, raw_value in value.items():
+        if raw_key == "description" and not isinstance(raw_value, dict):
+            unnamed_description = _validated_description(raw_value, f"{where}.description")
+            continue
+        if raw_key == "target_kind" and not isinstance(raw_value, dict):
+            unnamed_target_kind = _parse_scope_target_kind(raw_value, f"{where}.target_kind")
+            continue
         if raw_key == "ignore" and not isinstance(raw_value, dict):
             unnamed_ignore = _validated_target_ignores(raw_value, f"{where}.ignore")
             continue
@@ -82,20 +100,38 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
 
         name = _validate_scope_name(raw_key, where)
         scope_where = f"{where}.{name}"
-        _require_only_keys(raw_value, {"path", "ignore", "namespace"}, scope_where)
+        _require_only_keys(
+            raw_value,
+            {"path", "description", "target_kind", "ignore", "namespace"},
+            scope_where,
+        )
         raw_path = raw_value.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{scope_where}.path: expected a string")
         path = _validate_filesystem_location(raw_path, f"{scope_where}.path", label="Scope path")
+        description = None
+        if "description" in raw_value:
+            description = _validated_description(raw_value["description"], f"{scope_where}.description")
+        target_kind = _parse_scope_target_kind(raw_value.get("target_kind"), f"{scope_where}.target_kind")
         ignore = _validated_target_ignores(raw_value.get("ignore"), f"{scope_where}.ignore")
         namespace = _parse_namespace_reference(raw_value.get("namespace"), f"{scope_where}.namespace")
-        scopes[name] = Scope(name=name, path=path, ignore=ignore, namespace=namespace)
+        scopes[name] = Scope(
+            name=name,
+            path=path,
+            description=description,
+            target_kind=target_kind,
+            ignore=ignore,
+            namespace=namespace,
+        )
 
-    # The unnamed/default Scope always exists.  [scope] configures only its
-    # optional ignore policy and archive namespace; an empty [scope] is a no-op.
+    # The unnamed/default Scope always exists.  [scope] configures its optional
+    # metadata, Target kind, ignore policy, and archive namespace; an empty
+    # [scope] preserves the historical directory-Target defaults.
     scopes[None] = Scope(
         name=None,
         path=None,
+        description=unnamed_description,
+        target_kind=unnamed_target_kind,
         ignore=unnamed_ignore,
         namespace=unnamed_namespace,
     )

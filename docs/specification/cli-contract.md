@@ -25,7 +25,7 @@ level: MUST
 
 ## SPEC_149
 
-If the Effective Configuration contains a Pluck, positional arguments are resolved as `TARGET` references according to the CLI Target reference rules in Runtime Target, Scope, and Case. If it has no Pluck, positional `TARGET` arguments are not accepted.
+Positional arguments are resolved as `TARGET` references according to the CLI Target reference rules in Runtime Target, Scope, and Case. If the Effective Configuration contains a Pluck, one or more Target references are required. Without a Pluck, file Targets from file-kind Scopes are still accepted, while directory Targets are not. An Always-only run may still execute without positional Target arguments.
 
 level: MUST
 

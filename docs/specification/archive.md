@@ -2,7 +2,7 @@
 
 ## SPEC_095
 
-For a Target resolved through a Scope, the source root is the one-segment Target directory name. The logical Scope name is not implicitly included in the archive path.
+For a Target resolved through a Scope, the source root is the one-segment Target entry name: the directory name for a directory Target or the file name for a file Target. The logical Scope name is not implicitly included in the archive path.
 
 level: MUST
 
@@ -16,7 +16,7 @@ level: MUST
 
 ## SPEC_097
 
-For a source without a Namespace, the final Archive root is the source root. For a source with a Namespace, the final Archive root is `NAMESPACE/SOURCE_ROOT`, and selected file paths relative to the source directory are placed beneath it. The Namespace is applied whenever it is configured, not only when a collision actually occurs.
+For a source without a Namespace, the final Archive root is the source root. For a source with a Namespace, the final Archive root is `NAMESPACE/SOURCE_ROOT`. Directory sources place selected file paths relative to their source directory beneath that root; a file Target is placed at that root as the atomic file itself. The Namespace is applied whenever it is configured, not only when a collision actually occurs.
 
 level: MUST
 
@@ -32,13 +32,13 @@ related: [SPEC_064](namespace.md#spec_064)
 
 ## SPEC_099
 
-After final Archive roots are known to be unique, planning still rejects different physical files that collide at the same archive path. If the same physical file maps to the same archive path more than once, it is written once. If the same physical file is selected through different resolved sources and maps to different archive paths, each archive path is written.
+After final Archive roots are known to be unique, planning still rejects different physical files that collide at the same archive path. If the same physical file maps to the same archive path more than once, it is written once. If the same physical file is selected through different resolved sources and maps to different archive paths, each archive path is written. Because a file Target uses its final Archive root as the file entry itself, planning also rejects a file/directory path conflict where that file path is an ancestor or descendant of another archive file path.
 
 level: MUST
 
 ## SPEC_100
 
-Target and Always-source Selections are evaluated independently for each source. A physical file being present in a Target source tree does not let the Target's `ignore`, non-selection, or missing result alter the Always-source Selection. Physical overlap is determined only after each source's Selection is complete and does not merge, suppress, or invalidate either Selection result.
+A directory Target's Pluck Selection and each Always-source Selection are evaluated independently for each source. A file Target has no Selection and contributes the atomic file itself. A physical file being present in a directory Target source tree does not let the Target's `ignore`, non-selection, or missing result alter the Always-source Selection. Physical overlap is determined only after each source's final selected-file set is known and does not merge, suppress, or invalidate the per-source result.
 
 level: MUST
 
@@ -58,7 +58,7 @@ level: MUST
 
 ## SPEC_103
 
-Each resolved source is represented by one level-2 heading whose inline-code text is the final Archive root. The section records the selected file count as `Files: N`. When the Selection has a `description`, that text appears after the metadata as the section body. Descriptions are not compressed into table cells, so multi-line descriptions remain usable as section content. A source without a description has no description body.
+Each resolved source is represented by one level-2 heading whose inline-code text is the final Archive root. Directory-source headings and `Source root` metadata end in `/`; file Targets are shown as file paths without a trailing `/`. The section records the selected file count as `Files: N`. If a Target's `scope.description` exists, it appears first in the section body. A directory Target then shows the Pluck Selection `description`; a file Target does not use Pluck and therefore shows only the Scope description. Always sources continue to show their Selection `description`. Descriptions remain section-body text, including multiple lines.
 
 level: MUST
 
@@ -80,7 +80,7 @@ condition: when at least one source uses a Namespace
 
 ## SPEC_106
 
-By default, the README does not record source filesystem paths, Configuration path/table, base chain, Scope/Pluck/Always names, selected Case, or similar `dirpluck`-specific information. Target-overlap metadata uses the Target's final Archive root rather than a Target name. Only CLI `--paths` adds a `Source` value to each source section containing the resolved source directory as a `/`-separated filesystem path. `--paths` does not change archive paths or file selection.
+By default, the README does not record source filesystem paths, Configuration path/table, base chain, Scope/Pluck/Always names, selected Case, or similar `dirpluck`-specific information. Target-overlap metadata uses the Target's final Archive root rather than a Target name. Only CLI `--paths` adds a `Source` value to each source section containing the resolved source filesystem path with `/` separators: a directory path for directory sources and a file path for file Targets. `--paths` does not change archive paths or file selection.
 
 level: MUST
 

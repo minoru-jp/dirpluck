@@ -18,7 +18,7 @@
 
 ## SPEC_037
 
-実効設定に Pluck が存在する場合は CLI positional `TARGET` reference を1個以上必要とする。Pluck がない Effective Configuration では positional Target reference を受理しない。
+実効設定に Pluck が存在する場合は、既存契約どおり CLI positional `TARGET` reference を1個以上必要とする。Pluck がない Effective Configuration でも `target_kind = "file"` の Scope から file Target を選ぶ positional Target reference は受理する。Pluck がなく Always source もなく file-kind Scope だけを持つ場合は、実行時に positional Target reference を1個以上必要とする。
 
 level: MUST
 
@@ -26,7 +26,7 @@ condition: Effective Configuration に Pluck が存在する場合, Effective Co
 
 ## SPEC_038
 
-各 positional reference は effective Scope から1個以上の対象を解決し、各 Target へ同じ effective Pluck selection を独立して適用する。Target を Configuration file の配置や Pluck definition の origin から自動推定しない。
+各 positional reference は effective Scope から1個以上の対象を解決する。Directory Target には同じ effective Pluck selection を独立して適用し、file Target には Pluck を適用せず regular file 自体を atomic source とする。Pluck がない場合に directory Target を解決しようとした run は error とする。Target を Configuration file の配置や Pluck definition の origin から自動推定しない。
 
 level: MUST
 
@@ -36,7 +36,7 @@ title: Scope
 
 ### SPEC_039
 
-Default Scope は常に1個存在し、ルート設定ファイルがある directory を Scope root とする。Directory name による special case は設けない。`[scope]` はこの default Scope の optional `ignore` / `namespace` だけを設定し、`path` を持たない。`[scope]` を省略した場合と空の `[scope]` は同じ意味で、default Scope の `ignore` は空、Namespace reference はなしとする。
+Default Scope は常に1個存在し、ルート設定ファイルがある directory を Scope root とする。Directory name による special case は設けない。`[scope]` はこの default Scope の optional `description` / `target_kind` / `ignore` / `namespace` を設定し、`path` を持たない。`target_kind` の既定は `"directory"` とする。`[scope]` を省略した場合と空の `[scope]` は同じ意味で、description なし、directory Target、`ignore` は空、Namespace reference はなしとする。
 
 level: MUST
 
@@ -44,7 +44,7 @@ related: [SPEC_030](composition.md#spec_030), [SPEC_032](composition.md#spec_032
 
 ### SPEC_040
 
-名前付き `[scope.<name>]` は required `path` と optional `ignore` / `namespace` を持つ。`path` は concrete directory path とし、empty string と glob を拒否する。Relative `path` は Filesystem path notation の共通規則に従って definition の Configuration file directory から解決し、absolute `path` は host filesystem 上の directory を直接参照する。明示された Scope root location は symbolic link / Windows directory junction を含んでもよく、host OS の通常の filesystem semantics で解決した先が実在 directory でなければならない。Scope root 自体が alias であることと、その root 直下で自動発見した link-like Target candidate を除外することは別の rule とする。
+名前付き `[scope.<name>]` は required `path` と optional `description` / `target_kind` / `ignore` / `namespace` を持つ。`target_kind` は `"directory"` または `"file"` とし、既定は `"directory"` とする。`path` は concrete directory path とし、empty string と glob を拒否する。Relative `path` は Filesystem path notation の共通規則に従って definition の Configuration file directory から解決し、absolute `path` は host filesystem 上の directory を直接参照する。明示された Scope root location は symbolic link / Windows directory junction を含んでもよく、host OS の通常の filesystem semantics で解決した先が実在 directory でなければならない。Scope root 自体が alias であることと、その root 直下で自動発見した link-like Target candidate を除外することは別の rule とする。`description` は空でない string とし Target discovery / Archive placement を変更しない。
 
 level: MUST
 
@@ -72,7 +72,7 @@ level: MUST
 
 ### SPEC_044
 
-`scope.ignore` は Target candidate の direct child directory **name** を case-sensitive に照合し、一致した directory は単一 Target 選択と全展開のどちらでも Target にできない。File selection の `pluck.ignore` / `always.<name>.ignore` とは独立する。
+`scope.ignore` は Scope の `target_kind` に対応する direct-child Target candidate の **name** を case-sensitive に照合し、一致した entry は単一 Target 選択と全展開のどちらでも Target にできない。Directory mode では directory name、file mode では regular-file name に適用する。File selection の `pluck.ignore` / `always.<name>.ignore` とは独立する。
 
 level: MUST
 
@@ -101,7 +101,7 @@ level: MUST
 
 ### SPEC_047
 
-`NAME` は default Scope 直下の directory を1個選ぶ。`SCOPE/NAME` は named Scope `SCOPE` 直下の directory `NAME` を1個選ぶ。`/` は default Scope の全展開、`SCOPE/` は named Scope の全展開とする。
+`NAME` は default Scope の `target_kind` に対応する direct child entry を1個選ぶ。`SCOPE/NAME` は named Scope `SCOPE` の `target_kind` に対応する direct child entry `NAME` を1個選ぶ。`/` は default Scope の全展開、`SCOPE/` は named Scope の全展開とする。
 
 level: MUST
 
@@ -119,7 +119,7 @@ level: MUST
 
 ### SPEC_050
 
-Single Target resolution では指定した entry が Scope root の **direct child** にある実在 directory でなければならない。Symbolic link または Windows directory junction として認識した entry は Target として選択せず、明示的な `NAME` / `SCOPE/NAME` がそのような link-like entry を指す場合は error とする。
+Single Target resolution では指定した entry が Scope root の **direct child** にあり、Scope の `target_kind = "directory"` なら実在 directory、`target_kind = "file"` なら実在 regular file でなければならない。Symbolic link または Windows junction として認識した entry は Target として選択せず、明示的な `NAME` / `SCOPE/NAME` がそのような link-like entry を指す場合は error とする。File mode で directory、directory mode で file、または特殊 filesystem entry を指定した場合も error とする。
 
 level: MUST
 
@@ -137,13 +137,13 @@ title: Scope expansion
 
 ### SPEC_052
 
-`/` または `SCOPE/` は対応する Scope root の direct child directory entry を列挙し、Scope の `ignore` に一致しないものをそれぞれ独立した Target として展開する。再帰的な directory 列挙は行わず、regular file は Target にしない。
+`/` または `SCOPE/` は対応する Scope root の direct child entry を列挙し、Scope の `target_kind` と `ignore` に従う eligible entry をそれぞれ独立した Target として展開する。`target_kind = "directory"` では regular directory だけ、`target_kind = "file"` では regular file だけを対象とし、再帰列挙は行わない。
 
 level: MUST
 
 ### SPEC_053
 
-Ignore 対象 entry と、symbolic link / Windows directory junction として認識した entry は Target candidate として扱わない。認識した link-like entry の参照先は解決せず、`/` / `SCOPE/` の展開結果にも含めない。展開結果が0 eligible directory の場合は error とする。
+Ignore 対象 entry と、symbolic link / Windows junction として認識した entry は Target candidate として扱わない。認識した link-like entry の参照先は解決せず、`/` / `SCOPE/` の展開結果にも含めない。現在の `target_kind` に対応する eligible direct child が0件の場合は error とする。
 
 level: MUST
 

@@ -194,7 +194,13 @@ def _matching_include_entries(
 
 
 def select_files(source: ResolvedSource, *, allow_missing: bool = False) -> SelectionResult:
-    """Select files using required must and optional may patterns plus name ignores."""
+    """Select files for one resolved source."""
+
+    if source.source_kind == "file":
+        return SelectionResult(files=(source.directory,), missing=(), optional_missing=())
+
+    if source.selection is None:
+        raise AssertionError(f"directory source has no Selection: {source.label}")
 
     selected: dict[str, Path] = {}
     missing: list[str] = []

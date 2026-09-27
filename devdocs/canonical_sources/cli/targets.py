@@ -25,9 +25,9 @@ class CLI_PART:
 
     class SECTION_004:
         r"""
-        Pluck がある Configuration では、各 positional `TARGET` から解決した source directory へ同じ Pluck selection が独立して適用されます。
+        Positional `TARGET` は Scope の `target_kind` に応じて directory または regular file を解決します。Directory Target には effective Pluck selection を独立して適用し、file Target はその file 自体を atomic source として収録します。
 
-        常設の default Scope から1 Target を選ぶ場合は directory name だけを指定します。Default Scope は常に root Configuration file の directory を root とします。Configuration を別 directory に置けば default Scope もその directory に移るため、別の Target root が必要な場合は named Scope を定義します。
+        常設の default Scope から1 Target を選ぶ場合は direct-child name だけを指定します。Default Scope は常に root Configuration file の directory を root とします。Configuration を別 directory に置けば default Scope もその directory に移るため、別の Target root が必要な場合は named Scope を定義します。
 
         ```console
         {{example_006}}
@@ -41,17 +41,17 @@ class CLI_PART:
 
         `work/acme` は `work` Scope 直下の `acme` だけを Target とします。`work` Scope が未定義なら error で、別の relative path interpretation へ fallback しません。
 
-        Scope 直下の eligible directory をすべて Target にするには、次の expansion form を使います。
+        Scope 直下の eligible Target candidate をすべて選ぶには、次の expansion form を使います。
 
         ```console
         {{example_008}}
         ```
 
-        `/` は default Scope、`work/` は named Scope `work` を全展開します。`/` は filesystem root ではありません。どちらも direct child directory だけを展開し、再帰列挙しません。Scope の `ignore` に一致する directory は Target candidate から除きます。未使用の named Scope の path が現在存在しなくても、別の Scope だけを使う実行は失敗しません。
+        `/` は default Scope、`work/` は named Scope `work` を全展開します。`/` は filesystem root ではありません。`target_kind = "directory"` では direct child directory、`target_kind = "file"` では direct child regular file だけを展開し、再帰列挙しません。Scope の `ignore` に一致する candidate は除外します。未使用の named Scope の path が現在存在しなくても、別の Scope だけを使う実行は失敗しません。
 
         `./`、`./acme`、`/acme`、`work/team/acme`、absolute filesystem path は Target reference として受理しません。
 
-        Pluck がない Configuration は Always source など固定 source だけで実行できます。
+        Pluck がない Configuration でも file-kind Scope の Target reference は使用できます。Directory Target は Pluck を必要とします。Target を指定しない Always-only 実行も従来どおり有効です。
 
         ```console
         {{example_009}}

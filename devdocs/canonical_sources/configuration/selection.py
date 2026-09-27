@@ -30,7 +30,7 @@ class CONFIGURATION_PART:
 
     class SECTION_005:
         r"""
-        Pluck、Always source、Case はそれぞれ独立した{{TERM_7}}を持ちます。Selection では `must` / `may` / `ignore`、必要に応じて `allow_empty` を記述し、人間向けの説明を添えたい場合だけ `description` を使います。
+        Directory Target の Pluck、Always source、Case はそれぞれ独立した{{TERM_7}}を持ちます。Selection では `must` / `may` / `ignore`、必要に応じて `allow_empty` を記述し、人間向けの説明を添えたい場合だけ `description` を使います。File Target は atomic source なので Selection を持ちません。
         """
         title @= 'Selection'
 

@@ -72,6 +72,58 @@ class CliTests(unittest.TestCase):
                 names = set(archive.namelist())
             self.assertEqual(names, {"README.md", "app/src/app.py", "framework/src/core.py"})
 
+    def test_file_target_scope_bundles_returned_archives_with_always_source(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            guidelines = root / "guidelines"
+            returned.mkdir()
+            guidelines.mkdir()
+            (returned / "repo-a.zip").write_bytes(b"a")
+            (returned / "repo-b.zip").write_bytes(b"b")
+            (guidelines / "rules.md").write_text("rules\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(textwrap.dedent('''
+                [namespace.returned]
+
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+                namespace = "returned"
+                description = "Repositories returned from the previous editing cycle."
+
+                [always.guidelines]
+                path = "guidelines"
+                description = "Guidelines used for the next pass."
+                must = ["rules.md"]
+
+                [output]
+                path = "result.zip"
+            '''), encoding="utf-8")
+
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main(["returned/"])
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                self.assertEqual(
+                    set(archive.namelist()),
+                    {
+                        "README.md",
+                        "returned/repo-a.zip",
+                        "returned/repo-b.zip",
+                        "guidelines/rules.md",
+                    },
+                )
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("## `returned/repo-a.zip`", readme)
+            self.assertIn("Repositories returned from the previous editing cycle.", readme)
+            self.assertIn("Guidelines used for the next pass.", readme)
+
     def test_archive_write_oserror_is_reported_without_traceback(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)

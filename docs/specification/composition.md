@@ -46,7 +46,7 @@ level: MUST
 
 - Pluck: an outer Pluck shadows the entire inner Pluck definition.
 - Always source: an outer source shadows the entire same-named inner source; differently named sources remain.
-- Named Scope: an outer Scope shadows the entire same-named inner Scope; differently named Scopes remain. The default Scope is not composed from the base chain; its root is determined from the Root Configuration location by the default-Scope rule in Runtime Target, Scope, and Case, and only the Root Configuration's `[scope].ignore` / `namespace` is used.
+- Named Scope: an outer Scope shadows the entire same-named inner Scope, including `description`, `target_kind`, `path`, `ignore`, and `namespace`; differently named Scopes remain. The default Scope is not composed from the base chain; its root is determined from the Root Configuration location by the default-Scope rule in Runtime Target, Scope, and Case, and only the Root Configuration's `[scope].description` / `target_kind` / `ignore` / `namespace` is used.
 - Namespace: an outer Namespace shadows the entire same-named inner Namespace; differently named Namespaces remain. Scope and Always Namespace references are resolved against the effective Namespace set after composition.
 - Shared pattern: `must`, `may`, and `ignore` are independent namespaces. Within each namespace, an outer same-named pattern set shadows the entire inner array.
 

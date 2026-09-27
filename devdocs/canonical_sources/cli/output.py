@@ -50,7 +50,7 @@ class CLI_PART:
         {{example_012}}
         ```
 
-        `--paths` は各 source section に解決済み source directory を追加します。Absolute path を含む local filesystem 情報を Archive に残し得るため、外部へ配布する Archive では必要性を確認して使用してください。
+        `--paths` は各 source section に解決済み source filesystem path を追加します。Directory source では directory path、file Target では file path を表示します。Absolute path を含む local filesystem 情報を Archive に残し得るため、外部へ配布する Archive では必要性を確認して使用してください。
         """
         title @= 'Archive index の source path'
 

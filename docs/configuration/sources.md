@@ -6,7 +6,7 @@ This guide explains source authoring. The compatibility contract is defined by [
 
 ## Pluck
 
-`[pluck]` defines what to extract from Targets selected for the current run. It does not contain a source path itself; Targets are resolved from Scopes and CLI Target references.
+`[pluck]` defines what to extract from **directory** Targets selected for the current run. It does not contain a source path itself; Targets are resolved from Scopes and CLI Target references. A Target from a Scope with `target_kind = "file"` is atomic and does not use Pluck.
 
 ```toml
 [pluck]
@@ -16,14 +16,12 @@ may = ["attachments"]
 ignore = [".git/", "__pycache__/", "*.pyc"]
 ```
 
-When multiple Targets are selected in one run, the same Pluck selection is applied independently to each Target.
-
-A Configuration with no Pluck does not use positional Target references.
+When multiple directory Targets are selected in one run, the same Pluck selection is applied independently to each directory Target. File Targets and directory Targets may be selected in the same run. A Configuration with no Pluck may still use positional Target references for file-kind Scopes, but it cannot select directory Targets.
 ## Scope
 
 A Scope is a place where Targets are searched for. Configurations use an always-present default Scope and may add named Scopes.
 
-The default Scope always exists and always uses the directory containing the Root Configuration file as its search root. The `[scope]` table configures only the default Scope's optional `ignore` and `namespace`; it has no `path` field. Omitting `[scope]`, or writing an empty `[scope]`, is equivalent to `ignore = []` with no Namespace. A `[scope]` written in a Base Configuration applies when that Configuration itself is used as the Root; it is not inherited by an outer Root Configuration.
+The default Scope always exists and always uses the directory containing the Root Configuration file as its search root. The `[scope]` table configures the default Scope's optional `description`, `target_kind`, `ignore`, and `namespace`; it has no `path` field. `target_kind` accepts `"directory"` or `"file"` and defaults to `"directory"`. Omitting `[scope]`, or writing an empty `[scope]`, preserves the historical behavior: directory Targets, no description, `ignore = []`, and no Namespace. A `[scope]` written in a Base Configuration applies when that Configuration itself is used as the Root; it is not inherited by an outer Root Configuration.
 
 ```toml
 [scope]
@@ -42,7 +40,7 @@ path = "/srv/oss"
 ignore = ["old-*"]
 ```
 
-`ignore` names directories directly under the Scope that should not be treated as Target candidates. Its role is different from the file-selection `pluck.ignore`.
+With `target_kind = "directory"`, a Scope exposes only eligible direct-child directories as Target candidates. With `target_kind = "file"`, it exposes only eligible direct-child regular files. A Scope never mixes directory and file Targets. `ignore` matches the direct-child candidate name for the active Target kind. Its role is different from file-selection `pluck.ignore`. `description` supplies README context for Targets obtained from the Scope.
 
 CLI Target references have four forms combining unnamed or named Scope selection with one Target or all Targets:
 
@@ -53,9 +51,9 @@ SCOPE/NAME  -> one Target from a named Scope
 SCOPE/      -> all Targets from a named Scope
 ```
 
-Expansion includes only eligible directories directly under the Scope and is not recursive.
+Expansion includes only direct children matching the Scope's `target_kind` and is not recursive: eligible directories in directory mode, eligible regular files in file mode.
 
-Along a base chain, only named Scopes are overlaid by name. A named Scope in an outer Configuration replaces a same-named Scope, while differently named Scopes coexist. The default Scope is not inherited from a Base Configuration; it always belongs to the Root Configuration. Therefore a Base Configuration's `[scope].ignore` / `namespace` is not used by an outer Root, but remains valid when that Base Configuration itself is used as the Root. An inherited named Scope root remains anchored to the Configuration in which the Scope was declared and is not rebased to an outer Configuration.
+Along a base chain, only named Scopes are overlaid by name. A named Scope in an outer Configuration replaces the complete same-named Scope definition, including `description`, `target_kind`, `path`, `ignore`, and `namespace`, while differently named Scopes coexist. The default Scope is not inherited from a Base Configuration; it always belongs to the Root Configuration. Therefore a Base Configuration's `[scope]` metadata and policy are not used by an outer Root, but remain valid when that Base Configuration itself is used as the Root. An inherited named Scope root remains anchored to the Configuration in which the Scope was declared and is not rebased to an outer Configuration.
 
 A Scope may optionally specify `namespace = "<name>"`. This does not change where Targets are searched for. Instead, it prefixes the Archive root of every Target obtained from that Scope with a separately defined Namespace. A Namespace is applied whenever it is configured, not only when a collision happens.
 

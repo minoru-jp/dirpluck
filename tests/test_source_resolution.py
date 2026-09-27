@@ -684,5 +684,188 @@ class SourceResolutionTests(BuilderTestCase):
             self.assertIn("guidelines/rules.md", plan.entries)
 
 
+    def test_file_target_scope_selects_atomic_files_without_pluck(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            first = returned / "repo-a.zip"
+            second = returned / "repo-b.zip"
+            first.write_bytes(b"a")
+            second.write_bytes(b"b")
+            (returned / "nested").mkdir()
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+                description = "Repositories returned from the previous editing cycle."
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create("returned/"))
+            self.assertEqual([source.source_kind for source in sources], ["file", "file"])
+            self.assertEqual([source.directory for source in sources], [first.resolve(), second.resolve()])
+            self.assertTrue(all(source.selection is None for source in sources))
+
+            plan = plan_archive(config, BuildRequest.create("returned/"))
+            self.assertEqual(set(plan.entries), {"repo-a.zip", "repo-b.zip"})
+            self.assertEqual(plan.entries["repo-a.zip"], first.resolve())
+            self.assertIn(
+                "## `repo-a.zip`\n\nFiles: 1\n\nRepositories returned from the previous editing cycle.",
+                plan.readme,
+            )
+            self.assertNotIn("## `repo-a.zip/`", plan.readme)
+
+    def test_file_target_scope_namespace_places_files_under_existing_namespace(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            archive_file = returned / "repo.zip"
+            archive_file.write_bytes(b"zip")
+            config = self._config(root, '''
+                [namespace.returned]
+
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+                namespace = "returned"
+                description = "Returned repositories."
+            ''')
+
+            plan = plan_archive(config, BuildRequest.create("returned/repo.zip"))
+            self.assertEqual(set(plan.entries), {"returned/repo.zip"})
+            self.assertIn("## `returned/repo.zip`", plan.readme)
+            self.assertIn("Namespace: `returned/`; Source root: `repo.zip`", plan.readme)
+
+    def test_file_target_scope_ignore_applies_to_file_names_and_directories_are_not_targets(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "keep.zip").write_bytes(b"keep")
+            (returned / "skip.zip").write_bytes(b"skip")
+            (returned / "directory.zip").mkdir()
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+                ignore = ["skip.zip"]
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create("returned/"))
+            self.assertEqual([source.source_root for source in sources], ["keep.zip"])
+            with self.assertRaisesRegex(SelectionError, "ignored by"):
+                resolve_sources(config, BuildRequest.create("returned/skip.zip"))
+            with self.assertRaisesRegex(SelectionError, "not a regular file"):
+                resolve_sources(config, BuildRequest.create("returned/directory.zip"))
+
+    def test_file_target_scope_expansion_requires_eligible_files(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "only-directory").mkdir()
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+            with self.assertRaisesRegex(SelectionError, "no eligible direct child files"):
+                resolve_sources(config, BuildRequest.create("returned/"))
+
+    def test_directory_scope_description_precedes_pluck_description(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "project"
+            project.mkdir()
+            (project / "file.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                description = "Files selected from the project directory."
+                must = ["file.txt"]
+
+                [scope]
+                description = "Project supplied for review."
+            ''')
+            plan = plan_archive(config, BuildRequest.create("project"))
+            self.assertIn(
+                "## `project/`\n\nFiles: 1\n\n"
+                "Project supplied for review.\n\n"
+                "Files selected from the project directory.",
+                plan.readme,
+            )
+
+    def test_file_target_does_not_use_pluck_description(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "repo.zip").write_bytes(b"zip")
+            config = self._config(root, '''
+                [pluck]
+                description = "Directory-only selection description."
+                must = ["src"]
+
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+                description = "Returned repository archive."
+            ''')
+            plan = plan_archive(config, BuildRequest.create("returned/repo.zip"))
+            self.assertIn("Returned repository archive.", plan.readme)
+            self.assertNotIn("Directory-only selection description.", plan.readme)
+
+
+    def test_file_target_archive_path_cannot_be_parent_of_directory_source_entries(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "project"
+            (project / "src").mkdir(parents=True)
+            (project / "src" / "main.py").write_text("x", encoding="utf-8")
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "bundle").write_bytes(b"zip")
+            config = self._config(root, '''
+                [namespace.bundle]
+
+                [pluck]
+                must = ["src"]
+
+                [scope]
+                namespace = "bundle"
+
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            for targets in (("project", "returned/bundle"), ("returned/bundle", "project")):
+                with self.subTest(targets=targets):
+                    with self.assertRaisesRegex(SelectionError, "archive file/directory path conflict"):
+                        plan_archive(config, BuildRequest.create(*targets))
+
+    def test_mixed_directory_and_file_scopes_use_pluck_only_for_directory_target(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "project"
+            project.mkdir()
+            (project / "src").mkdir()
+            (project / "src" / "main.py").write_text("x", encoding="utf-8")
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "repo.zip").write_bytes(b"zip")
+            config = self._config(root, '''
+                [pluck]
+                description = "Directory contents."
+                must = ["src"]
+
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+            plan = plan_archive(config, BuildRequest.create("project", "returned/repo.zip"))
+            self.assertEqual(set(plan.entries), {"project/src/main.py", "repo.zip"})
+
+
 if __name__ == "__main__":
     unittest.main()

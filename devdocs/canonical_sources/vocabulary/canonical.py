@@ -25,7 +25,7 @@ class TERMS:
         r"""
             {{対象}}
 
-            実行時にスコープから選ばれ、pluck の selection が適用される source directory。
+            実行時にスコープから選ばれる direct-child filesystem entry。Directory Target には pluck selection を適用し、file Target はその regular file 自体を atomic source として扱う。
         """
     class TERM_4:
         r"""
@@ -43,13 +43,13 @@ class TERMS:
         r"""
             {{ソース}}
 
-            1回の実行で file selection の対象となる filesystem directory。対象と常時ソースは、source が実行へ参加する方法の違いを表す。
+            1回の実行で Archive へ収録する filesystem source。Directory source は Selection の対象となり、file Target は regular file 自体を atomic source とする。対象と常時ソースは source が実行へ参加する方法の違いを表す。
         """
     class TERM_7:
         r"""
             {{選択}}
 
-            source から Archive に含める file を、宣言された pattern と policy に従って決めること、またはそのための定義。
+            directory source から Archive に含める file を、宣言された pattern と policy に従って決めること、またはそのための定義。
         """
     class TERM_8:
         r"""
@@ -73,7 +73,7 @@ class TERMS:
         r"""
             {{pluck}}
 
-            今回の実行で選ばれた対象から何を取り出すかを表す selection definition。
+            今回の実行で選ばれた directory Target から何を取り出すかを表す selection definition。File Target には適用しない。
         """
         preserve_spelling @= True
 

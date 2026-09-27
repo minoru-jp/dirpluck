@@ -469,3 +469,54 @@ class ConfigSchemaTests(ConfigTestCase):
                 root = Path(temp)
                 with self.assertRaises(ConfigurationError):
                     load_config(self._write(root, body))
+
+    def test_scope_parses_description_and_target_kind_with_directory_default(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [pluck]
+                description = "Default."
+                must = ["src"]
+
+                [scope]
+                description = "Default workspace."
+
+                [scope.returned]
+                path = "returned"
+                description = "Returned archives."
+                target_kind = "file"
+            '''))
+            self.assertEqual(config.scopes[None].description, "Default workspace.")
+            self.assertEqual(config.scopes[None].target_kind, "directory")
+            self.assertEqual(config.scopes["returned"].description, "Returned archives.")
+            self.assertEqual(config.scopes["returned"].target_kind, "file")
+
+    def test_scope_target_kind_rejects_unknown_and_non_string_values(self):
+        invalid_values = ('"archive"', 'true', '1')
+        for value in invalid_values:
+            with self.subTest(value=value), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                with self.assertRaisesRegex(ConfigurationError, "expected 'directory' or 'file'"):
+                    load_config(self._write(root, f'''
+                        [pluck]
+                        description = "Default."
+                        must = ["src"]
+
+                        [scope.work]
+                        path = "work"
+                        target_kind = {value}
+                    '''))
+
+    def test_scope_description_must_be_nonempty_string(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(ConfigurationError, "expected a non-empty string"):
+                load_config(self._write(root, '''
+                    [pluck]
+                    description = "Default."
+                    must = ["src"]
+
+                    [scope.work]
+                    path = "work"
+                    description = "   "
+                '''))

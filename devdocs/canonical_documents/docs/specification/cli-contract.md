@@ -43,7 +43,7 @@ level: MUST
 
 ## SPEC_149
 
-Effective Configuration に Pluck がある場合、positional argument は `TARGET` reference として Runtime Target, Scope, and Case の CLI Target reference rules で解決する。Pluck がない場合は positional `TARGET` を受理しない。
+Positional argument は Runtime Target, Scope, and Case の CLI Target reference rules で解決する。Effective Configuration に Pluck がある場合は1個以上の Target reference を必要とする。Pluck がない場合も file-kind Scope の file Target reference は受理するが、directory Target は受理しない。Always-only run は positional argument なしで実行できる。
 
 level: MUST
 

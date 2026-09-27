@@ -8,7 +8,7 @@ level: MUST
 
 ## SPEC_089
 
-A runtime Target directory is resolved as a direct child of its corresponding Scope root. The Scope root is the base for finding Target candidates, while the boundary for selected files is the resolved Target directory itself.
+A runtime Target is resolved as a direct child of its corresponding Scope root. A Target from `target_kind = "directory"` uses that directory itself as the Selection boundary. A Target from `target_kind = "file"` treats the regular file itself as an atomic source and performs no Selection traversal inside it. The Scope root is the base for finding Target candidates.
 
 level: MUST
 
@@ -20,7 +20,7 @@ level: MUST
 
 ## SPEC_091
 
-Include resolution and selected files for each source are confined to that source directory. Only regular files are included in the Archive; regular directories are used only for traversal. An entry recognized as a symbolic link during Target discovery or Selection traversal is not selectable: `dirpluck` does not resolve or traverse its target and does not include the link in the Archive. On Windows, directory junctions are treated as the same kind of link-like entry. File symlinks, directory symlinks, broken symlinks, and recognized Windows directory junctions are all non-traversable. Other non-regular entries such as FIFOs, sockets, and devices are likewise not archived and are not traversed as directories.
+Include resolution and selected files for each directory source are confined to that source directory, while a file Target is confined to the selected regular file itself. Only regular files are included in the Archive; regular directories are used only for traversal. An entry recognized as a symbolic link during Target discovery or Selection traversal is not selectable: `dirpluck` does not resolve or traverse its target and does not include the link in the Archive. On Windows, directory junctions are treated as the same kind of link-like entry. File symlinks, directory symlinks, broken symlinks, and recognized Windows directory junctions are all non-traversable. Other non-regular entries such as FIFOs, sockets, and devices are likewise not archived and are not traversed as directories.
 
 level: MUST
 

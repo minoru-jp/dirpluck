@@ -54,7 +54,7 @@ Review the output path and existing-file policy in the Configuration before runn
 
 ## When an Archive leaves the local environment
 
-The generated Archive README omits source filesystem paths by default. Only `--paths` adds each resolved source directory to the index. Because those values may expose local-environment information such as absolute paths, review the Archive when using `--paths` for material that will be shared externally.
+The generated Archive README omits source filesystem paths by default. Only `--paths` adds each resolved source filesystem path to the index. Because those values may expose local-environment information such as absolute paths, review the Archive when using `--paths` for material that will be shared externally.
 
 The files included in the Archive are still selected according to the Configuration. Hiding source paths from the README is not inspection or sanitization of the Archive contents.
 

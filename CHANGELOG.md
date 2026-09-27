@@ -2,6 +2,21 @@
 
 Release history for dirpluck.
 
+## 0.11.0
+
+Add an opt-in Scope mode for treating direct-child regular files as atomic Targets. This supports workflows such as collecting several returned ZIP archives together with existing Always sources without unpacking those archives first, while preserving the directory-only behavior of existing Scopes by default.
+
+### Added
+
+- Add Scope `target_kind = "directory" | "file"`. The default remains `"directory"`, so existing Configurations keep their previous Target discovery and `SCOPE/` expansion behavior. A file-kind Scope exposes only eligible direct-child regular files as Targets; directories, link-like entries, and other special filesystem entries are not file Targets.
+- Add optional Scope `description` metadata. For directory Targets, the generated Archive README shows the Scope description before the Pluck description. For file Targets, each atomic file receives its own README section and shows the Scope description without a Pluck description.
+
+### Changed
+
+- Clarify Pluck as content Selection for directory Targets. File Targets bypass Pluck and are included as atomic files, so a Configuration without Pluck may still accept positional Target references from file-kind Scopes. Directory Targets continue to require Pluck.
+- Apply the existing Scope Namespace mechanism to file Targets. A file Target uses its file name as the source root, or `NAMESPACE/FILENAME` when the Scope references a Namespace.
+- Extend Scope `ignore` and `SCOPE/` expansion according to the active Target kind. Directory mode retains the existing direct-child-directory behavior; file mode applies the same candidate-name policy to direct-child regular files.
+
 ## 0.10.2
 
 Clarify the responsibilities of the release artifacts and standardize the build backend on Hatchling. The wheel provides the implementation and the complete published documentation set, while the sdist provides the complete source needed to rebuild and validate the release.

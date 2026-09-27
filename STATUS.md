@@ -2,11 +2,11 @@
 
 This document describes dirpluck's current development stage, compatibility policy, and the criteria for moving toward 1.0.
 
-The `0.10.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and 0.10.0 aligns runtime Output and the published documentation structure with the current design. From this point, the project will validate that public surface in real use while actively preserving compatibility.
+The `0.11.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and 0.10.0 aligns runtime Output and the published documentation structure with the current design. From this point, the project will validate that public surface in real use while actively preserving compatibility.
 
 ## Current status
 
-The current public version line is `0.10.x`, and the development stage is **Beta**.
+The current public version line is `0.11.x`, and the development stage is **Beta**.
 
 Beta is not a period for freely redesigning public interfaces. The goal is to verify in real use that the current Configuration, CLI, official Python API, and Archive semantics can be used continuously, while making necessary improvements additively wherever possible.
 

@@ -55,7 +55,7 @@ configs/common.dirpluck
 
 ## 基本形
 
-Configuration はひとつの最終 Archive intent を表します。実行時に選ぶ Target がある場合は `pluck` と `scope`、Configuration に固定する source は `always` で表します。
+Configuration はひとつの最終 Archive intent を表します。実行時に選ぶ Target の探索場所と kind は `scope` で表し、directory Target の内部 Selection は `pluck`、Configuration に固定する source は `always` で表します。File Target は `scope` だけで選択でき、Pluck は適用しません。
 
 ```toml
 [pluck]
@@ -76,7 +76,7 @@ must = ["*.md"]
 path = "artifacts/review.zip"
 ```
 
-`[pluck]` は対象へ適用するpluck、`[scope]` / `[scope.<name>]` は Target を探すスコープ、`[always.<name>]` は常時ソースです。Archive 上で同名の source root を区別する必要がある場合はネームスペースを使えます。必要に応じて共有パターン、ケース、基底設定ファイルを使って構成を広げます。
+`[pluck]` は directory 対象へ適用するpluck、`[scope]` / `[scope.<name>]` は Target を探し `target_kind` を決めるスコープ、`[always.<name>]` は常時ソースです。Archive 上で同名の source root を区別する必要がある場合はネームスペースを使えます。必要に応じて共有パターン、ケース、基底設定ファイルを使って構成を広げます。
 
 ## About
 

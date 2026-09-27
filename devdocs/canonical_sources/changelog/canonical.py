@@ -7,6 +7,22 @@ from shikumi_devdoc.norms.document import title
 class CHANGELOG:
     """dirpluck のリリースごとの変更履歴。"""
 
+    class RELEASE_19:
+        r"""
+        Scope が direct-child regular file を Target として扱える opt-in mode を追加し、directory Target と file Target の責務境界を明確化する。既存 Scope は既定の directory mode のままとし、0.10.x Configuration の Target discovery と Archive 結果を維持する。
+        """
+        title @= '0.11.0'
+
+        version @= '0.11.0'
+
+        added @= '`[scope]` / `[scope.<name>]` に `target_kind = "directory" | "file"` を追加する。既定は `"directory"` で従来挙動を維持する。`"file"` の Scope は direct-child regular file だけを Target candidate とし、single Target と `SCOPE/` expansion の両方で atomic file Target として扱う。Directory、symbolic link / Windows junction、特殊 filesystem entry は file Target candidate にしない。'
+
+        added @= 'Scope に optional `description` を追加する。生成 Archive README では Target section に Scope description を表示し、directory Target ではその後に Pluck description、file Target では Scope description だけを表示する。'
+
+        changed @= 'Pluck の役割を directory Target の content Selection として明確化する。File Target には Pluck selection を適用せず、その regular file 自体を1個の Archive entry として収録する。Pluck がない Configuration でも file-kind Scope の file Target reference は使用できるが、directory Target は引き続き Pluck を必要とする。'
+
+        changed @= '既存 Namespace mechanism を file Target にも適用する。File Target の source root は file name 1 segment とし、Namespace がある場合は `NAMESPACE/FILENAME` を final archive file path とする。'
+
     class RELEASE_18:
         r"""
         配布物の役割を明確化し、build backend を Hatchling へ統一する。Wheel は実装と公開文書一式を提供し、sdist は release の再構築・検証に必要な完全な source を提供する。
