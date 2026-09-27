@@ -71,7 +71,8 @@ def _parser() -> argparse.ArgumentParser:
         metavar="TARGET",
         help=(
             "Target reference: NAME (default Scope), SCOPE/NAME (named Scope), "
-            "/ (all in default Scope), or SCOPE/ (all in named Scope); "
+            "/ (all in default Scope), SCOPE/ (all in named Scope), or for file-kind "
+            "Scopes :[NAMES] / SCOPE:[NAMES] and :<REGEX> / SCOPE:<REGEX>; "
             "one or more required when [pluck] is defined"
         ),
     )

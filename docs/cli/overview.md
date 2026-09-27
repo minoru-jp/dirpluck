@@ -20,7 +20,7 @@ dirpluck work/project-a work/project-b
 dirpluck --config snapshot
 ```
 
-A Target reference has one of four forms: `NAME`, `SCOPE/NAME`, `/`, or `SCOPE/`. Every form selects Targets from a Scope.
+Target references keep the existing `NAME`, `SCOPE/NAME`, `/`, and `SCOPE/` forms. File-kind Scopes additionally support literal-list selectors `:[...]` / `SCOPE:[...]` and regular-expression selectors `:<...>` / `SCOPE:<...>`. Every form selects Targets from a Scope.
 
 ## Selecting a Configuration
 

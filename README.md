@@ -24,6 +24,8 @@ If you record decisions such as "collect README, `src/`, and `tests/`" or "exclu
 
 The Scope from which a Target is selected is defined separately, so the Configuration and the actual project tree do not need to live in the same place.
 
+Directory-Target `must`, `may`, and `ignore` rules use a restricted Selection pattern language so directory-tree traversal stays predictable. File-kind Scopes also provide a regular-expression selector for narrower direct-child file-name filtering. These are intentionally different selection languages with different scopes and roles. See [Configuration selection](docs/configuration/selection.md) and [Targets and Cases](docs/cli/targets.md) for details.
+
 ## Why keep it declarative
 
 For a one-off task, creating a ZIP by hand may be simpler.
@@ -61,7 +63,7 @@ For Configuration fields and composition, see [Configuration guide](docs/configu
 
 ## Installation
 
-The current version is **0.11.1**.
+The current version is **0.12.0**.
 
 Python 3.11 or later is required.
 

@@ -7,6 +7,8 @@ example_007 = test_target_field("example 007")
 example_008 = test_target_field("example 008")
 example_009 = test_target_field("example 009")
 example_010 = test_target_field("example 010")
+example_011 = test_target_field("example 011")
+example_012 = test_target_field("example 012")
 
 
 @summary('Target reference、Scope expansion、Case の CLI 操作。')
@@ -49,6 +51,24 @@ class CLI_PART:
 
         `/` は default Scope、`work/` は named Scope `work` を全展開します。`/` は filesystem root ではありません。`target_kind = "directory"` では direct child directory、`target_kind = "file"` では direct child regular file だけを展開し、再帰列挙しません。Scope の `ignore` に一致する candidate は除外します。未使用の named Scope の path が現在存在しなくても、別の Scope だけを使う実行は失敗しません。
 
+        File-kind Scope では、Scope 直下の file Target を selector で絞れます。`[...]` は literal file name の列挙で、内部の `/` を name separator として使います。最初の `[` と最後の `]` だけが selector syntax で、内部の `[` / `]` などは file name の一部として扱います。
+
+        ```console
+        {{example_011}}
+        ```
+
+        `<...>` は regular-expression selector です。Python-compatible regular expression を eligible direct-child file の basename 全体へ適用し、部分一致ではなく full-match とします。Pattern は空にできず、`/` を含められず、512 character 以下です。Invalid regular expression と0件 match は error です。
+
+        この regular-expression syntax は Pluck / Always selection の `must` / `may` / `ignore` pattern とは別の language です。この差は意図的で、Selection pattern は directory tree の予測可能な traversal を制御し、regular-expression selector は eligible な direct-child file name の追加絞り込みだけを行います。Selection pattern の説明は `../configuration/selection.md` を参照してください。
+
+        ```console
+        {{example_012}}
+        ```
+
+        Default file-kind Scope では `:[a.zip/b.zip]` / `:<.*\.zip>`、named file-kind Scope では `returned:[a.zip/b.zip]` / `returned:<.*\.zip>` のように書きます。Selector は `target_kind = "file"` の Scope だけで使用でき、directory-kind Scope では error です。Scope の `ignore` と link-like exclusion で eligible file を決めてから selector を適用します。
+
+        Shell から使用する場合、`[]`、`<>`、regular-expression metacharacter が shell 自身に解釈されないよう、selector reference 全体を quote してください。
+
         `./`、`./acme`、`/acme`、`work/team/acme`、absolute filesystem path は Target reference として受理しません。
 
         Pluck がない Configuration でも file-kind Scope の Target reference は使用できます。Directory Target は Pluck を必要とします。Target を指定しない Always-only 実行も従来どおり有効です。
@@ -71,6 +91,10 @@ class CLI_PART:
         """
 
         example_009 @= "dirpluck --config project-snapshot"
+
+        example_011 @= "dirpluck 'returned:[repo-a.zip/repo-b.zip]'"
+
+        example_012 @= r"dirpluck 'returned:<repo-[0-9]+\.zip>'"
 
         merge @= TERMS.TERM_1
 

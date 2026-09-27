@@ -50,7 +50,7 @@ dirpluck work/project-a work/project-b
 dirpluck --config snapshot
 ```
 
-Target reference は `NAME`、`SCOPE/NAME`、`/`、`SCOPE/` の4形です。どの形式もスコープから対象を選びます。
+Target reference は既存の `NAME`、`SCOPE/NAME`、`/`、`SCOPE/` に加え、file-kind Scope では `:[...]` / `SCOPE:[...]` の literal list selector と `:<...>` / `SCOPE:<...>` の regular-expression selector を使用できます。どの形式もスコープから対象を選びます。
 
 ## Configuration を選ぶ
 

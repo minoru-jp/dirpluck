@@ -56,6 +56,8 @@ Backup のように周辺をすべて複製するのではなく、review、引�
 
 対象 をどこから選ぶかは スコープ として分けられるため、Configuration の置き場所と実際の project tree を同じ場所に揃える必要はありません。
 
+Directory Target の `must` / `may` / `ignore` は、directory tree を予測可能に扱うための制限された Selection pattern を使います。File-kind Scope には direct-child file name をさらに絞り込む regular-expression selector もありますが、これは Python-compatible regular expression を使う別の selection language です。この違いは意図したもので、両者は適用する範囲と役割が異なります。詳細は `docs/configuration/selection.md` と `docs/cli/targets.md` を参照してください。
+
 ## なぜ宣言として残すのか
 
 一度だけなら、手作業で ZIP を作る方が簡単です。
@@ -93,7 +95,7 @@ Configuration field の詳細は `docs/configuration/INDEX.md`、CLI option と 
 
 ## インストール
 
-現在の version は **0.11.1** です。
+現在の version は **0.12.0** です。
 
 Python 3.11 以降を使用します。
 

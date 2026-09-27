@@ -8,6 +8,8 @@ This guide explains Selection authoring. Exact pattern grammar and validation ar
 
 Directory-Target Pluck, Always sources, and Cases each contain an independent Selection. A Selection uses `must`, `may`, `ignore`, and optionally `allow_empty`; use `description` only when you want to attach a human-readable explanation. File Targets are atomic sources and do not contain a Selection.
 
+Selection patterns and the regular-expression selector for file-kind Scopes intentionally use different pattern languages. `must`, `may`, and `ignore` use a restricted path/name pattern language so directory-tree traversal and exclusion stay predictable. By contrast, the `<...>` selector for a file-kind Scope uses a Python-compatible regular expression only as an optional way to further filter the basenames of already-eligible direct-child files. See [Targets and Cases](../cli/targets.md) for regular-expression selector syntax.
+
 ### `description`
 
 Describe the role the source plays in the extraction intent. In the generated Archive README, this description explains the meaning of the archive path.

@@ -31,7 +31,7 @@ class CLI_PART:
         {{example_002}}
         ```
 
-        Target reference は `NAME`、`SCOPE/NAME`、`/`、`SCOPE/` の4形です。どの形式も{{TERM_16}}から{{TERM_3}}を選びます。
+        Target reference は既存の `NAME`、`SCOPE/NAME`、`/`、`SCOPE/` に加え、file-kind Scope では `:[...]` / `SCOPE:[...]` の literal list selector と `:<...>` / `SCOPE:<...>` の regular-expression selector を使用できます。どの形式も{{TERM_16}}から{{TERM_3}}を選びます。
         """
         title @= '基本形'
 

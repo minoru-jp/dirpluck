@@ -36,7 +36,7 @@ related: [SPEC_018](paths.md#spec_018), [SPEC_024](paths.md#spec_024)
 
 ### SPEC_041
 
-Whether a named Scope root exists and is a directory is checked only when that Scope is actually used by `SCOPE/NAME` or `SCOPE/`. The current filesystem availability of an unused named Scope does not fail the run. Duplicate effective Scope-root validation remains Configuration-level validation and does not require an unused Scope root to exist.
+Whether a named Scope root exists and is a directory is checked only when that Scope is actually used by `SCOPE/NAME`, `SCOPE/`, `SCOPE:[...]`, or `SCOPE:<...>`. The current filesystem availability of an unused named Scope does not fail the run. Duplicate effective Scope-root validation remains Configuration-level validation and does not require an unused Scope root to exist.
 
 level: MUST
 
@@ -72,32 +72,38 @@ title: CLI Target reference resolution
 
 ### SPEC_046
 
-Each positional `TARGET` argument must have exactly one of these four forms:
+Each positional `TARGET` argument accepts the following forms:
 
 ```text
 NAME
 SCOPE/NAME
 /
 SCOPE/
+:[NAME/NAME/...]
+SCOPE:[NAME/NAME/...]
+:<REGEX>
+SCOPE:<REGEX>
 ```
+
+The `:[...]` / `SCOPE:[...]` and `:<...>` / `SCOPE:<...>` forms are file Target selectors and are valid only for Scopes with `target_kind = "file"`.
 
 level: MUST
 
 ### SPEC_047
 
-`NAME` selects one direct-child entry matching the default Scope's `target_kind`. `SCOPE/NAME` selects direct-child entry `NAME` matching named Scope `SCOPE`'s `target_kind`. `/` expands all Targets from the default Scope, and `SCOPE/` expands all Targets from named Scope `SCOPE`.
+`NAME` selects one direct-child entry matching the default Scope's `target_kind`. `SCOPE/NAME` selects direct-child entry `NAME` matching named Scope `SCOPE`'s `target_kind`. `/` expands all Targets from the default Scope, and `SCOPE/` expands all Targets from named Scope `SCOPE`. `:[...]` / `SCOPE:[...]` are literal file-name lists, while `:<...>` / `SCOPE:<...>` are regular-expression selectors over eligible file names.
 
 level: MUST
 
 ### SPEC_048
 
-`/` does not mean the filesystem root. It is the expansion marker for the default Scope in the CLI Target-reference grammar. Alternative spellings such as `./`, `./NAME`, and `/NAME`, multi-level references such as `SCOPE/team/NAME`, absolute filesystem paths, and backslash separators are not accepted.
+`/` does not mean the filesystem root. It is the expansion marker for the default Scope in the CLI Target-reference grammar. Alternative spellings such as `./`, `./NAME`, and `/NAME`, multi-level literal references such as `SCOPE/team/NAME`, and absolute filesystem paths are not accepted. Backslash is not accepted as a path separator in literal Target references or file names inside a list selector. Inside a regular-expression selector, backslash may be used as a regex escape.
 
 level: MUST
 
 ### SPEC_049
 
-`NAME` and `/` use the always-present default Scope. The `SCOPE` in `SCOPE/NAME` and `SCOPE/` must exist as an effective named Scope; an unknown name does not fall back to another relative-path interpretation.
+`NAME`, `/`, `:[...]`, and `:<...>` use the always-present default Scope. The `SCOPE` in `SCOPE/NAME`, `SCOPE/`, `SCOPE:[...]`, and `SCOPE:<...>` must exist as an effective named Scope; a selector reference does not fall back to another relative-path interpretation.
 
 level: MUST
 
@@ -114,6 +120,36 @@ condition: when resolving a single Target
 The Scope name is an identifier used for Target lookup and is not implicitly part of the archive path. An outer Archive directory is added only when the Scope explicitly references a Namespace.
 
 level: MUST NOT
+
+### SPEC_153
+
+File Target selector syntax is valid only for a Scope with `target_kind = "file"`. Using `:[...]` / `SCOPE:[...]` or `:<...>` / `SCOPE:<...>` with a directory-kind Scope is an error.
+
+level: MUST
+
+### SPEC_154
+
+A list selector treats only its outermost `[` and `]` as selector syntax. Its contents are split on `/`, and each non-empty component is interpreted as one literal direct-child file name. Inner `[`, `]`, `<`, `>`, `,`, `:`, and similar characters are ordinary file-name characters. An empty list, an empty component, a missing closing `]`, a missing file, a file excluded by Scope `ignore`, or an entry that is not a regular file is an error.
+
+level: MUST
+
+### SPEC_155
+
+A regular-expression selector treats only its outermost `<` and `>` as selector syntax and compiles the contents as a Python-compatible regular expression. The pattern is applied with full-match semantics to the complete basename of each eligible direct-child regular file after Scope `ignore` and link-like-entry exclusion. The pattern must be non-empty, at most 512 characters, and contain no `/`. An invalid regular expression and a selector that matches zero eligible files are errors.
+
+level: MUST
+
+### SPEC_156
+
+A file selector does not replace Scope candidate discovery. The Scope first determines eligible direct-child file Targets using `target_kind = "file"`, Scope `ignore`, the regular-file requirement, and link-like-entry exclusion. The selector is then applied to that eligible set. Selection is not recursive.
+
+level: MUST
+
+### SPEC_157
+
+`:` begins file-selector syntax only when it appears at the Scope/selector boundary of a Target reference and is immediately followed by `[` or `<`. A `:` elsewhere, including inside the `NAME` portion of `SCOPE/NAME`, remains an ordinary literal Target-name character, preserving names such as `foo:bar` and `SCOPE/foo:[bar]`. If a literal default-Scope file name has the same shape as selector syntax, it can be specified as one item in a list selector.
+
+level: MUST
 
 ## SECTION_503
 
@@ -133,9 +169,15 @@ level: MUST
 
 ### SPEC_054
 
-Multiple positional Target references and expansions may be combined in the same run.
+Multiple positional Target references, Scope expansions, and file selectors may be combined in the same run.
 
 level: MAY
+
+### SPEC_158
+
+If a file selector overlaps a literal Target reference or another file selector and resolves the same filesystem entry, that overlap is collapsed to one runtime Target. If only existing literal Target references duplicate the same filesystem entry and no selector is involved, the existing distinct-entry validation error is preserved.
+
+level: MUST
 
 ## SECTION_504
 

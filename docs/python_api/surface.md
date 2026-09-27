@@ -1,6 +1,6 @@
 # Package surface
 
-The official package-root exports for 0.11.x are exactly:
+The official package-root exports for 0.12.x are exactly:
 
 ```python
 from dirpluck import DirpluckError, RunResult, __version__, run

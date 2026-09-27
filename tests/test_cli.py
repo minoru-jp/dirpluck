@@ -124,6 +124,38 @@ class CliTests(unittest.TestCase):
             self.assertIn("Repositories returned from the previous editing cycle.", readme)
             self.assertIn("Guidelines used for the next pass.", readme)
 
+    def test_file_target_regex_selector_is_accepted_by_cli(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "repo-a.zip").write_bytes(b"a")
+            (returned / "repo-b.zip").write_bytes(b"b")
+            (returned / "notes.txt").write_text("notes\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(textwrap.dedent('''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+
+                [output]
+                path = "result.zip"
+            '''), encoding="utf-8")
+
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                with redirect_stdout(StringIO()):
+                    result = main([r"returned:<.*\.zip>"])
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(result, 0)
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                self.assertEqual(
+                    set(archive.namelist()),
+                    {"README.md", "repo-a.zip", "repo-b.zip"},
+                )
+
     def test_archive_write_oserror_is_reported_without_traceback(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
@@ -654,6 +686,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("SCOPE/NAME (named Scope)", normalized)
         self.assertIn("/ (all in default Scope)", normalized)
         self.assertIn("SCOPE/ (all in named Scope)", normalized)
+        self.assertIn(":[NAMES] / SCOPE:[NAMES]", normalized)
+        self.assertIn(":<REGEX> / SCOPE:<REGEX>", normalized)
         self.assertIn("--preview", text)
         self.assertNotIn("--dry-run", text)
 

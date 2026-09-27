@@ -65,16 +65,20 @@ class CONFIGURATION_PART:
 
         `target_kind = "directory"` の Scope は直下の eligible directory だけを Target candidate とし、`target_kind = "file"` の Scope は直下の eligible regular file だけを Target candidate とします。Directory と file を同じ Scope で混在 Target として扱いません。`ignore` は現在の `target_kind` に応じた direct-child Target candidate の name を除外します。File selection の `pluck.ignore` とは役割が違います。`description` はその Scope から得た Target の Archive README context として使います。
 
-        CLI Target reference は Scope の有無と、1 Target / 全 Target の組み合わせとして次の4形です。
+        CLI Target reference は、single Target と全展開に加え、file-kind Scope だけで使える selector を持ちます。
 
         ```text
-        NAME        -> 無名 Scope から1 Target
-        SCOPE/NAME  -> 名前付き Scope から1 Target
-        /           -> 無名 Scope の全 Target
-        SCOPE/      -> 名前付き Scope の全 Target
+        NAME                  -> default Scope から1 Target
+        SCOPE/NAME            -> named Scope から1 Target
+        /                     -> default Scope の全 Target
+        SCOPE/                -> named Scope の全 Target
+        :[name-a/name-b]      -> default file-kind Scope の literal list
+        SCOPE:[name-a/name-b] -> named file-kind Scope の literal list
+        :<regex>              -> default file-kind Scope の regular-expression selector
+        SCOPE:<regex>         -> named file-kind Scope の regular-expression selector
         ```
 
-        全展開は Scope の `target_kind` に対応する direct child だけを対象とし、再帰しません。Directory mode では eligible directory、file mode では eligible regular file を展開します。
+        全展開は Scope の `target_kind` に対応する direct child だけを対象とし、再帰しません。Directory mode では eligible directory、file mode では eligible regular file を展開します。File selector も direct-child regular file だけを対象とし、Scope `ignore` と link-like exclusion を適用した eligible candidate から選びます。`[...]` の内部は `/` 区切りの literal file name、`<...>` は basename 全体へ full-match する Python-compatible regular expression です。Regular-expression selector は空 pattern、`/`、512 character 超、invalid regex、0件 match を error とします。
 
         Base chain では名前付き Scope だけを名前ごとに重ね、同名 Scope は `description` / `target_kind` / `path` / `ignore` / `namespace` を含む definition 全体として外側の Configuration が置き換え、異名 Scope は共存します。Default Scope は base から継承せず、常に root Configuration に属します。したがって Base の `[scope]` metadata / policy は outer Root では使用されませんが、その Base Configuration 自身を Root として使う場合には通常どおり有効です。名前付き Scope の root は定義元 Configuration を基準にした場所のままで rebase しません。
 

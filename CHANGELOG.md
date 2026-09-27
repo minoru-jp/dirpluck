@@ -2,6 +2,19 @@
 
 Release history for dirpluck.
 
+## 0.12.0
+
+Add selector syntax to file-kind Scope Target references so direct-child regular files can be selected either by explicit name lists or by regular expressions. Existing literal Target references and whole-Scope expansion keep their previous meanings.
+
+### Added
+
+- Add file Target selectors for Scopes with `target_kind = "file"`. `SCOPE:[name-a/name-b]` / `:[name-a/name-b]` are `/`-separated literal file-name lists, while `SCOPE:<regex>` / `:<regex>` are regular-expression selectors applied to the complete eligible direct-child file name. Selector syntax is valid only for file-kind Scopes; using it with a directory-kind Scope is an error.
+- Regular-expression selectors use Python-compatible regular expressions with `fullmatch` semantics. A pattern must be non-empty, contain no `/`, and be at most 512 characters. Invalid regular expressions and zero-match selectors are errors. Selection is applied only after the Scope's `target_kind`, `ignore`, and link-like-entry rules determine the eligible file Targets.
+
+### Changed
+
+- When a file selector overlaps an existing literal Target reference or another selector and resolves the same filesystem entry, that selector overlap is collapsed to one Target. Existing distinct-entry validation is preserved when only literal Target references duplicate the same entry. CLI arguments and `.dirpluck-inv` `targets` use the same selector grammar. Quote selector references in a shell so `[]`, `<>`, and regular-expression metacharacters are not interpreted by the shell.
+
 ## 0.11.1
 
 Simplify the generated Archive README by removing auxiliary Namespace / Source-root metadata that can already be inferred from the final Archive path. Namespace placement semantics are unchanged.

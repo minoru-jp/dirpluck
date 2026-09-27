@@ -16,7 +16,7 @@ cwd_example = test_target_field("cwd example")
 @canonical_source('Python API overview', filename='overview.md', order=0, placeholders=False, heading="title")
 class API_REFERENCE_PART:
     r"""
-    この文書は、{{TERM_1}} 0.11.x の公式 Python API を説明します。API は CLI と同じ実行 model を Python から利用するための最小 surface として定義し、Configuration parser や builder pipeline の低 level object を一般用途の互換性契約には含めません。
+    この文書は、{{TERM_1}} 0.12.x の公式 Python API を説明します。API は CLI と同じ実行 model を Python から利用するための最小 surface として定義し、Configuration parser や builder pipeline の低 level object を一般用途の互換性契約には含めません。
 
     `run()` の引数と runtime modifier は `run.md`、返り値は `result.md`、公開 error boundary は `errors.md`、package root の互換性対象 export は `surface.md` を参照してください。Configuration / Target / Case / Archive の実行意味論は `../specification/INDEX.md` と共通です。
     """
@@ -29,7 +29,7 @@ class API_REFERENCE_PART:
 
         CLI は人間向けの argument parsing、help、exit status、stdout / stderr formatting を担当します。Python API は `SystemExit` を通常の制御手段にせず、結果を `RunResult` で返し、期待される dirpluck error を `DirpluckError` として raise します。
 
-        0.11.x では、package root から明示的に export する名前だけを公式 Python API とします。低 level module や underscore 名は implementation detail であり、Beta 中の互換性保証対象には含めません。
+        0.12.x では、package root から明示的に export する名前だけを公式 Python API とします。低 level module や underscore 名は implementation detail であり、Beta 中の互換性保証対象には含めません。
         """
         title @= '位置づけ'
 

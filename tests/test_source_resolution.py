@@ -868,5 +868,254 @@ class SourceResolutionTests(BuilderTestCase):
             self.assertEqual(set(plan.entries), {"project/src/main.py", "repo.zip"})
 
 
+    def test_file_target_list_selector_selects_named_scope_files_in_declared_order(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            for name in ("repo-a.zip", "repo-b.zip", "repo-c.zip"):
+                (returned / name).write_bytes(name.encode())
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(
+                config,
+                BuildRequest.create("returned:[repo-c.zip/repo-a.zip]"),
+            )
+            self.assertEqual(
+                [source.source_root for source in sources],
+                ["repo-c.zip", "repo-a.zip"],
+            )
+
+    def test_file_target_list_selector_uses_only_outer_brackets_as_syntax(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "[foo").write_bytes(b"a")
+            (returned / "b]ar").write_bytes(b"b")
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create("returned:[[foo/b]ar]"))
+            self.assertEqual([source.source_root for source in sources], ["[foo", "b]ar"])
+
+    def test_file_target_list_selector_supports_default_scope(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "a.zip").write_bytes(b"a")
+            (root / "b.zip").write_bytes(b"b")
+            config = self._config(root, '''
+                [scope]
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create(":[b.zip/a.zip]"))
+            self.assertEqual([source.source_root for source in sources], ["b.zip", "a.zip"])
+
+    def test_file_target_regex_selector_uses_fullmatch_and_sorted_scope_candidates(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            for name in ("repo-10.zip", "repo-2.zip", "repo-a.zip", "notes.txt"):
+                (returned / name).write_bytes(name.encode())
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(
+                config,
+                BuildRequest.create(r"returned:<repo-[0-9]+\.zip>"),
+            )
+            self.assertEqual(
+                [source.source_root for source in sources],
+                ["repo-10.zip", "repo-2.zip"],
+            )
+            with self.assertRaisesRegex(SelectionError, "matched no eligible file Targets"):
+                resolve_sources(config, BuildRequest.create("returned:<zip>"))
+
+    def test_file_target_regex_selector_supports_default_scope(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "repo-1.zip").write_bytes(b"1")
+            (root / "repo-a.zip").write_bytes(b"a")
+            config = self._config(root, '''
+                [scope]
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create(r":<repo-[0-9]+\.zip>"))
+            self.assertEqual([source.source_root for source in sources], ["repo-1.zip"])
+
+    def test_file_target_regex_selector_applies_scope_ignore_before_matching(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "keep.zip").write_bytes(b"keep")
+            (returned / "skip.zip").write_bytes(b"skip")
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+                ignore = ["skip.zip"]
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create(r"returned:<.*\.zip>"))
+            self.assertEqual([source.source_root for source in sources], ["keep.zip"])
+
+    def test_file_target_selector_requires_file_kind_scope(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            work = root / "work"
+            project = work / "project"
+            project.mkdir(parents=True)
+            (project / "src").mkdir()
+            config = self._config(root, '''
+                [pluck]
+                must = ["src"]
+
+                [scope.work]
+                path = "work"
+            ''')
+
+            with self.assertRaisesRegex(SelectionError, "target_kind = 'file'"):
+                resolve_sources(config, BuildRequest.create("work:[project]"))
+            with self.assertRaisesRegex(SelectionError, "target_kind = 'file'"):
+                resolve_sources(config, BuildRequest.create("work:<project>"))
+
+    def test_file_target_list_selector_rejects_malformed_or_missing_items(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "a.zip").write_bytes(b"a")
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            cases = (
+                ("returned:[a.zip", "must end with"),
+                ("returned:[]", "must not be empty"),
+                ("returned:[a.zip//b.zip]", "empty file name"),
+                ("returned:[missing.zip]", "does not exist"),
+            )
+            for reference, message in cases:
+                with self.subTest(reference=reference), self.assertRaisesRegex(SelectionError, message):
+                    resolve_sources(config, BuildRequest.create(reference))
+
+    def test_file_target_regex_selector_validates_pattern_boundary_and_syntax(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "a.zip").write_bytes(b"a")
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            cases = (
+                (r"returned:<.*\.zip", "must end with"),
+                ("returned:<>", "must not be empty"),
+                ("returned:<foo/bar>", "must not contain '/'"),
+                ("returned:<(>", "invalid regular-expression selector"),
+                ("returned:<" + "a" * 513 + ">", "512-character limit"),
+            )
+            for reference, message in cases:
+                with self.subTest(reference=reference), self.assertRaisesRegex(SelectionError, message):
+                    resolve_sources(config, BuildRequest.create(reference))
+
+    def test_file_target_selectors_deduplicate_overlapping_selector_results(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "a.zip").write_bytes(b"a")
+            (returned / "b.zip").write_bytes(b"b")
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(
+                config,
+                BuildRequest.create(
+                    "returned/a.zip",
+                    "returned:[a.zip/b.zip]",
+                    r"returned:<.*\.zip>",
+                ),
+            )
+            self.assertEqual([source.source_root for source in sources], ["a.zip", "b.zip"])
+
+    def test_file_target_selector_with_unknown_named_scope_is_not_treated_as_a_literal_default_target(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            literal = root / "missing:[a.zip]"
+            literal.write_bytes(b"x")
+            config = self._config(root, '''
+                [scope]
+                target_kind = "file"
+            ''')
+
+            with self.assertRaisesRegex(SelectionError, "Scope 'missing' is not defined"):
+                resolve_sources(config, BuildRequest.create("missing:[a.zip]"))
+
+    def test_selector_marker_inside_named_literal_target_name_remains_literal(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            literal = returned / "repo:[x].zip"
+            literal.write_bytes(b"x")
+            config = self._config(root, '''
+                [scope.returned]
+                path = "returned"
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create("returned/repo:[x].zip"))
+            self.assertEqual([source.directory for source in sources], [literal.resolve()])
+
+    def test_selector_shaped_literal_file_name_can_be_selected_through_list_selector(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            literal = root / "returned:[x]"
+            literal.write_bytes(b"x")
+            config = self._config(root, '''
+                [scope]
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create(":[returned:[x]]"))
+            self.assertEqual([source.directory for source in sources], [literal.resolve()])
+
+    def test_non_selector_colon_remains_a_literal_default_file_target_name(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            literal = root / "foo:bar"
+            literal.write_bytes(b"x")
+            config = self._config(root, '''
+                [scope]
+                target_kind = "file"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create("foo:bar"))
+            self.assertEqual([source.directory for source in sources], [literal.resolve()])
+
+
 if __name__ == "__main__":
     unittest.main()

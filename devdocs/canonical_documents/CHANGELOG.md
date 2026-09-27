@@ -18,6 +18,21 @@
 
 dirpluck のリリースごとの変更履歴。
 
+## 0.12.0
+
+File-kind Scope の Target reference に selector syntax を追加し、Scope 直下の regular file を明示列挙または正規表現で選べるようにする。既存の literal Target reference と全展開の意味は変更しない。
+
+version: 0.12.0
+
+Added:
+
+- `target_kind = "file"` の Scope に file Target selector を追加する。`SCOPE:[name-a/name-b]` / `:[name-a/name-b]` は `/` 区切りの literal file-name list、`SCOPE:<regex>` / `:<regex>` は eligible direct-child file name 全体へ適用する regular-expression selector とする。Selector syntax は file-kind Scope だけで使用でき、directory-kind Scope では error とする。
+- Regular-expression selector は Python-compatible regular expression を `fullmatch` semantics で適用する。Pattern は空を許可せず、`/` を含めず、512 character 以下とする。不正な regular expression と0件 match は error とする。Selector は Scope の `target_kind` / `ignore` / link-like exclusion で eligible file Target を確定した後に適用する。
+
+Changed:
+
+- File selector と既存 literal Target reference / 別 selector が同じ filesystem entry を解決した場合、その selector overlap は1 Target にまとめる。既存の literal Target reference 同士だけを重複指定した場合の distinct-entry validation は維持する。CLI と `.dirpluck-inv` の `targets` は同じ selector grammar を使用する。Shell では `[]`、`<>`、regular-expression metacharacter の解釈を避けるため selector reference 全体を quote することを推奨する。
+
 ## 0.11.1
 
 生成 Archive README を簡潔化し、Archive path そのものから読み取れる Namespace / Source root の補助 metadata を削除する。Namespace の配置 semantics 自体は変更しない。

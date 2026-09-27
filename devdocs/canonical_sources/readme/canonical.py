@@ -40,6 +40,8 @@ class SECTION_001:
             「README と `src/` と `tests/` を集める」「秘密情報や生成物は除外する」といった判断を {{TERM_2}} に残しておけば、対象となる project を変えながら同じルールを使えます。
 
             {{TERM_3}} をどこから選ぶかは {{TERM_16}} として分けられるため、Configuration の置き場所と実際の project tree を同じ場所に揃える必要はありません。
+
+            Directory Target の `must` / `may` / `ignore` は、directory tree を予測可能に扱うための制限された Selection pattern を使います。File-kind Scope には direct-child file name をさらに絞り込む regular-expression selector もありますが、これは Python-compatible regular expression を使う別の selection language です。この違いは意図したもので、両者は適用する範囲と役割が異なります。詳細は `docs/configuration/selection.md` と `docs/cli/targets.md` を参照してください。
             """
             title @= '同じ抽出方法を、別の Target に使う'
 

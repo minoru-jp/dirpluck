@@ -29,6 +29,24 @@ dirpluck work/
 
 `/` expands the default Scope, while `work/` expands named Scope `work`. `/` does not mean the filesystem root. With `target_kind = "directory"`, expansion includes only eligible direct-child directories. With `target_kind = "file"`, it includes only eligible direct-child regular files. Expansion is never recursive, and candidates matching the Scope's `ignore` are removed. A missing named-Scope path does not affect a run that does not use that Scope.
 
+File-kind Scopes can also select direct-child file Targets with selector syntax. `[...]` is a literal file-name list whose items are separated by `/`. Only the first `[` and final `]` are selector syntax; brackets and other characters inside an item are treated as part of the literal file name.
+
+```console
+dirpluck 'returned:[repo-a.zip/repo-b.zip]'
+```
+
+`<...>` is a regular-expression selector. It uses a Python-compatible regular expression and matches the complete basename of each eligible direct-child file rather than searching for a substring. The pattern must be non-empty, contain no `/`, and be no more than 512 characters. Invalid regular expressions and selectors that match no eligible files are errors.
+
+This regular-expression syntax is intentionally separate from the pattern language used by `must`, `may`, and `ignore` in Pluck and Always selections. Selection patterns control predictable traversal through a directory tree; a regular-expression selector only performs additional filtering over eligible direct-child file names. See [Configuration selection](../configuration/selection.md) for the Selection pattern language.
+
+```console
+dirpluck 'returned:<repo-[0-9]+\.zip>'
+```
+
+For a default file-kind Scope, use `:[a.zip/b.zip]` or `:<.*\.zip>`. For a named file-kind Scope, use forms such as `returned:[a.zip/b.zip]` or `returned:<.*\.zip>`. Selector syntax is valid only when that Scope has `target_kind = "file"`; using it with a directory-kind Scope is an error. Scope `ignore` and link-like-entry exclusion are applied before a selector evaluates the eligible files.
+
+When invoking dirpluck from a shell, quote the entire selector reference so the shell does not interpret `[]`, `<>`, or regular-expression metacharacters.
+
 `./`, `./acme`, `/acme`, `work/team/acme`, and absolute filesystem paths are not accepted as Target references.
 
 A Configuration without a Pluck may still use Target references from file-kind Scopes. Directory Targets require Pluck. An Always-only Configuration can continue to run without positional Target arguments.

@@ -38,6 +38,8 @@
 
 Directory Target の Pluck、Always source、Case はそれぞれ独立した選択を持ちます。Selection では `must` / `may` / `ignore`、必要に応じて `allow_empty` を記述し、人間向けの説明を添えたい場合だけ `description` を使います。File Target は atomic source なので Selection を持ちません。
 
+Selection pattern と file-kind Scope の regular-expression selector は、意図的に同じ pattern language にはしていません。`must` / `may` / `ignore` は directory tree を予測可能に探索・除外するための制限された path / name pattern を使います。一方、file-kind Scope の `<...>` selector は、すでに eligible と判定された direct-child file の basename をさらに絞り込む補助的な手段として Python-compatible regular expression を使います。Regular-expression selector の使い方は `../cli/targets.md` を参照してください。
+
 ### `description`
 
 その source が抽出意図の中で果たす役割を書きます。生成されるアーカイブREADMEでは、この description が archive path の意味を説明するために使われます。

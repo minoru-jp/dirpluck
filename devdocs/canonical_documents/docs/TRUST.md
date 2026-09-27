@@ -52,6 +52,8 @@ Invocation Templateは、使用する Configuration document、CLI Target refere
 
 Named Invocation は root Invocation の差分ではなく独立しているため、選択した entry 自身の内容を確認してください。`config` の relative path は runtime cwd ではなく Invocation Template file 自身の directory を基準に解決し、`.dirpluck` suffix は省略できます。`config` を省略した場合は runtime cwd の `default.dirpluck` を使用します。CLI の `-i PATH` 自体は relative path なら runtime cwd 基準です。Configuration / Invocation Template document を選択・参照する path は host OS の通常の filesystem semantics に従うため、symbolic link / Windows directory junction を介した document も参照できます。Relative reference は選択した document path の directory を基準にするため、実行前に path と参照先の内容を確認してください。Invocation Template は Configuration の filesystem access capability を増やすものではありませんが、どの Configuration と Target を実行するかを選ぶため、信頼できない Template を無確認で実行しないでください。
 
+File-kind Scope の regular-expression selector は Python-compatible regular expression を direct-child file name に適用します。File content や recursive path へ適用するものではなく pattern length も制限しますが、backtracking 型 regular expression は pattern と file name の組み合わせによって CPU time を大きく消費する可能性があります。第三者由来の Invocation Template の `targets` に `:<...>` / `SCOPE:<...>` が含まれる場合は、他の実行指示と同様に pattern を確認してから実行してください。
+
 ## Filesystem permission が実際の権限境界です
 
 dirpluck は OS の permission を越えて file を読む、または書く機能を持ちません。一方で、実行 user がアクセスでき、Configuration の path rules で参照できる場所は source や Output として指定できます。Relative `..` や absolute path も、そのための明示的な filesystem location です。

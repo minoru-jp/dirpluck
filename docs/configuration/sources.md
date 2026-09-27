@@ -42,16 +42,20 @@ ignore = ["old-*"]
 
 With `target_kind = "directory"`, a Scope exposes only eligible direct-child directories as Target candidates. With `target_kind = "file"`, it exposes only eligible direct-child regular files. A Scope never mixes directory and file Targets. `ignore` matches the direct-child candidate name for the active Target kind. Its role is different from file-selection `pluck.ignore`. `description` supplies README context for Targets obtained from the Scope.
 
-CLI Target references have four forms combining unnamed or named Scope selection with one Target or all Targets:
+CLI Target references support single Targets and whole-Scope expansion, plus selectors for file-kind Scopes:
 
 ```text
-NAME        -> one Target from the default Scope
-SCOPE/NAME  -> one Target from a named Scope
-/           -> all Targets from the default Scope
-SCOPE/      -> all Targets from a named Scope
+NAME                  -> one Target from the default Scope
+SCOPE/NAME            -> one Target from a named Scope
+/                     -> all Targets from the default Scope
+SCOPE/                -> all Targets from a named Scope
+:[name-a/name-b]      -> literal list in the default file-kind Scope
+SCOPE:[name-a/name-b] -> literal list in a named file-kind Scope
+:<regex>              -> regular-expression selector in the default file-kind Scope
+SCOPE:<regex>         -> regular-expression selector in a named file-kind Scope
 ```
 
-Expansion includes only direct children matching the Scope's `target_kind` and is not recursive: eligible directories in directory mode, eligible regular files in file mode.
+Expansion includes only direct children matching the Scope's `target_kind` and is not recursive: eligible directories in directory mode, eligible regular files in file mode. File selectors likewise operate only on direct-child regular files after Scope `ignore` and link-like-entry exclusion have determined the eligible candidates. Inside `[...]`, `/` separates literal file names. Inside `<...>`, a Python-compatible regular expression is full-matched against the complete basename. A regular-expression selector rejects an empty pattern, `/`, more than 512 characters, an invalid regular expression, or a zero-match result.
 
 Along a base chain, only named Scopes are overlaid by name. A named Scope in an outer Configuration replaces the complete same-named Scope definition, including `description`, `target_kind`, `path`, `ignore`, and `namespace`, while differently named Scopes coexist. The default Scope is not inherited from a Base Configuration; it always belongs to the Root Configuration. Therefore a Base Configuration's `[scope]` metadata and policy are not used by an outer Root, but remain valid when that Base Configuration itself is used as the Root. An inherited named Scope root remains anchored to the Configuration in which the Scope was declared and is not rebased to an outer Configuration.
 

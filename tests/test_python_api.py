@@ -203,6 +203,45 @@ class PythonApiTests(unittest.TestCase):
             self.assertIn("test_app.py", result.preview_text)
             self.assertNotIn("src/", result.preview_text)
 
+    def test_invocation_template_targets_accept_file_selectors(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "repo-a.zip").write_bytes(b"a")
+            (returned / "repo-b.zip").write_bytes(b"b")
+            (returned / "notes.txt").write_text("notes\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    '''
+                    [scope.returned]
+                    path = "returned"
+                    target_kind = "file"
+
+                    [output]
+                    path = "result.zip"
+                    overwrite = true
+                    '''
+                ),
+                encoding="utf-8",
+            )
+            (root / "calls.dirpluck-inv").write_text(
+                textwrap.dedent(
+                    r'''
+                    [invocation]
+                    targets = ["returned:<.*\\.zip>"]
+                    '''
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run(invocation="calls", preview=True, cwd=root)
+            self.assertEqual(
+                set(result.archive_entries),
+                {"README.md", "repo-a.zip", "repo-b.zip"},
+            )
+            self.assertNotIn("notes.txt", result.archive_entries)
+
     def test_run_rejects_invalid_cli_style_argument_combinations(self):
         cases = (
             ({"config": "review", "invocation": "calls"}, "config cannot be combined"),

@@ -9,12 +9,12 @@ class STATUS:
     """
     dirpluck の現在の開発段階、互換性方針、および 1.0 へ向けた判断基準を示します。
 
-    0.11.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 では runtime Output と公開文書体系を現在の設計へ揃えました。以後はこの公開面を実運用で検証しながら、互換性を積極的に維持します。
+    0.12.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 では runtime Output と公開文書体系を現在の設計へ揃えました。以後はこの公開面を実運用で検証しながら、互換性を積極的に維持します。
     """
 
     class CURRENT_STATUS:
         """
-        現在の公開 version 系列は `0.11.x`、開発段階は **Beta** です。
+        現在の公開 version 系列は `0.12.x`、開発段階は **Beta** です。
 
         Beta 期間は公開 interface を自由に作り直すための期間ではありません。Configuration、CLI、公式 Python API、Archive semantics を現在の設計で継続利用できることを実運用の中で確認し、必要な改善を可能な限り additive に行います。
         """

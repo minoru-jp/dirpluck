@@ -52,7 +52,7 @@ related: [SPEC_018](paths.md#spec_018), [SPEC_024](paths.md#spec_024)
 
 ### SPEC_041
 
-Named Scope の root が実在し directory であることは、その Scope を `SCOPE/NAME` または `SCOPE/` で実際に使用するときに検証する。未使用の named Scope の filesystem availability は、その run を失敗させない。Duplicate effective Scope root の検査は Configuration-level validation として行い、未使用 Scope の存在確認を必要としない。
+Named Scope の root が実在し directory であることは、その Scope を `SCOPE/NAME`、`SCOPE/`、`SCOPE:[...]`、`SCOPE:<...>` のいずれかで実際に使用するときに検証する。未使用の named Scope の filesystem availability は、その run を失敗させない。Duplicate effective Scope root の検査は Configuration-level validation として行い、未使用 Scope の存在確認を必要としない。
 
 level: MUST
 
@@ -88,32 +88,38 @@ title: CLI Target reference resolution
 
 ### SPEC_046
 
-各 positional `TARGET` argument は、次の4形式のいずれかだけを受理する。
+各 positional `TARGET` argument は、次の形式を受理する。
 
 ```text
 NAME
 SCOPE/NAME
 /
 SCOPE/
+:[NAME/NAME/...]
+SCOPE:[NAME/NAME/...]
+:<REGEX>
+SCOPE:<REGEX>
 ```
+
+`:[...]` / `SCOPE:[...]` と `:<...>` / `SCOPE:<...>` は `target_kind = "file"` の Scope だけで使用できる file Target selector とする。
 
 level: MUST
 
 ### SPEC_047
 
-`NAME` は default Scope の `target_kind` に対応する direct child entry を1個選ぶ。`SCOPE/NAME` は named Scope `SCOPE` の `target_kind` に対応する direct child entry `NAME` を1個選ぶ。`/` は default Scope の全展開、`SCOPE/` は named Scope の全展開とする。
+`NAME` は default Scope の `target_kind` に対応する direct child entry を1個選ぶ。`SCOPE/NAME` は named Scope `SCOPE` の `target_kind` に対応する direct child entry `NAME` を1個選ぶ。`/` は default Scope の全展開、`SCOPE/` は named Scope の全展開とする。`:[...]` / `SCOPE:[...]` は file name の literal list、`:<...>` / `SCOPE:<...>` は eligible file name に対する regular-expression selector とする。
 
 level: MUST
 
 ### SPEC_048
 
-`/` は filesystem root を意味しない。CLI Target reference grammar における default Scope の expansion marker である。`./`、`./NAME`、`/NAME`、`SCOPE/team/NAME` のような別表記、多階層 reference、absolute filesystem path、backslash separator は受理しない。
+`/` は filesystem root を意味しない。CLI Target reference grammar における default Scope の expansion marker である。`./`、`./NAME`、`/NAME`、`SCOPE/team/NAME` のような別表記、多階層 literal reference、absolute filesystem path は受理しない。Literal Target reference と list selector の file name では backslash を path separator として受理しない。Regular-expression selector 内の backslash は regex escape として使用できる。
 
 level: MUST
 
 ### SPEC_049
 
-`NAME` と `/` は常設の default Scope を使う。`SCOPE/NAME` と `SCOPE/` の `SCOPE` は effective named Scope に存在しなければならず、unknown name を別の relative path interpretation へ fallback しない。
+`NAME`、`/`、`:[...]`、`:<...>` は常設の default Scope を使う。`SCOPE/NAME`、`SCOPE/`、`SCOPE:[...]`、`SCOPE:<...>` の `SCOPE` は effective named Scope に存在しなければならず、selector reference を別の relative path interpretation へ fallback しない。
 
 level: MUST
 
@@ -130,6 +136,36 @@ condition: single Target を解決する場合
 Scope name は Target lookup の識別子であり、それ自体を archive path に暗黙利用しない。Archive placement に outer directory が必要な場合だけ、Scope が明示参照するネームスペースを使用する。
 
 level: MUST NOT
+
+### SPEC_153
+
+File Target selector は `target_kind = "file"` の Scope だけで有効とする。Directory-kind Scope に `:[...]` / `SCOPE:[...]` または `:<...>` / `SCOPE:<...>` を使用した場合は error とする。
+
+level: MUST
+
+### SPEC_154
+
+List selector は最外郭の `[` と `]` だけを selector syntax とし、その内部を `/` で分割した各 non-empty component を literal direct-child file name とする。内部の `[` / `]` / `<` / `>` / `,` / `:` などは file name の通常文字として扱う。Empty list、empty component、missing closing `]`、存在しない file、Scope `ignore` に一致する file、regular file ではない entry は error とする。
+
+level: MUST
+
+### SPEC_155
+
+Regular-expression selector は最外郭の `<` と `>` を selector syntax とし、その内部を Python-compatible regular expression として compile する。Pattern は Scope `ignore` と link-like exclusion を適用済みの eligible direct-child regular file の basename **全体**へ full-match semantics で適用する。Pattern は non-empty、512 character 以下、`/` を含まないものとし、invalid regular expression と0件 match は error とする。
+
+level: MUST
+
+### SPEC_156
+
+File selector は Scope の candidate discovery を置き換えない。まず `target_kind = "file"`、Scope `ignore`、regular-file requirement、link-like exclusion によって eligible direct-child file Target を確定し、その後 selector で選ぶ。再帰探索は行わない。
+
+level: MUST
+
+### SPEC_157
+
+`:` は Target reference の Scope/selector 境界で `:[` または `:<` の selector marker として現れる場合だけ file selector syntax を開始する。`SCOPE/NAME` の `NAME` 内部を含む、それ以外の `:` は literal Target name の通常文字として扱い、既存の `foo:bar` や `SCOPE/foo:[bar]` のような literal name の意味を変更しない。Selector syntax と同じ形を持つ literal default-Scope file name を明示する必要がある場合は list selector の1 item として指定できる。
+
+level: MUST
 
 ## SECTION_503
 
@@ -149,9 +185,15 @@ level: MUST
 
 ### SPEC_054
 
-複数 positional Target reference と expansion は同じ run で併用できる。
+複数 positional Target reference、Scope expansion、file selector は同じ run で併用できる。
 
 level: MAY
+
+### SPEC_158
+
+File selector と literal Target reference、または複数 file selector が同じ filesystem entry を解決した overlap は1個の runtime Target にまとめる。Selector を含まない既存 literal Target reference 同士が同じ filesystem entry を重複指定した場合は、従来どおり distinct-entry validation error とする。
+
+level: MUST
 
 ## SECTION_504
 

@@ -28,6 +28,8 @@ class SECTION_001:
         {{TERM_19}}は、使用する Configuration document、CLI Target reference、optional な default Case を default / named Invocation として保存した実行指示です。第三者から受け取った `.dirpluck-inv` document は、実行前に root `[invocation]` と使用予定の `[invocation.<name>]` にある `config`、`targets`、`case` を確認してください。`-e` / `--entry` は file 内の named Invocation を選び、CLI `--case` は選択した Invocation の `case` を上書きできます。
 
         Named Invocation は root Invocation の差分ではなく独立しているため、選択した entry 自身の内容を確認してください。`config` の relative path は runtime cwd ではなく Invocation Template file 自身の directory を基準に解決し、`.dirpluck` suffix は省略できます。`config` を省略した場合は runtime cwd の `default.dirpluck` を使用します。CLI の `-i PATH` 自体は relative path なら runtime cwd 基準です。Configuration / Invocation Template document を選択・参照する path は host OS の通常の filesystem semantics に従うため、symbolic link / Windows directory junction を介した document も参照できます。Relative reference は選択した document path の directory を基準にするため、実行前に path と参照先の内容を確認してください。Invocation Template は Configuration の filesystem access capability を増やすものではありませんが、どの Configuration と Target を実行するかを選ぶため、信頼できない Template を無確認で実行しないでください。
+
+        File-kind Scope の regular-expression selector は Python-compatible regular expression を direct-child file name に適用します。File content や recursive path へ適用するものではなく pattern length も制限しますが、backtracking 型 regular expression は pattern と file name の組み合わせによって CPU time を大きく消費する可能性があります。第三者由来の Invocation Template の `targets` に `:<...>` / `SCOPE:<...>` が含まれる場合は、他の実行指示と同様に pattern を確認してから実行してください。
         """
         title @= 'Invocation Template も実行指示です'
 
