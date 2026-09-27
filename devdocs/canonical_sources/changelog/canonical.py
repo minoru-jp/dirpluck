@@ -7,6 +7,22 @@ from shikumi_devdoc.norms.document import title
 class CHANGELOG:
     """dirpluck のリリースごとの変更履歴。"""
 
+    class RELEASE_18:
+        r"""
+        配布物の役割を明確化し、build backend を Hatchling へ統一する。Wheel は実装と公開文書一式を提供し、sdist は release の再構築・検証に必要な完全な source を提供する。
+        """
+        title @= '0.10.2'
+
+        version @= '0.10.2'
+
+        changed @= 'Build backend を setuptools から Hatchling へ移行する。Version は引き続き `dirpluck.__version__` を正本とし、Hatchling の version source から project metadata へ反映する。Setuptools 専用の `MANIFEST.in` と generated `*.egg-info` は配布設計から除外する。'
+
+        changed @= 'Wheel 専用の compact documentation を廃止する。`src/dirpluck/docs/`、`canonical_sources/package_cli/`、`canonical_sources/package_configuration/`、`canonical_sources/package_trust/`、および `canonical_documents/package/` の独立 publication channel を削除し、公開文書の二重管理をやめる。'
+
+        changed @= 'Wheel には実装に加えて repository の公開 `README.md`、`GLOSSARY.md`、`CHANGELOG.md`、`STATUS.md`、`docs/` 全体を `dirpluck/_docs/` 以下へ同梱する。CLI、Configuration、Python API、Trust、Specification、Glossary を同じ release の wheel だけから参照できるようにする。'
+
+        changed @= 'sdist は特定 directory を列挙する方式ではなく、VCS ignore rules を尊重した release source 全体を収録する方針へ変更する。`tests/`、`tools/`、`devdocs/`、公開文書、実装を含め、repository operation 専用の `.github/` は除外する。'
+
     class RELEASE_17:
         r"""
         0.10.0 の runtime behavior と公開 API / Configuration semantics を維持したまま、release metadata と公開文書を 0.10.1 release として同期する。

@@ -2,6 +2,17 @@
 
 Release history for dirpluck.
 
+## 0.10.2
+
+Clarify the responsibilities of the release artifacts and standardize the build backend on Hatchling. The wheel provides the implementation and the complete published documentation set, while the sdist provides the complete source needed to rebuild and validate the release.
+
+### Changed
+
+- Migrate the build backend from setuptools to Hatchling. `dirpluck.__version__` remains the version source of truth and Hatchling reads it for project metadata. Remove the setuptools-specific `MANIFEST.in` and generated `*.egg-info` from the distribution design.
+- Remove the compact documentation channel that existed only for wheels. Delete `src/dirpluck/docs/`, `canonical_sources/package_cli/`, `canonical_sources/package_configuration/`, `canonical_sources/package_trust/`, and the independent `canonical_documents/package/` publication channel so the published documentation no longer has to be maintained in two forms.
+- Bundle the repository's published `README.md`, `GLOSSARY.md`, `CHANGELOG.md`, `STATUS.md`, and the complete `docs/` tree under `dirpluck/_docs/` in the wheel, in addition to the implementation. CLI, Configuration, Python API, Trust, Specification, and Glossary documentation can therefore be read from the wheel for the same release.
+- Change the sdist from an explicitly enumerated set of directories to the complete release source selected with VCS ignore rules. It includes `tests/`, `tools/`, `devdocs/`, published documentation, and the implementation, while repository-operation-only `.github/` content is excluded.
+
 ## 0.10.1
 
 Synchronize release metadata and published documentation for the 0.10.1 release while preserving the runtime behavior and public API / Configuration semantics of 0.10.0.

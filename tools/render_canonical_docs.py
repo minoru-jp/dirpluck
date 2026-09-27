@@ -57,14 +57,6 @@ DOCUMENT_ARTIFACTS: tuple[tuple[str, str, Path], ...] = (
     ("document", "devdocs.canonical_sources.specification.output", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.preview", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.cli_contract", Path("docs/specification")),
-    ("document", "devdocs.canonical_sources.package_cli.canonical", Path("package")),
-    ("document", "devdocs.canonical_sources.package_configuration.canonical", Path("package")),
-    ("document", "devdocs.canonical_sources.package_trust.canonical", Path("package")),
-    ("document", "devdocs.canonical_sources.python_api.overview", Path("package/python_api")),
-    ("document", "devdocs.canonical_sources.python_api.run", Path("package/python_api")),
-    ("document", "devdocs.canonical_sources.python_api.result", Path("package/python_api")),
-    ("document", "devdocs.canonical_sources.python_api.errors", Path("package/python_api")),
-    ("document", "devdocs.canonical_sources.python_api.surface", Path("package/python_api")),
 )
 
 # canonical source package, output directory, index title
@@ -73,7 +65,6 @@ INDEX_ARTIFACTS: tuple[tuple[str, Path, str], ...] = (
     ("devdocs.canonical_sources.configuration", Path("docs/configuration"), "dirpluck Configuration Guide"),
     ("devdocs.canonical_sources.python_api", Path("docs/python_api"), "dirpluck Python API"),
     ("devdocs.canonical_sources.specification", Path("docs/specification"), "dirpluck Specification"),
-    ("devdocs.canonical_sources.python_api", Path("package/python_api"), "dirpluck Python API"),
 )
 
 def _context() -> str:

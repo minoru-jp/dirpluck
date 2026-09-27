@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "dirpluck"
@@ -32,19 +32,26 @@ dirpluck = "dirpluck.cli:main"
 [dependency-groups]
 docs = ["shikumi-devdoc>=0.3.0"]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-include-package-data = false
+[tool.hatch.version]
+path = "src/dirpluck/__init__.py"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["dirpluck*"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/dirpluck"]
 
-[tool.setuptools.package-data]
-dirpluck = ["docs/CLI.md", "docs/CONFIGURATION.md", "docs/TRUST.md", "docs/python_api/*.md"]
+[tool.hatch.build.targets.wheel.force-include]
+"README.md" = "dirpluck/_docs/README.md"
+"GLOSSARY.md" = "dirpluck/_docs/GLOSSARY.md"
+"CHANGELOG.md" = "dirpluck/_docs/CHANGELOG.md"
+"STATUS.md" = "dirpluck/_docs/STATUS.md"
+"docs" = "dirpluck/_docs/docs"
 
-[tool.setuptools.dynamic]
-version = { attr = "dirpluck.__version__" }
+[tool.hatch.build.targets.sdist]
+# The sdist is the complete release source. Hatchling includes the project by
+# default while respecting VCS ignore rules; exclude only repository-operation
+# files that are not part of the release itself.
+exclude = [
+    "/.github",
+]
 
 [tool.ruff]
 target-version = "py311"

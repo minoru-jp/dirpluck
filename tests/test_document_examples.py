@@ -18,8 +18,6 @@ API_SOURCES = ROOT / "devdocs" / "canonical_sources" / "python_api"
 CLI_SOURCES = ROOT / "devdocs" / "canonical_sources" / "cli"
 CONFIGURATION_SOURCES = ROOT / "devdocs" / "canonical_sources" / "configuration"
 GETTING_STARTED_SOURCE = ROOT / "devdocs" / "canonical_sources" / "getting_started" / "canonical.py"
-PACKAGE_CLI_SOURCE = ROOT / "devdocs" / "canonical_sources" / "package_cli" / "canonical.py"
-PACKAGE_CONFIGURATION_SOURCE = ROOT / "devdocs" / "canonical_sources" / "package_configuration" / "canonical.py"
 
 
 def _test_target_fields(path: Path) -> dict[str, tuple[str | None, list[str]]]:
@@ -75,7 +73,6 @@ class DocumentExampleTests(unittest.TestCase):
         sources = [
             *sorted(CONFIGURATION_SOURCES.glob("*.py")),
             GETTING_STARTED_SOURCE,
-            PACKAGE_CONFIGURATION_SOURCE,
         ]
         for source in sources:
             if source.name == "__init__.py":
@@ -87,7 +84,7 @@ class DocumentExampleTests(unittest.TestCase):
                     with self.subTest(source=source.name, field=name):
                         tomllib.loads(snippet)
                     checked += 1
-        self.assertGreaterEqual(checked, 27)
+        self.assertGreaterEqual(checked, 22)
 
     def test_cli_console_test_targets_are_commands(self):
         checked = 0
@@ -104,20 +101,6 @@ class DocumentExampleTests(unittest.TestCase):
                         self.assertTrue(all(command.startswith("dirpluck") for command in commands))
                     checked += 1
         self.assertGreaterEqual(checked, 15)
-
-    def test_packaged_cli_console_test_targets_are_commands(self):
-        checked = 0
-        for name, (language, snippets) in _test_target_fields(PACKAGE_CLI_SOURCE).items():
-            if language != "console":
-                continue
-            for snippet in snippets:
-                with self.subTest(field=name):
-                    commands = [line.strip() for line in snippet.splitlines() if line.strip()]
-                    self.assertTrue(commands)
-                    self.assertTrue(all(command.startswith("dirpluck") for command in commands))
-                    self.assertNotIn("{{", snippet)
-                checked += 1
-        self.assertGreaterEqual(checked, 1)
 
     def test_documented_run_signature_tracks_public_run_parameters(self):
         snippets = _test_target_fields(API_SOURCES / "run.py")["run_signature"][1]

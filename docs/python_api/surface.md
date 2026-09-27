@@ -20,4 +20,4 @@ In the repository or source distribution, use these published documents:
 - Trust boundaries for filesystem operations and distribution: `docs/TRUST.md`
 - Term meanings: `GLOSSARY.md`
 
-The wheel includes the CLI, Configuration, Trust, and Python API references under `dirpluck/docs/`. The Specification and Glossary remain repository/source-distribution documentation.
+The wheel also bundles the same complete published documentation set under `dirpluck/_docs/`. An installed wheel therefore provides the README, Glossary, CLI / Configuration / Python API guides, Trust model, Specification, CHANGELOG, and STATUS for that release.

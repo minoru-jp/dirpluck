@@ -44,7 +44,7 @@ class API_REFERENCE_PART:
         - filesystem 操作と配布時の trust boundary: `docs/TRUST.md`
         - 用語の意味: `GLOSSARY.md`
 
-        Wheel には CLI、Configuration、Trust、Python API の reference を `dirpluck/docs/` 以下へ同梱します。Specification と Glossary は source distribution / repository の公開文書を参照します。
+        Wheel にも同じ公開文書一式を `dirpluck/_docs/` 以下へ同梱します。したがって installed wheel だけでも README、Glossary、CLI / Configuration / Python API guide、Trust model、Specification、CHANGELOG、STATUS を参照できます。
         """
         title @= '次に読む文書'
 

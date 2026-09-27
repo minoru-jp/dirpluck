@@ -28,7 +28,7 @@ devdocs/
 
 The canonical Vocabulary is `canonical_sources/vocabulary/canonical.py`. Other canonical sources import canonical term classes from that module directly and use `merge` to bring the required concepts and spelling policy into local scope. There is no generated term-proxy module.
 
-Compact wheel-facing documents have publication-specific canonical sources because their navigation context differs from the repository guides: `canonical_sources/package_cli/`, `canonical_sources/package_configuration/`, and `canonical_sources/package_trust/`. The Python API collection publishes the same content to both repository and package channels, so its canonical sources are realized independently into each publication target.
+The repository-facing publication is the only published-document channel. There are no wheel-specific compact canonical sources or package publication channel; the same published English documents are reused as package resources in the wheel.
 
 `canonical_sources/__init__.py` deliberately provides no aggregate API. This package is an import namespace for document realization, not an official dirpluck Python API. With the repository root on `sys.path`, canonical modules use dotted paths such as `devdocs.canonical_sources.vocabulary.canonical` and `devdocs.canonical_sources.readme.canonical`.
 
@@ -65,17 +65,7 @@ canonical_documents/docs/specification/*.md
 canonical_documents/devdocs/README.md
 ```
 
-Python-distribution documentation uses a separate `package/` publication namespace rather than mirroring the physical `src/dirpluck/docs/` path:
-
-```text
-canonical_documents/package/CLI.md
-canonical_documents/package/CONFIGURATION.md
-canonical_documents/package/TRUST.md
-canonical_documents/package/python_api/INDEX.md
-canonical_documents/package/python_api/*.md
-```
-
-When one canonical source feeds both repository-facing and package-facing publication targets, each target is realized as an independent canonical artifact.
+No separate canonical artifacts are generated for the wheel. The published English Markdown used by the repository is bundled directly into the wheel, so canonical documents are kept only for the single repository publication path.
 
 ## Generation and translation
 
@@ -109,7 +99,9 @@ python tools/render_canonical_docs.py --check
 
 Canonical sources, Japanese canonical documents, and published English documents are all committed so changes can be reviewed across the full source-to-publication path.
 
-`devdocs/` is included in the source distribution so the documentation generation and validation inputs remain available with a release. It is excluded from the wheel. References needed by wheel users are packaged under `dirpluck/docs/`.
+`devdocs/` is included in the source distribution so the documentation generation and validation inputs remain available with a release. Canonical sources and canonical documents are not included in the wheel. Instead, the wheel bundles the repository's published `README.md`, `GLOSSARY.md`, `CHANGELOG.md`, `STATUS.md`, and complete `docs/` tree under `dirpluck/_docs/`.
+
+The source distribution contains the complete source needed to rebuild and validate the release, while repository-operation-only `.github/` content is excluded. Hatchling is the build backend, and ordinary caches, virtual environments, and build artifacts are left out according to VCS ignore rules.
 
 The `devdocs/` directory layout and canonical implementation are repository-development surfaces, not part of dirpluck's product compatibility contract.
 

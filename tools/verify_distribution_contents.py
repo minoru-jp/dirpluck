@@ -32,17 +32,20 @@ def repository_files_under(directory: str) -> set[str]:
     }
 
 
-def packaged_document_sources() -> dict[str, Path]:
-    docs_root = ROOT / "src" / "dirpluck" / "docs"
-    relative_paths = {
-        "CLI.md",
-        "CONFIGURATION.md",
-        "TRUST.md",
-        *(path.relative_to(docs_root).as_posix() for path in (docs_root / "python_api").rglob("*.md")),
-    }
+def public_documents() -> set[str]:
     return {
-        f"dirpluck/docs/{relative}": docs_root / relative
-        for relative in sorted(relative_paths)
+        "README.md",
+        "GLOSSARY.md",
+        "CHANGELOG.md",
+        "STATUS.md",
+        *repository_files_under("docs"),
+    }
+
+
+def packaged_document_sources() -> dict[str, Path]:
+    return {
+        f"dirpluck/_docs/{relative}": ROOT / relative
+        for relative in sorted(public_documents())
     }
 
 
@@ -55,24 +58,36 @@ def check_wheel(path: Path) -> None:
         if missing:
             fail(f"wheel is missing required files: {missing}")
 
-        forbidden_prefixes = ("tests/", "tools/", "devdocs/", ".github/")
+        forbidden_prefixes = (
+            "tests/",
+            "tools/",
+            "devdocs/",
+            ".github/",
+            "dirpluck/docs/",
+        )
         forbidden = sorted(
             name for name in names if name.startswith(forbidden_prefixes)
         )
         if forbidden:
-            fail(f"wheel contains files outside the wheel distribution boundary: {forbidden[:10]}")
+            fail(
+                "wheel contains files outside the wheel distribution boundary: "
+                f"{forbidden[:10]}"
+            )
 
         for archive_name, source in expected_docs.items():
             if archive.read(archive_name) != source.read_bytes():
                 fail(f"wheel document differs from repository source: {archive_name}")
 
         wheel_docs = {
-            name for name in names if name.startswith("dirpluck/docs/") and name.endswith(".md")
+            name
+            for name in names
+            if name.startswith("dirpluck/_docs/") and name.endswith(".md")
         }
         if wheel_docs != set(expected_docs):
             fail(
-                "wheel contains unexpected packaged documents: "
-                f"{sorted(wheel_docs - set(expected_docs))}"
+                "wheel documentation set differs from the public documentation set: "
+                f"unexpected={sorted(wheel_docs - set(expected_docs))}, "
+                f"missing={sorted(set(expected_docs) - wheel_docs)}"
             )
 
 
@@ -81,40 +96,52 @@ def strip_sdist_root(name: str) -> str:
     return parts[1] if len(parts) == 2 else ""
 
 
+def release_source_files() -> set[str]:
+    required = {
+        ".gitignore",
+        "pyproject.toml",
+        "LICENSE",
+        *public_documents(),
+    }
+    for directory in ("src", "tests", "tools", "devdocs"):
+        required |= repository_files_under(directory)
+    return required
+
+
 def check_sdist(path: Path) -> None:
     with tarfile.open(path, "r:gz") as archive:
-        members = {strip_sdist_root(member.name): member for member in archive.getmembers()}
+        members = {
+            strip_sdist_root(member.name): member
+            for member in archive.getmembers()
+            if strip_sdist_root(member.name)
+        }
         names = set(members)
-        public_documents = {
-            "README.md",
-            "GLOSSARY.md",
-            "CHANGELOG.md",
-            "STATUS.md",
-            *repository_files_under("docs"),
-        }
-        required = {
-            "src/dirpluck/__init__.py",
-            "pyproject.toml",
-            "LICENSE",
-            *public_documents,
-        }
-        required |= repository_files_under("tests")
-        required |= repository_files_under("tools")
-        required |= repository_files_under("devdocs")
+        required = release_source_files()
         missing = sorted(required - names)
         if missing:
-            fail(f"sdist is missing required files: {missing}")
+            fail(f"sdist is missing required release-source files: {missing}")
 
-        forbidden_prefixes = (".github/",)
+        forbidden_prefixes = (
+            ".github/",
+            "dist/",
+            "build/",
+            "src/dirpluck.egg-info/",
+            "__pycache__/",
+            ".pytest_cache/",
+            ".mypy_cache/",
+            ".ruff_cache/",
+            ".venv/",
+            "venv/",
+        )
         forbidden = sorted(
             name for name in names if name.startswith(forbidden_prefixes)
         )
         if forbidden:
-            fail(f"sdist contains repository-only files: {forbidden[:10]}")
-        if ".gitignore" in names:
-            fail("sdist contains repository-only file: .gitignore")
+            fail(f"sdist contains repository-operation or generated files: {forbidden[:10]}")
+        if "MANIFEST.in" in names:
+            fail("sdist contains obsolete setuptools file: MANIFEST.in")
 
-        for document in sorted(public_documents):
+        for document in sorted(public_documents()):
             extracted = archive.extractfile(members[document])
             if extracted is None or extracted.read() != (ROOT / document).read_bytes():
                 fail(f"sdist document differs from repository source: {document}")

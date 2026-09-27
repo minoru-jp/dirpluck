@@ -61,7 +61,7 @@ For Configuration fields and composition, see [Configuration guide](docs/configu
 
 ## Installation
 
-The current version is **0.10.1**.
+The current version is **0.10.2**.
 
 Python 3.11 or later is required.
 

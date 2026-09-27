@@ -63,12 +63,8 @@ EXPECTED_DOCUMENTS = {
     *(f"docs/configuration/{name}" for name in CONFIGURATION_DOCUMENTS),
     "docs/TRUST.md",
     "devdocs/README.md",
-    "package/CLI.md",
-    "package/CONFIGURATION.md",
-    "package/TRUST.md",
     *(f"docs/specification/{name}" for name in SPECIFICATION_DOCUMENTS),
     *(f"docs/python_api/{name}" for name in PYTHON_API_DOCUMENTS),
-    *(f"package/python_api/{name}" for name in PYTHON_API_DOCUMENTS),
 }
 CANONICAL_SOURCE = re.compile(r"正本は `([^`]+)` です。")
 
@@ -141,6 +137,34 @@ class DocumentBuildTests(unittest.TestCase):
             project["dependency-groups"]["docs"],
             ["shikumi-devdoc>=0.3.0"],
         )
+
+    def test_distribution_uses_hatchling_and_full_public_docs(self):
+        with (ROOT / "pyproject.toml").open("rb") as stream:
+            project = tomllib.load(stream)
+
+        self.assertEqual(project["build-system"]["build-backend"], "hatchling.build")
+        self.assertEqual(project["build-system"]["requires"], ["hatchling>=1.27"])
+        self.assertEqual(project["project"]["dynamic"], ["version"])
+        self.assertEqual(
+            project["tool"]["hatch"]["version"]["path"],
+            "src/dirpluck/__init__.py",
+        )
+        self.assertEqual(
+            project["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"],
+            {
+                "README.md": "dirpluck/_docs/README.md",
+                "GLOSSARY.md": "dirpluck/_docs/GLOSSARY.md",
+                "CHANGELOG.md": "dirpluck/_docs/CHANGELOG.md",
+                "STATUS.md": "dirpluck/_docs/STATUS.md",
+                "docs": "dirpluck/_docs/docs",
+            },
+        )
+        self.assertEqual(
+            project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"],
+            ["/.github"],
+        )
+        self.assertFalse((ROOT / "MANIFEST.in").exists())
+        self.assertFalse((ROOT / "src" / "dirpluck.egg-info").exists())
 
     def test_vocabulary_does_not_define_current_release_version(self):
         canonical = (
@@ -308,41 +332,11 @@ class DocumentBuildTests(unittest.TestCase):
                     link_pattern.findall(canonical),
                 )
 
-    def test_packaged_trust_has_publication_specific_canonical_source(self):
-        source = CANONICAL_SOURCES / "package_trust" / "canonical.py"
-        self.assertTrue(source.is_file())
-        canonical = (CANONICAL_DOCUMENTS / "package" / "TRUST.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn(
-            "devdocs/canonical_sources/package_trust/canonical.py",
-            canonical,
-        )
-        packaged = (ROOT / "src" / "dirpluck" / "docs" / "TRUST.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("docs/TRUST.md", packaged)
-        self.assertIn("docs/specification/INDEX.md", packaged)
-
-    def test_packaged_python_api_matches_public_python_api_collection(self):
-        public_root = ROOT / "docs" / "python_api"
-        packaged_root = ROOT / "src" / "dirpluck" / "docs" / "python_api"
-        public = {
-            path.relative_to(public_root).as_posix(): path.read_bytes()
-            for path in public_root.rglob("*.md")
-        }
-        packaged = {
-            path.relative_to(packaged_root).as_posix(): path.read_bytes()
-            for path in packaged_root.rglob("*.md")
-        }
-        self.assertEqual(packaged, public)
-
-    def test_package_trust_points_to_source_distribution_specification(self):
-        packaged = (ROOT / "src" / "dirpluck" / "docs" / "TRUST.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("docs/specification/INDEX.md", packaged)
-        self.assertNotIn("SPECIFICATION.md", packaged)
+    def test_compact_package_documentation_channel_is_removed(self):
+        for name in ["package_cli", "package_configuration", "package_trust"]:
+            self.assertFalse((CANONICAL_SOURCES / name).exists())
+        self.assertFalse((CANONICAL_DOCUMENTS / "package").exists())
+        self.assertFalse((ROOT / "src" / "dirpluck" / "docs").exists())
 
     def test_specification_uses_stable_rule_nodes_and_semantic_fields(self):
         seen: set[str] = set()
