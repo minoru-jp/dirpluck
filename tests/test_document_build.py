@@ -146,7 +146,7 @@ class DocumentBuildTests(unittest.TestCase):
         canonical = (
             CANONICAL_SOURCES / "vocabulary" / "canonical.py"
         ).read_text(encoding="utf-8")
-        self.assertNotIn("{{0.10.0}}", canonical)
+        self.assertNotIn(f"{{{{{__version__}}}}}", canonical)
         self.assertNotRegex(canonical, r'class TERM_\d+:\s+r?["\']{3}\{\{\d+\.\d+\.\d+\}\}')
 
     def test_readme_uses_external_version_context(self):

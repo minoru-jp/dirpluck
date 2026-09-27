@@ -93,7 +93,7 @@ Configuration field の詳細は `docs/configuration/INDEX.md`、CLI option と 
 
 ## インストール
 
-現在の version は **0.10.0** です。
+現在の version は **0.10.1** です。
 
 Python 3.11 以降を使用します。
 

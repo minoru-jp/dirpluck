@@ -2,6 +2,15 @@
 
 Release history for dirpluck.
 
+## 0.10.1
+
+Synchronize release metadata and published documentation for the 0.10.1 release while preserving the runtime behavior and public API / Configuration semantics of 0.10.0.
+
+### Changed
+
+- Update the package version and documentation current-version snapshot to 0.10.1. This release makes no functional changes to runtime behavior, the official Python API, CLI, Configuration language, or Archive semantics.
+- Align release-preparation documentation with the current shikumi / shikumi-devdoc baseline, including the STATUS documentation-tooling wording for the release baseline of Shikumi 0.2.0 and shikumi-devdoc 0.3.0.
+
 ## 0.10.0
 
 Allow the runtime to choose the Output destination and overwrite policy so a Configuration's extraction definition can be reused while changing where an invocation writes its Archive.

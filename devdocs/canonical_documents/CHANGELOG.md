@@ -18,6 +18,17 @@
 
 dirpluck のリリースごとの変更履歴。
 
+## 0.10.1
+
+0.10.0 の runtime behavior と公開 API / Configuration semantics を維持したまま、release metadata と公開文書を 0.10.1 release として同期する。
+
+version: 0.10.1
+
+Changed:
+
+- Package version と文書の current-version snapshot を 0.10.1 へ更新する。Runtime behavior、公式 Python API、CLI、Configuration language、Archive semantics の機能変更は行わない。
+- Release-preparation 文書を現在の shikumi / shikumi-devdoc baseline と整合させ、STATUS の documentation tooling 記述を今回の release baseline である Shikumi 0.2.0 と shikumi-devdoc 0.3.0 に揃える。
+
 ## 0.10.0
 
 Runtime から Output destination と overwrite policy を指定できるようにし、Configuration の抽出定義を保ったまま書き出し場所を invocation ごとに変更できるようにする。
