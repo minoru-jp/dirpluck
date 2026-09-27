@@ -16,6 +16,8 @@ From 0.10.0 onward, breaking changes to the published Configuration language, CL
 
 Compelling reasons include defects where preserving the existing behavior would damage correctness, safety, or core design consistency. Ordinary feature additions and improvements should be additive. If an existing interface must be replaced, the project will provide deprecation and a migration period where practical.
 
+Human-facing generated output, such as the generated Archive README and diagnostic messages, is different: its exact wording and formatting are not treated as a stable machine-readable interface. Those details may change in later releases to improve readability or clarity. Programmatic integrations should depend on the explicitly documented public contracts such as Configuration, CLI, the official Python API, and Archive semantics rather than parsing the exact presentation of human-facing output.
+
 Internal modules, repository-local development tools, and the documentation-generation workspace are outside this compatibility policy.
 
 ## Beta goals

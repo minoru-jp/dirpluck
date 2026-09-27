@@ -7,6 +7,16 @@ from shikumi_devdoc.norms.document import title
 class CHANGELOG:
     """dirpluck のリリースごとの変更履歴。"""
 
+    class RELEASE_20:
+        r"""
+        生成 Archive README を簡潔化し、Archive path そのものから読み取れる Namespace / Source root の補助 metadata を削除する。Namespace の配置 semantics 自体は変更しない。
+        """
+        title @= '0.11.1'
+
+        version @= '0.11.1'
+
+        changed @= '生成 Archive README から Namespace の説明文と、各 namespaced source section の `Namespace` / `Source root` metadata を削除する。Namespaced source は引き続き final Archive root を section heading として表示し、Namespace は従来どおり Archive placement に適用される。この変更は人間向け README の書式整理であり、Configuration、CLI、公式 Python API、Archive entry path の semantics は変更しない。README の exact formatting を機械的に解析している consumer は調整が必要になる場合がある。'
+
     class RELEASE_19:
         r"""
         Scope が direct-child regular file を Target として扱える opt-in mode を追加し、directory Target と file Target の責務境界を明確化する。既存 Scope は既定の directory mode のままとし、0.10.x Configuration の Target discovery と Archive 結果を維持する。

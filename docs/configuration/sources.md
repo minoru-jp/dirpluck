@@ -91,7 +91,7 @@ If `work/project` has source root `project/`, it is placed at `work/project/`. I
 
 If different resolved sources still produce the same final Archive root, `dirpluck` fails rather than silently merging them. A Namespace is an explicit way to avoid that collision, but it does not guarantee uniqueness by itself; two sources may still collide if they use the same Namespace and the same source root.
 
-When at least one Namespace is used, the generated Archive README explains that Namespace directories are Archive-only and not part of the original source path. Each source uses its final Archive root as a heading, and namespaced sources identify the Namespace and Source root separately as metadata.
+The generated Archive README uses each source's final Archive root directly as its heading. For a namespaced source, that final placement path appears in the heading without separate Namespace / Source-root metadata or a stock Namespace explanation.
 ## Always
 
 `[always.<name>]` fixes a source directory in the Configuration and makes it participate on every run. Its `path` may be relative or absolute.

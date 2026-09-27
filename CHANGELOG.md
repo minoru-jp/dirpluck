@@ -2,6 +2,14 @@
 
 Release history for dirpluck.
 
+## 0.11.1
+
+Simplify the generated Archive README by removing auxiliary Namespace / Source-root metadata that can already be inferred from the final Archive path. Namespace placement semantics are unchanged.
+
+### Changed
+
+- Remove the Namespace explanatory paragraph and the per-source `Namespace` / `Source root` metadata from the generated Archive README. Namespaced sources still use their final Archive root as the section heading, and Namespace continues to affect Archive placement exactly as before. This is a human-facing README format change; Configuration, CLI, the official Python API, and Archive-entry path semantics are unchanged. Consumers that parse the README's exact formatting may need to adjust.
+
 ## 0.11.0
 
 Add an opt-in Scope mode for treating direct-child regular files as atomic Targets. This supports workflows such as collecting several returned ZIP archives together with existing Always sources without unpacking those archives first, while preserving the directory-only behavior of existing Scopes by default.

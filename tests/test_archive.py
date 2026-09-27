@@ -135,9 +135,9 @@ class ArchiveTests(BuilderTestCase):
                 "reference/shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl",
                 names,
             )
-            self.assertIn("archive-only directory prefix", readme)
             self.assertIn("## `reference/shikumi-devdoc/`", readme)
-            self.assertIn("Namespace: `reference/`; Source root: `shikumi-devdoc/`", readme)
+            self.assertNotIn("Namespace:", readme)
+            self.assertNotIn("Source root:", readme)
             self.assertIn("The current built distribution used as a reference.", readme)
             self.assertIn(
                 "## `shikumi-devdoc/`\n\nFiles: 1\n\n"
@@ -208,7 +208,6 @@ class ArchiveTests(BuilderTestCase):
             self.assertIn(
                 "## `devdoc/shikumi-devdoc/dist/`\n\n"
                 "Files: 1\n"
-                "Namespace: `devdoc/`; Source root: `shikumi-devdoc/dist/`\n"
                 "Target overlap: 1 selected file is also included under `shikumi-devdoc/`.\n\n"
                 "The built distribution used as a development tool.",
                 readme,
@@ -382,7 +381,7 @@ class ArchiveTests(BuilderTestCase):
             self.assertIn("## `application/`\n\nFiles: 1", readme)
             self.assertIn("## `docs/`\n\nFiles: 1\n\nReview guidance.", readme)
 
-    def test_archive_readme_namespace_metadata_does_not_require_description(self):
+    def test_archive_readme_namespaced_source_uses_final_archive_root_without_namespace_metadata(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             docs = root / "docs"
@@ -401,7 +400,9 @@ class ArchiveTests(BuilderTestCase):
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("## `reference/docs/`", readme)
             self.assertIn("Files: 1", readme)
-            self.assertIn("Namespace: `reference/`; Source root: `docs/`", readme)
+            self.assertNotIn("archive-only directory prefix", readme)
+            self.assertNotIn("Namespace:", readme)
+            self.assertNotIn("Source root:", readme)
 
 
 if __name__ == "__main__":

@@ -37,16 +37,9 @@ def _render_archive_readme(
     selection_counts: Mapping[str, int],
     target_overlaps: Mapping[str, tuple[tuple[str, int], ...]],
 ) -> str:
-    uses_namespace = any(source.namespace is not None for source in sources)
     lines = ["# Archive contents", ""]
     if about_description is not None:
         lines.extend([about_description, ""])
-    if uses_namespace:
-        lines.extend([
-            "A Namespace is an archive-only directory prefix used to keep source roots distinct. "
-            "It is not part of the original source path; the source root is immediately below it.",
-            "",
-        ])
 
     for source in sorted(sources, key=lambda item: (item.archive_root, item.key)):
         archive_root = source.archive_root
@@ -54,16 +47,6 @@ def _render_archive_readme(
             archive_root = f"{archive_root.rstrip('/')}/"
         lines.extend([f"## {_markdown_code_span(archive_root)}", ""])
         lines.append(f"Files: {selection_counts[source.key]}")
-        if source.namespace is not None:
-            namespace = f"{source.namespace.rstrip('/')}/"
-            source_root = source.source_root
-            if source.source_kind == "directory":
-                source_root = f"{source_root.rstrip('/')}/"
-            lines.append(
-                "Namespace: "
-                f"{_markdown_code_span(namespace)}; "
-                f"Source root: {_markdown_code_span(source_root)}"
-            )
         if request.paths:
             lines.append(f"Source: {_markdown_code_span(source.directory.as_posix())}")
         target_sources = {target.archive_root: target for target in sources if target.kind == "target"}

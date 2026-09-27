@@ -26,6 +26,8 @@ class STATUS:
 
         重大な理由には、維持することで正確性・安全性・中核的な設計整合性を損なう欠陥などが含まれます。通常の機能追加や改善は additive に行い、既存 interface を置き換える必要が生じた場合は、可能な限り deprecation と移行期間を設けます。
 
+        一方、generated Archive README、診断 message など、人間が読むことを主目的とした生成出力の exact wording / formatting は安定した machine-readable interface とはみなしません。可読性や明瞭性の改善に伴い、これらの書式や文言は今後の release でも変更する場合があります。Programmatic integration は Configuration、CLI、公式 Python API、Archive semantics など明示された公開契約に依存させてください。
+
         内部 module、repository-local development tools、文書生成 workspace はこの互換性方針の対象外です。
         """
         title @= "安定性方針"

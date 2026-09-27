@@ -58,7 +58,7 @@ level: MUST
 
 ## SPEC_103
 
-Each resolved source is represented by one level-2 heading whose inline-code text is the final Archive root. Directory-source headings and `Source root` metadata end in `/`; file Targets are shown as file paths without a trailing `/`. The section records the selected file count as `Files: N`. If a Target's `scope.description` exists, it appears first in the section body. A directory Target then shows the Pluck Selection `description`; a file Target does not use Pluck and therefore shows only the Scope description. Always sources continue to show their Selection `description`. Descriptions remain section-body text, including multiple lines.
+Each resolved source is represented by one level-2 heading whose inline-code text is the final Archive root. Directory-source headings end in `/`; file Targets are shown as file paths without a trailing `/`. The section records the selected file count as `Files: N`. If a Target's `scope.description` exists, it appears first in the section body. A directory Target then shows the Pluck Selection `description`; a file Target does not use Pluck and therefore shows only the Scope description. Always sources continue to show their Selection `description`. Descriptions remain section-body text, including multiple lines.
 
 level: MUST
 
@@ -72,7 +72,7 @@ condition: when an Always source and a Target select the same physical file
 
 ## SPEC_105
 
-When at least one source uses a Namespace, the README first explains that a Namespace is an Archive-only outer directory and is not part of the original source path, and that the source root is immediately below it. Each namespaced source section also records its `Namespace` and `Source root`; sources without a Namespace omit that metadata.
+For a namespaced source, the README directly shows the final Archive root as the section heading. It does not add a stock Namespace explanation or separate `Namespace` / `Source root` metadata. Namespace still affects Archive placement semantics, but it does not require extra provenance metadata in the README.
 
 level: MUST
 

@@ -735,7 +735,8 @@ class SourceResolutionTests(BuilderTestCase):
             plan = plan_archive(config, BuildRequest.create("returned/repo.zip"))
             self.assertEqual(set(plan.entries), {"returned/repo.zip"})
             self.assertIn("## `returned/repo.zip`", plan.readme)
-            self.assertIn("Namespace: `returned/`; Source root: `repo.zip`", plan.readme)
+            self.assertNotIn("Namespace:", plan.readme)
+            self.assertNotIn("Source root:", plan.readme)
 
     def test_file_target_scope_ignore_applies_to_file_names_and_directories_are_not_targets(self):
         with resolved_temporary_directory() as temp:

@@ -123,7 +123,7 @@ class CONFIGURATION_PART:
 
         異なる resolved source の最終 Archive root が同じになる場合、dirpluck は source を黙って merge せず error にします。Namespace はこの衝突を明示的に避けるために使えますが、自動的に一意性を保証するものではありません。同じ Namespace を共有して最終 Archive root が再び同じになれば error です。
 
-        生成される{{TERM_10}}は、Namespace を使う run では Namespace が Archive 専用の外側 directory であることを説明します。各 source は final Archive root 自体を見出しとして表示し、Namespace を使う source では Namespace と Source root も metadata として分けて示します。これにより受け手は Namespace directory を元 filesystem path の一部と誤認せず、その直下が source root であることを確認できます。
+        生成される{{TERM_10}}では、各 source の final Archive root 自体を見出しとして表示します。Namespace を使う場合も、その最終配置 path が見出しへ直接反映され、Namespace と Source root を分離した補助 metadata や Namespace の定型説明文は追加しません。
         """
         title @= 'Namespace'
 

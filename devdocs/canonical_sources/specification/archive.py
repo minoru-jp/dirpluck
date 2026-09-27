@@ -51,7 +51,7 @@ class SPECIFICATION_PART:
         level @= MUST
 
     class SPEC_103:
-        r"""各 resolved source は、その final archive root を inline code とした level-2 heading で1 sectionずつ表現する。Directory source の heading / Source root 表示は末尾 `/` を付け、file Target は file path として末尾 `/` を付けない。Section には selected file 数を `Files: N` として記録する。Target の `scope.description` が存在する場合は最初に本文として表示し、directory Target では続けて Pluck selection `description` を表示する。File Target は Pluck を使わないため `scope.description` だけを表示する。Always source は従来どおり selection `description` を表示する。各 description は metadata の後へ本文としてそのまま置き、複数行も section body として保持する。"""
+        r"""各 resolved source は、その final archive root を inline code とした level-2 heading で1 sectionずつ表現する。Directory source の heading は末尾 `/` を付け、file Target は file path として末尾 `/` を付けない。Section には selected file 数を `Files: N` として記録する。Target の `scope.description` が存在する場合は最初に本文として表示し、directory Target では続けて Pluck selection `description` を表示する。File Target は Pluck を使わないため `scope.description` だけを表示する。Always source は従来どおり selection `description` を表示する。各 description は metadata の後へ本文としてそのまま置き、複数行も section body として保持する。"""
         level @= MUST
 
     class SPEC_104:
@@ -60,9 +60,9 @@ class SPECIFICATION_PART:
         condition @= "Always source と Target が同じ physical file を選択した場合"
 
     class SPEC_105:
-        r"""少なくとも1個の source に Namespace が適用される場合、README は source section の前に Namespace が Archive 専用の outer directory であり元 source path の一部ではないこと、source root がその直下にあることを説明する。Namespace を使う各 source section には `Namespace` と `Source root` も表示する。Namespace を使わない source にはこの metadata を追加しない。"""
+        r"""Namespace を使う source も、README では final archive root を heading として直接表示する。Namespace が Archive 専用の outer directory であることを説明する定型文や、`Namespace` / `Source root` を分離した補助 metadata は生成しない。Namespace の有無は Archive placement semantics を変更するが、README に追加の provenance metadata を要求しない。"""
         level @= MUST
-        condition @= "少なくとも1個の source に Namespace が適用される場合"
+        condition @= "source に Namespace が適用される場合"
 
     class SPEC_106:
         r"""既定では source filesystem path、Configuration path / table、base chain、Scope / Pluck / Always 名、選択 Case などの dirpluck 固有情報を記録しない。Target overlap metadata は Target 名ではなく final archive root を使用する。CLI `--paths` が指定された場合だけ各 source section に `Source` として解決済み source filesystem path を `/` separator で記録する。Directory source では directory path、file Target では file path を表示する。`--paths` は archive path や selection を変更しない。"""
