@@ -1,6 +1,7 @@
 include README.md
 include GLOSSARY.md
 include CHANGELOG.md
+include STATUS.md
 include LICENSE
 include pyproject.toml
 recursive-include docs *.md

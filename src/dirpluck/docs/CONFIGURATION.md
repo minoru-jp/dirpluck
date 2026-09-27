@@ -100,4 +100,4 @@ prefix = "project"
 suffix = "review"
 ```
 
-For pattern grammar, base composition, Scope shadowing, Case semantics, filesystem boundaries, and Output write-boundary collisions, see `docs/CONFIGURATION.md` and `docs/SPECIFICATION.md` in the source distribution for the same release. The trust model is in the bundled `TRUST.md`, and the bundled `CLI.md` is the compact CLI reference.
+For pattern grammar, base composition, Scope shadowing, Case semantics, filesystem boundaries, and Output write-boundary collisions, see `docs/configuration/INDEX.md` and `docs/specification/INDEX.md` in the source distribution for the same release. The trust model is in the bundled `TRUST.md`, and the bundled `CLI.md` is the compact CLI reference.

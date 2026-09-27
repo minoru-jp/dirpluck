@@ -32,4 +32,4 @@ dirpluck -i release
 dirpluck -i release -e docs
 ```
 
-For the compact TOML reference, see the bundled `CONFIGURATION.md`; for the trust model, see the bundled `TRUST.md`. For detailed CLI semantics, the Configuration guide, the Glossary, and the Specification, see `docs/CLI.md`, `docs/CONFIGURATION.md`, `GLOSSARY.md`, and `docs/SPECIFICATION.md` in the source distribution for the same release.
+For the compact TOML reference, see the bundled `CONFIGURATION.md`; for the trust model, see the bundled `TRUST.md`. For detailed CLI semantics, the Configuration guide, the Glossary, and the Specification, see `docs/cli/INDEX.md`, `docs/configuration/INDEX.md`, `GLOSSARY.md`, and `docs/specification/INDEX.md` in the source distribution for the same release.

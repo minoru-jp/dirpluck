@@ -20,15 +20,36 @@ def one(pattern: str) -> Path:
     return matches[0]
 
 
+def repository_files_under(directory: str) -> set[str]:
+    root = ROOT / directory
+    return {
+        path.relative_to(ROOT).as_posix()
+        for path in root.rglob("*")
+        if path.is_file()
+        and "__pycache__" not in path.parts
+        and path.suffix not in {".pyc", ".pyo"}
+        and path.name != ".DS_Store"
+    }
+
+
+def packaged_document_sources() -> dict[str, Path]:
+    docs_root = ROOT / "src" / "dirpluck" / "docs"
+    relative_paths = {
+        "CLI.md",
+        "CONFIGURATION.md",
+        "TRUST.md",
+        *(path.relative_to(docs_root).as_posix() for path in (docs_root / "python_api").rglob("*.md")),
+    }
+    return {
+        f"dirpluck/docs/{relative}": docs_root / relative
+        for relative in sorted(relative_paths)
+    }
+
+
 def check_wheel(path: Path) -> None:
     with ZipFile(path) as archive:
         names = set(archive.namelist())
-        expected_docs = {
-            "dirpluck/docs/CLI.md": ROOT / "src" / "dirpluck" / "docs" / "CLI.md",
-            "dirpluck/docs/CONFIGURATION.md": ROOT / "src" / "dirpluck" / "docs" / "CONFIGURATION.md",
-            "dirpluck/docs/PYTHON_API.md": ROOT / "src" / "dirpluck" / "docs" / "PYTHON_API.md",
-            "dirpluck/docs/TRUST.md": ROOT / "src" / "dirpluck" / "docs" / "TRUST.md",
-        }
+        expected_docs = packaged_document_sources()
         required = {"dirpluck/__init__.py", *expected_docs}
         missing = sorted(required - names)
         if missing:
@@ -60,18 +81,6 @@ def strip_sdist_root(name: str) -> str:
     return parts[1] if len(parts) == 2 else ""
 
 
-def repository_files_under(directory: str) -> set[str]:
-    root = ROOT / directory
-    return {
-        path.relative_to(ROOT).as_posix()
-        for path in root.rglob("*")
-        if path.is_file()
-        and "__pycache__" not in path.parts
-        and path.suffix not in {".pyc", ".pyo"}
-        and path.name != ".DS_Store"
-    }
-
-
 def check_sdist(path: Path) -> None:
     with tarfile.open(path, "r:gz") as archive:
         members = {strip_sdist_root(member.name): member for member in archive.getmembers()}
@@ -80,11 +89,8 @@ def check_sdist(path: Path) -> None:
             "README.md",
             "GLOSSARY.md",
             "CHANGELOG.md",
-            "docs/CLI.md",
-            "docs/CONFIGURATION.md",
-            "docs/PYTHON_API.md",
-            "docs/SPECIFICATION.md",
-            "docs/TRUST.md",
+            "STATUS.md",
+            *repository_files_under("docs"),
         }
         required = {
             "src/dirpluck/__init__.py",
@@ -95,7 +101,6 @@ def check_sdist(path: Path) -> None:
         required |= repository_files_under("tests")
         required |= repository_files_under("tools")
         required |= repository_files_under("devdocs")
-        required |= repository_files_under("docs")
         missing = sorted(required - names)
         if missing:
             fail(f"sdist is missing required files: {missing}")

@@ -1,6 +1,8 @@
 # dirpluck Trust Model
 
-This document explains the trust boundary for `dirpluck` Configurations, Invocation Templates, and filesystem operations. For exact path resolution, selection, and Output semantics, see [SPECIFICATION.md](SPECIFICATION.md).
+This document explains the trust boundary for `dirpluck` Configurations, Invocation Templates, and filesystem operations. It does not define an automatic safety judgment; it describes what the user is responsible for reviewing.
+
+The Specification defines the compatibility contract. See [Filesystem path notation](specification/paths.md) for path resolution, [Selection and Shared patterns](specification/selection.md) and [Filesystem boundaries and entry types](specification/filesystem.md) for Selection and filesystem entries, [Output](specification/output.md) for write behavior, and [Archive planning](specification/archive.md) for Archive construction.
 
 ## A Configuration is an execution instruction
 

@@ -29,6 +29,9 @@ classifiers = [
 [project.scripts]
 dirpluck = "dirpluck.cli:main"
 
+[dependency-groups]
+docs = ["shikumi-devdoc>=0.3.0"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 include-package-data = false
@@ -38,7 +41,7 @@ where = ["src"]
 include = ["dirpluck*"]
 
 [tool.setuptools.package-data]
-dirpluck = ["docs/CLI.md", "docs/CONFIGURATION.md", "docs/PYTHON_API.md", "docs/TRUST.md"]
+dirpluck = ["docs/CLI.md", "docs/CONFIGURATION.md", "docs/TRUST.md", "docs/python_api/*.md"]
 
 [tool.setuptools.dynamic]
 version = { attr = "dirpluck.__version__" }

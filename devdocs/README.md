@@ -1,98 +1,116 @@
 # dirpluck development documents
 
-`devdocs/` is the repository workspace used to create and verify dirpluck's public documentation. The canonical sources and Japanese intermediate documents stored here are public repository content, but they are not part of dirpluck's runtime API, Configuration interface, or product compatibility contract.
+`devdocs/` is the repository workspace for authoring and validating dirpluck's published documentation. The canonical sources and the realized Japanese canonical documents are public repository artifacts, but they are not part of dirpluck's runtime API, Configuration interface, or product compatibility contract.
 
-When documentation content changes, start from the canonical source in this workspace rather than editing published Markdown as the source of truth.
+When documentation content changes, edit the canonical source in this workspace rather than starting from the published Markdown.
 
-## Structure
+## Layout
 
-`devdocs/` has three main areas.
+`devdocs/` has three main areas:
 
 ```text
 devdocs/
 ├── README.md
-├── canonical_documents/
+├── canonical_sources/
 ├── config/
-└── intermediate_documents/
+└── canonical_documents/
 ```
 
-- `canonical_documents/`: the Python package containing canonical document sources.
+- `canonical_sources/`: Python packages containing the documentation sources of truth.
 - `config/`: repository-local inputs passed to shikumi-devdoc.
-- `intermediate_documents/`: Japanese Markdown realized from the canonical sources.
+- `canonical_documents/`: Japanese Markdown realized from the canonical sources.
 
-`devdocs/README.md` is not an exception. Its canonical source is `canonical_documents/devdocs_readme/canonical.py`, and it follows the same pipeline as the other documents.
+`devdocs/README.md` is managed by the same pipeline. Its canonical source is `canonical_sources/devdocs_readme/canonical.py`.
 
-## Canonical documents
+## Canonical sources
 
-`canonical_documents/` is itself a Python package. Each document purpose has a subpackage containing `canonical.py`. For example, the canonical README source is `canonical_documents/readme/canonical.py`, and the canonical Configuration guide is `canonical_documents/configuration/canonical.py`.
+`canonical_sources/` is a Python package organized by documentation purpose. Single documents use a `canonical.py` source, such as `canonical_sources/readme/canonical.py` for the repository README, `canonical_sources/status/canonical.py` for project status, and `canonical_sources/getting_started/canonical.py` for the first-run walkthrough. Multi-document collections place independent canonical modules directly in their subpackages: the CLI guide uses `canonical_sources/cli/`, the Configuration guide uses `canonical_sources/configuration/`, the Python API uses `canonical_sources/python_api/`, and the Specification uses `canonical_sources/specification/`.
 
-The canonical Vocabulary is `canonical_documents/vocabulary/canonical.py`. The `canonical_documents/terms.py` module is generated from it by the shikumi-devdoc `terms` realization and is shared by the other canonical documents so they can reference the concepts and spelling policy defined by the Vocabulary.
+The canonical Vocabulary is `canonical_sources/vocabulary/canonical.py`. Other canonical sources import canonical term classes from that module directly and use `merge` to bring the required concepts and spelling policy into local scope. There is no generated term-proxy module.
 
-`canonical_documents/__init__.py` does not provide an aggregate API. This package is an import namespace for document realization, not part of dirpluck's official Python API.
+Compact wheel-facing documents have publication-specific canonical sources because their navigation context differs from the repository guides: `canonical_sources/package_cli/`, `canonical_sources/package_configuration/`, and `canonical_sources/package_trust/`. The Python API collection publishes the same content to both repository and package channels, so its canonical sources are realized independently into each publication target.
 
-When shikumi-devdoc imports canonical modules, `devdocs/` is placed on the Python import path. Canonical module names therefore take forms such as `canonical_documents.vocabulary.canonical` and `canonical_documents.readme.canonical`.
+`canonical_sources/__init__.py` deliberately provides no aggregate API. This package is an import namespace for document realization, not an official dirpluck Python API. With the repository root on `sys.path`, canonical modules use dotted paths such as `devdocs.canonical_sources.vocabulary.canonical` and `devdocs.canonical_sources.readme.canonical`.
 
 ## Configuration
 
-`config/context.json` and `config/notice.toml` are repository-side inputs used with the existing shikumi-devdoc interface.
+`config/context.json` and `config/notice.toml` provide repository-local input through shikumi-devdoc's existing interfaces.
 
-- `context.json` is the JSON object snapshot passed through `--context` during rendering. Refresh the current version from `dirpluck.__version__` with `python tools/generate_document_context.py`.
-- `notice.toml` is passed through `--notice` and contains the `[notice].content` required by shikumi-devdoc.
+- `context.json` is the JSON object passed through `--context`. The current version snapshot is refreshed from `dirpluck.__version__` with `python tools/generate_document_context.py`.
+- `notice.toml` is passed through `--notice` and supplies the required `[notice].content`.
 
-Their locations and filenames are repository conventions. This workspace does not redefine shikumi-devdoc's interface for dotted canonical modules, `-o`, `--context`, `--notice`, or `--translation-source`.
+These paths and filenames are repository conventions. They do not redefine shikumi-devdoc's dotted-module, `-o`, `--context`, `--notice`, or `--translation-source` interfaces.
 
-## Intermediate documents
+## Canonical documents
 
-`intermediate_documents/` contains Japanese Markdown realized from the canonical sources with shikumi-devdoc. The canonical sources and intermediate documents are fixed to Japanese, so there is no language-name subdirectory.
+`canonical_documents/` contains Japanese Markdown realized from the canonical sources. Canonical sources and canonical documents are intentionally fixed to Japanese, so no language-name subdirectory is used.
 
-Repository-facing documents mirror their publication paths.
-
-```text
-intermediate_documents/README.md
-intermediate_documents/GLOSSARY.md
-intermediate_documents/CHANGELOG.md
-intermediate_documents/docs/CLI.md
-intermediate_documents/docs/CONFIGURATION.md
-intermediate_documents/docs/PYTHON_API.md
-intermediate_documents/docs/SPECIFICATION.md
-intermediate_documents/docs/TRUST.md
-intermediate_documents/devdocs/README.md
-```
-
-Documents bundled in the Python distribution do not mirror the physical `src/dirpluck/docs/` path. They live under `package/`, which represents the publication channel.
+Repository-facing artifacts mirror their publication paths:
 
 ```text
-intermediate_documents/package/CLI.md
-intermediate_documents/package/CONFIGURATION.md
-intermediate_documents/package/PYTHON_API.md
+canonical_documents/README.md
+canonical_documents/GLOSSARY.md
+canonical_documents/CHANGELOG.md
+canonical_documents/STATUS.md
+canonical_documents/docs/GETTING_STARTED.md
+canonical_documents/docs/cli/INDEX.md
+canonical_documents/docs/cli/*.md
+canonical_documents/docs/configuration/INDEX.md
+canonical_documents/docs/configuration/*.md
+canonical_documents/docs/TRUST.md
+canonical_documents/docs/python_api/INDEX.md
+canonical_documents/docs/python_api/*.md
+canonical_documents/docs/specification/INDEX.md
+canonical_documents/docs/specification/*.md
+canonical_documents/devdocs/README.md
 ```
 
-When one canonical source produces both a repository-facing and package-facing document, each publication target still has its own intermediate artifact.
+Python-distribution documentation uses a separate `package/` publication namespace rather than mirroring the physical `src/dirpluck/docs/` path:
+
+```text
+canonical_documents/package/CLI.md
+canonical_documents/package/CONFIGURATION.md
+canonical_documents/package/TRUST.md
+canonical_documents/package/python_api/INDEX.md
+canonical_documents/package/python_api/*.md
+```
+
+When one canonical source feeds both repository-facing and package-facing publication targets, each target is realized as an independent canonical artifact.
 
 ## Generation and translation
 
 The documentation pipeline is:
 
 ```text
-canonical_documents/vocabulary/canonical.py
-        ↓ shikumi-devdoc terms
-canonical_documents/terms.py
-        ↓
-canonical_documents/*/canonical.py
-        ↓ shikumi-devdoc render --translation-source
-intermediate Japanese Markdown under intermediate_documents/
-        ↓ translation
+canonical_sources/
+        ↓ shikumi-devdoc render document / glossary
+canonical_documents/
+        + render index for document collections
+        ↓ translation / publication
 public English Markdown
 ```
 
-Translation metadata in the intermediate documents carries policies that must survive Markdown realization, such as Vocabulary `preserve_spelling` rules, across the translation boundary. Published English documents omit both that metadata comment and the generated notice.
+Translation metadata in the canonical documents carries policies that must survive Markdown realization, such as Vocabulary terms marked `preserve_spelling`. Published English documents omit the generation notice and translation-metadata comment.
 
-To change meaning, structure, or information content, edit the canonical source, regenerate the intermediate document, and then update the published English document. Do not treat the intermediate document itself as the source of truth.
+A collection `INDEX.md` is translated from the canonical index realized from `order` and `summary`; the published index does not carry extra prose of its own. Explanatory navigation and reading guidance belong in the collection's canonical `overview.md`.
+
+For changes to meaning, structure, or information content, edit the canonical source, regenerate the canonical document, then reflect the same content in the published English document. Do not treat a canonical document as an independently editable source.
+
+Repository-wide generation orchestration stays in the repository-specific `tools/render_canonical_docs.py`. The set of canonical sources, publication targets, index titles, and project context are dirpluck-specific information and are not pushed into shikumi-devdoc's generic API.
+
+```console
+python tools/render_canonical_docs.py
+python tools/render_canonical_docs.py --check
+```
+
+`--check` compares committed canonical documents with a temporary realization and detects drift from their sources of truth.
 
 ## Version control and distribution
 
-Canonical documents, Japanese intermediate documents, and published English documents are all committed to version control so changes can be reviewed from source of truth through publication.
+Canonical sources, Japanese canonical documents, and published English documents are all committed so changes can be reviewed across the full source-to-publication path.
 
-`devdocs/` is included in the source distribution so a release can be used to regenerate and verify its documentation. It is excluded from wheels. Runtime references needed by wheel users are the published English documents bundled under `dirpluck/docs/`.
+`devdocs/` is included in the source distribution so the documentation generation and validation inputs remain available with a release. It is excluded from the wheel. References needed by wheel users are packaged under `dirpluck/docs/`.
 
-The `devdocs/` directory layout and canonical implementation are a repository development surface, not part of dirpluck's product compatibility contract.
+The `devdocs/` directory layout and canonical implementation are repository-development surfaces, not part of dirpluck's product compatibility contract.
+
+Before the GitHub repository is public, dirpluck intentionally has no hosted CI or release workflow. Pre-release tests, canonical-document checks, wheel / sdist builds, metadata and distribution-content checks, and an installed-wheel CLI smoke test are run locally with `python tools/check_release.py`. CI and release workflows will be configured for the public environment when the repository is published on GitHub.

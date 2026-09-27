@@ -3,100 +3,433 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import json
 import re
+import tomllib
 import unittest
 
 from dirpluck import __version__
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INTERMEDIATE_DOCUMENTS = ROOT / "devdocs" / "intermediate_documents"
+CANONICAL_SOURCES = ROOT / "devdocs" / "canonical_sources"
+CANONICAL_DOCUMENTS = ROOT / "devdocs" / "canonical_documents"
+
+SPECIFICATION_DOCUMENTS = {
+    "INDEX.md",
+    "overview.md",
+    "document-selection.md",
+    "configuration-schema.md",
+    "paths.md",
+    "composition.md",
+    "runtime-targets.md",
+    "namespace.md",
+    "selection.md",
+    "filesystem.md",
+    "archive.md",
+    "output.md",
+    "preview.md",
+    "cli-contract.md",
+}
+CONFIGURATION_DOCUMENTS = {
+    "INDEX.md",
+    "overview.md",
+    "sources.md",
+    "selection.md",
+    "composition.md",
+    "output.md",
+    "examples.md",
+}
+CLI_DOCUMENTS = {
+    "INDEX.md",
+    "overview.md",
+    "invocation-templates.md",
+    "targets.md",
+    "output.md",
+}
+PYTHON_API_DOCUMENTS = {
+    "INDEX.md",
+    "overview.md",
+    "run.md",
+    "result.md",
+    "errors.md",
+    "surface.md",
+}
 EXPECTED_DOCUMENTS = {
     "README.md",
     "GLOSSARY.md",
     "CHANGELOG.md",
-    "docs/CLI.md",
-    "docs/PYTHON_API.md",
-    "docs/CONFIGURATION.md",
-    "docs/SPECIFICATION.md",
+    "STATUS.md",
+    "docs/GETTING_STARTED.md",
+    *(f"docs/cli/{name}" for name in CLI_DOCUMENTS),
+    *(f"docs/configuration/{name}" for name in CONFIGURATION_DOCUMENTS),
     "docs/TRUST.md",
     "devdocs/README.md",
     "package/CLI.md",
     "package/CONFIGURATION.md",
-    "package/PYTHON_API.md",
+    "package/TRUST.md",
+    *(f"docs/specification/{name}" for name in SPECIFICATION_DOCUMENTS),
+    *(f"docs/python_api/{name}" for name in PYTHON_API_DOCUMENTS),
+    *(f"package/python_api/{name}" for name in PYTHON_API_DOCUMENTS),
 }
 CANONICAL_SOURCE = re.compile(r"正本は `([^`]+)` です。")
 
 
 class DocumentBuildTests(unittest.TestCase):
-    def test_japanese_intermediate_document_paths_are_canonical(self):
+    def test_japanese_canonical_document_paths_are_canonical(self):
         actual = {
-            path.relative_to(INTERMEDIATE_DOCUMENTS).as_posix()
-            for path in INTERMEDIATE_DOCUMENTS.rglob("*.md")
+            path.relative_to(CANONICAL_DOCUMENTS).as_posix()
+            for path in CANONICAL_DOCUMENTS.rglob("*.md")
         }
         self.assertEqual(actual, EXPECTED_DOCUMENTS)
         self.assertNotIn("USAGE.md", actual)
+        self.assertNotIn("docs/SPECIFICATION.md", actual)
+        self.assertNotIn("docs/PYTHON_API.md", actual)
+        self.assertNotIn("docs/CONFIGURATION.md", actual)
 
-    def test_japanese_intermediate_notices_use_portable_canonical_paths(self):
+    def test_japanese_canonical_document_notices_use_portable_source_paths(self):
         for relative in sorted(EXPECTED_DOCUMENTS):
             with self.subTest(document=relative):
-                text = (INTERMEDIATE_DOCUMENTS / relative).read_text(encoding="utf-8")
+                text = (CANONICAL_DOCUMENTS / relative).read_text(encoding="utf-8")
                 match = CANONICAL_SOURCE.search(text)
                 self.assertIsNotNone(match)
                 canonical = match.group(1)
-                self.assertTrue(canonical.startswith("devdocs/canonical_documents/"), canonical)
+                self.assertTrue(canonical.startswith("devdocs/canonical_sources/"), canonical)
                 self.assertFalse(PurePosixPath(canonical).is_absolute(), canonical)
                 windows_path = PureWindowsPath(canonical)
                 self.assertFalse(windows_path.is_absolute(), canonical)
                 self.assertFalse(windows_path.drive, canonical)
 
-    def test_canonical_documents_use_direct_package_namespace(self):
-        package = ROOT / "devdocs" / "canonical_documents"
-        self.assertTrue((package / "__init__.py").is_file())
-        self.assertTrue((package / "terms.py").is_file())
-        self.assertFalse((package / "dirpluck_docs").exists())
+    def test_canonical_sources_use_direct_vocabulary_references(self):
+        self.assertTrue((ROOT / "devdocs" / "__init__.py").is_file())
+        self.assertTrue((CANONICAL_SOURCES / "__init__.py").is_file())
+        self.assertFalse((CANONICAL_SOURCES / "terms.py").exists())
 
-        for canonical in package.glob("*/canonical.py"):
-            if canonical.parent.name == "vocabulary":
+        for source in CANONICAL_SOURCES.rglob("*.py"):
+            if source.name == "__init__.py" or source.parent.name == "vocabulary":
                 continue
-            text = canonical.read_text(encoding="utf-8")
-            self.assertIn("from canonical_documents import terms", text)
-            self.assertNotIn("dirpluck_docs", text)
+            text = source.read_text(encoding="utf-8")
+            with self.subTest(source=source.relative_to(ROOT).as_posix()):
+                if "{{TERM_" in text:
+                    self.assertIn(
+                        "from devdocs.canonical_sources.vocabulary.canonical import TERMS",
+                        text,
+                    )
+                    self.assertIn("merge @= TERMS.TERM_", text)
+                self.assertNotIn("from canonical_documents import terms", text)
+                self.assertNotIn("vocabulary_refs", text)
+                self.assertNotIn("dirpluck_docs", text)
+
+    def test_vocabulary_uses_canonical_term_classes(self):
+        canonical = (
+            CANONICAL_SOURCES / "vocabulary" / "canonical.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("@vocabulary", canonical)
+        self.assertIn("@canonical_source", canonical)
+        self.assertIn("class TERM_1:", canonical)
+        self.assertNotIn("@term(", canonical)
+        self.assertNotIn("glossary @= True", canonical)
 
     def test_document_context_version_matches_package_version(self):
         context_path = ROOT / "devdocs" / "config" / "context.json"
         context = json.loads(context_path.read_text(encoding="utf-8"))
         self.assertEqual(context, {"version": __version__})
 
+    def test_documentation_tooling_dependency_is_explicit(self):
+        with (ROOT / "pyproject.toml").open("rb") as stream:
+            project = tomllib.load(stream)
+        self.assertEqual(project["project"]["dependencies"], [])
+        self.assertEqual(
+            project["dependency-groups"]["docs"],
+            ["shikumi-devdoc>=0.3.0"],
+        )
+
     def test_vocabulary_does_not_define_current_release_version(self):
         canonical = (
-            ROOT
-            / "devdocs"
-            / "canonical_documents"
-            / "vocabulary"
-            / "canonical.py"
+            CANONICAL_SOURCES / "vocabulary" / "canonical.py"
         ).read_text(encoding="utf-8")
-        self.assertIsNone(re.search(r'@term\("\d+\.\d+\.\d+"\)', canonical))
-
-    def test_packaged_trust_matches_public_trust(self):
-        public = (ROOT / "docs" / "TRUST.md").read_bytes()
-        packaged = (ROOT / "src" / "dirpluck" / "docs" / "TRUST.md").read_bytes()
-        self.assertEqual(packaged, public)
-
-    def test_packaged_python_api_matches_public_python_api(self):
-        public = (ROOT / "docs" / "PYTHON_API.md").read_bytes()
-        packaged = (ROOT / "src" / "dirpluck" / "docs" / "PYTHON_API.md").read_bytes()
-        self.assertEqual(packaged, public)
+        self.assertNotIn("{{0.10.0}}", canonical)
+        self.assertNotRegex(canonical, r'class TERM_\d+:\s+r?["\']{3}\{\{\d+\.\d+\.\d+\}\}')
 
     def test_readme_uses_external_version_context(self):
         canonical = (
-            ROOT
-            / "devdocs"
-            / "canonical_documents"
-            / "readme"
-            / "canonical.py"
+            CANONICAL_SOURCES / "readme" / "canonical.py"
         ).read_text(encoding="utf-8")
         self.assertIn("{{version}}", canonical)
         self.assertNotIn("TERM_11", canonical)
+
+    def test_cli_configuration_specification_and_python_api_are_collections(self):
+        cli_sources = {
+            path.stem
+            for path in (CANONICAL_SOURCES / "cli").glob("*.py")
+            if path.name != "__init__.py"
+        }
+        spec_sources = {
+            path.stem
+            for path in (CANONICAL_SOURCES / "specification").glob("*.py")
+            if path.name != "__init__.py"
+        }
+        api_sources = {
+            path.stem
+            for path in (CANONICAL_SOURCES / "python_api").glob("*.py")
+            if path.name != "__init__.py"
+        }
+        configuration_sources = {
+            path.stem
+            for path in (CANONICAL_SOURCES / "configuration").glob("*.py")
+            if path.name != "__init__.py"
+        }
+        self.assertNotIn("canonical", cli_sources)
+        self.assertNotIn("canonical", spec_sources)
+        self.assertNotIn("canonical", api_sources)
+        self.assertNotIn("canonical", configuration_sources)
+        self.assertGreaterEqual(len(cli_sources), 4)
+        self.assertGreaterEqual(len(spec_sources), 10)
+        self.assertGreaterEqual(len(api_sources), 5)
+        self.assertGreaterEqual(len(configuration_sources), 6)
+
+        for source in [
+            *(CANONICAL_SOURCES / "cli").glob("*.py"),
+            *(CANONICAL_SOURCES / "configuration").glob("*.py"),
+            *(CANONICAL_SOURCES / "specification").glob("*.py"),
+            *(CANONICAL_SOURCES / "python_api").glob("*.py"),
+        ]:
+            if source.name == "__init__.py":
+                continue
+            text = source.read_text(encoding="utf-8")
+            with self.subTest(source=source.relative_to(ROOT).as_posix()):
+                self.assertIn("@summary(", text)
+                self.assertIn("@canonical_source(", text)
+                self.assertRegex(text, r"\border=\d+")
+
+    def test_canonical_sources_use_current_shikumi_devdoc_authoring_contract(self):
+        for source in CANONICAL_SOURCES.rglob("*.py"):
+            if source.name == "__init__.py":
+                continue
+            text = source.read_text(encoding="utf-8")
+            with self.subTest(source=source.relative_to(ROOT).as_posix()):
+                self.assertNotRegex(text, r"(?m)^\s*@title\(")
+                self.assertNotRegex(text, r"(?m)^\s*\w+\s*=\s*code_field\(")
+                if "@canonical_source(" in text:
+                    self.assertRegex(text, r"@canonical_source\([^\n]*heading=[\"'](?:title|identity)[\"']")
+
+        for source in (CANONICAL_SOURCES / "specification").glob("*.py"):
+            if source.name == "__init__.py":
+                continue
+            self.assertIn('heading="identity"', source.read_text(encoding="utf-8"))
+
+    def test_split_specification_has_no_legacy_numbered_section_references(self):
+        legacy_reference = re.compile(r"(?:\d+節|Section\s+\d+)")
+        sources = sorted((CANONICAL_SOURCES / "specification").glob("*.py"))
+        canonical_documents = sorted(
+            (CANONICAL_DOCUMENTS / "docs" / "specification").glob("*.md")
+        )
+        public_documents = sorted((ROOT / "docs" / "specification").glob("*.md"))
+
+        for path in [*sources, *canonical_documents, *public_documents]:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
+                self.assertIsNone(legacy_reference.search(text))
+
+    def test_public_collections_replace_legacy_single_files(self):
+        self.assertFalse((ROOT / "docs" / "CLI.md").exists())
+        self.assertFalse((ROOT / "docs" / "SPECIFICATION.md").exists())
+        self.assertFalse((ROOT / "docs" / "PYTHON_API.md").exists())
+        self.assertFalse((ROOT / "docs" / "CONFIGURATION.md").exists())
+        self.assertTrue((ROOT / "docs" / "cli" / "INDEX.md").is_file())
+        self.assertTrue((ROOT / "docs" / "configuration" / "INDEX.md").is_file())
+        self.assertTrue((ROOT / "docs" / "specification" / "INDEX.md").is_file())
+        self.assertTrue((ROOT / "docs" / "python_api" / "INDEX.md").is_file())
+
+    def test_public_markdown_links_resolve_locally(self):
+        link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+        heading_pattern = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
+
+        def github_fragment(heading: str) -> str:
+            normalized = heading.strip().lower()
+            normalized = "".join(
+                character
+                for character in normalized
+                if character.isalnum() or character in "-_ "
+            )
+            return re.sub(r"\s+", "-", normalized)
+
+        documents = [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
+        checked = 0
+        fragment_checked = 0
+        for document in documents:
+            text = document.read_text(encoding="utf-8")
+            for target in link_pattern.findall(text):
+                if target.startswith(("http://", "https://", "mailto:")):
+                    continue
+                path_part, separator, fragment = target.partition("#")
+                resolved = document if not path_part else (document.parent / path_part).resolve()
+                with self.subTest(document=document.relative_to(ROOT).as_posix(), target=target):
+                    self.assertTrue(resolved.exists(), resolved)
+                    if separator and fragment:
+                        headings = {
+                            github_fragment(match.group(1))
+                            for match in heading_pattern.finditer(
+                                resolved.read_text(encoding="utf-8")
+                            )
+                        }
+                        self.assertIn(fragment, headings)
+                        fragment_checked += 1
+                checked += 1
+        self.assertGreaterEqual(checked, 70)
+        self.assertGreaterEqual(fragment_checked, 20)
+
+    def test_public_collection_indexes_are_index_only(self):
+        indexes = [
+            ROOT / "docs" / "cli" / "INDEX.md",
+            ROOT / "docs" / "configuration" / "INDEX.md",
+            ROOT / "docs" / "specification" / "INDEX.md",
+            ROOT / "docs" / "python_api" / "INDEX.md",
+        ]
+        for index in indexes:
+            lines = [line for line in index.read_text(encoding="utf-8").splitlines() if line]
+            with self.subTest(index=index.relative_to(ROOT).as_posix()):
+                self.assertTrue(lines[0].startswith("# "))
+                self.assertEqual(lines[1], "| Document | Summary |")
+                self.assertEqual(lines[2], "| --- | --- |")
+                self.assertTrue(all(line.startswith("|") for line in lines[1:]))
+
+    def test_public_collection_index_links_match_canonical_indexes(self):
+        collections = ["cli", "configuration", "specification", "python_api"]
+        link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+\.md)\)")
+        for collection in collections:
+            canonical = (
+                CANONICAL_DOCUMENTS / "docs" / collection / "INDEX.md"
+            ).read_text(encoding="utf-8")
+            public = (ROOT / "docs" / collection / "INDEX.md").read_text(
+                encoding="utf-8"
+            )
+            with self.subTest(collection=collection):
+                self.assertEqual(
+                    link_pattern.findall(public),
+                    link_pattern.findall(canonical),
+                )
+
+    def test_packaged_trust_has_publication_specific_canonical_source(self):
+        source = CANONICAL_SOURCES / "package_trust" / "canonical.py"
+        self.assertTrue(source.is_file())
+        canonical = (CANONICAL_DOCUMENTS / "package" / "TRUST.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "devdocs/canonical_sources/package_trust/canonical.py",
+            canonical,
+        )
+        packaged = (ROOT / "src" / "dirpluck" / "docs" / "TRUST.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("docs/TRUST.md", packaged)
+        self.assertIn("docs/specification/INDEX.md", packaged)
+
+    def test_packaged_python_api_matches_public_python_api_collection(self):
+        public_root = ROOT / "docs" / "python_api"
+        packaged_root = ROOT / "src" / "dirpluck" / "docs" / "python_api"
+        public = {
+            path.relative_to(public_root).as_posix(): path.read_bytes()
+            for path in public_root.rglob("*.md")
+        }
+        packaged = {
+            path.relative_to(packaged_root).as_posix(): path.read_bytes()
+            for path in packaged_root.rglob("*.md")
+        }
+        self.assertEqual(packaged, public)
+
+    def test_package_trust_points_to_source_distribution_specification(self):
+        packaged = (ROOT / "src" / "dirpluck" / "docs" / "TRUST.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("docs/specification/INDEX.md", packaged)
+        self.assertNotIn("SPECIFICATION.md", packaged)
+
+    def test_specification_uses_stable_rule_nodes_and_semantic_fields(self):
+        seen: set[str] = set()
+        for source in sorted((CANONICAL_SOURCES / "specification").glob("*.py")):
+            if source.name == "__init__.py":
+                continue
+            text = source.read_text(encoding="utf-8")
+            rule_ids = set(re.findall(r"\bclass (SPEC_\d{3}):", text))
+            with self.subTest(source=source.relative_to(ROOT).as_posix()):
+                self.assertTrue(rule_ids)
+                self.assertIn("level @=", text)
+                self.assertFalse(seen & rule_ids, seen & rule_ids)
+            seen.update(rule_ids)
+
+        self.assertGreaterEqual(len(seen), 150)
+
+    def test_public_specification_exposes_the_same_rule_identities(self):
+        source_ids: set[str] = set()
+        for source in (CANONICAL_SOURCES / "specification").glob("*.py"):
+            source_ids.update(re.findall(r"\bclass (SPEC_\d{3}):", source.read_text(encoding="utf-8")))
+
+        public_ids: set[str] = set()
+        for document in (ROOT / "docs" / "specification").glob("*.md"):
+            public_ids.update(re.findall(r"^#{2,} (SPEC_\d{3})$", document.read_text(encoding="utf-8"), re.MULTILINE))
+
+        self.assertEqual(public_ids, source_ids)
+
+    def test_public_specification_exposes_the_same_section_identities(self):
+        source_ids: set[str] = set()
+        for source in (CANONICAL_SOURCES / "specification").glob("*.py"):
+            source_ids.update(
+                re.findall(r"\bclass (SECTION_\d+):", source.read_text(encoding="utf-8"))
+            )
+
+        public_ids: set[str] = set()
+        for document in (ROOT / "docs" / "specification").glob("*.md"):
+            public_ids.update(
+                re.findall(
+                    r"^#{2,} (SECTION_\d+)$",
+                    document.read_text(encoding="utf-8"),
+                    re.MULTILINE,
+                )
+            )
+
+        self.assertEqual(public_ids, source_ids)
+
+    def test_public_specification_preserves_rule_levels(self):
+        rendered_levels = {
+            "MUST": "MUST",
+            "MUST_NOT": "MUST NOT",
+            "SHOULD": "SHOULD",
+            "SHOULD_NOT": "SHOULD NOT",
+            "MAY": "MAY",
+            "INFORMATIVE": "INFORMATIVE",
+        }
+        source_levels: dict[str, str] = {}
+        for source in (CANONICAL_SOURCES / "specification").glob("*.py"):
+            text = source.read_text(encoding="utf-8")
+            for rule_id, level_name in re.findall(
+                r"class (SPEC_\d{3}):.*?\n\s+level @= ([A-Z_]+)",
+                text,
+                re.DOTALL,
+            ):
+                source_levels[rule_id] = rendered_levels[level_name]
+
+        public_levels: dict[str, str] = {}
+        for document in (ROOT / "docs" / "specification").glob("*.md"):
+            text = document.read_text(encoding="utf-8")
+            for match in re.finditer(
+                r"^#{2,} (SPEC_\d{3})$.*?^level: ([A-Z ]+)$",
+                text,
+                re.MULTILINE | re.DOTALL,
+            ):
+                public_levels[match.group(1)] = match.group(2)
+
+        self.assertEqual(public_levels, source_levels)
+
+    def test_python_api_examples_use_test_target_fields(self):
+        api_root = CANONICAL_SOURCES / "python_api"
+        combined = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(api_root.glob("*.py"))
+            if path.name != "__init__.py"
+        )
+        self.assertNotRegex(combined, r"(?m)^\s*\w+\s*=\s*code_field\(")
+        self.assertGreaterEqual(combined.count("test_target_field("), 10)
+        self.assertIn("```python", combined)
 
 
 if __name__ == "__main__":
