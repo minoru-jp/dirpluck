@@ -36,27 +36,27 @@
 
 ## Pluck
 
-`[pluck]` は、今回の実行で選ばれた **directory** 対象から何を取り出すかを定義します。Source path 自体は持たず、Target はスコープと CLI Target reference から解決します。`target_kind = "file"` の Scope から得た file Target は atomic source であり、Pluck は適用しません。
+`[pluck]` は、今回の実行で選ばれた **directory** 対象から何を取り出すかを定義します。Source path 自体は持たず、Target はスコープと CLI Target reference から解決します。`target_kind = "file"` または `"both"` の Scope から得た file Target は atomic source であり、Pluck は適用しません。
 
 ```toml
 [pluck]
 description = "The submission currently being reviewed."
-must = ["documents", "metadata.json"]
-may = ["attachments"]
+must = ["documents/", "metadata.json"]
+may = ["attachments/"]
 ignore = [".git/", "__pycache__/", "*.pyc"]
 ```
 
-同じ実行で複数 directory Target を選んだ場合も、各 directory Target へ同じ pluck selection を独立して適用します。File Target と directory Target は同じ実行で併用できます。Pluck がない Configuration でも file-kind Scope の file Target は positional Target reference から選択できますが、directory Target は選択できません。
+同じ実行で複数 directory Target を選んだ場合も、各 directory Target へ同じ pluck selection を独立して適用します。File Target と directory Target は同じ実行で併用できます。Pluck がない Configuration でも `target_kind = "file"` または `"both"` の Scope から file Target は positional Target reference で選択できますが、directory Target は選択できません。
 
 ## Scope
 
 スコープは Target を探す場所です。常設の default Scope と、必要に応じて追加する名前付き Scope を使えます。
 
-Default Scope は常に存在し、ルート設定ファイルがある directory を探索 root とします。`[scope]` table は default Scope の optional `description` / `target_kind` / `ignore` / `namespace` を設定するために使い、`path` は書きません。`target_kind` は `"directory"` または `"file"` で、既定は `"directory"` です。`[scope]` を省略した場合、または空の `[scope]` を書いた場合は directory Target、description なし、`ignore = []`、Namespace なしという従来動作になります。Base Configuration に書いた `[scope]` は、その Configuration 自身を Root として使う場合だけ有効で、outer Root の default Scope へ継承されません。
+Default Scope は常に存在し、ルート設定ファイルがある directory を探索 root とします。`[scope]` table は default Scope の optional `description` / `target_kind` / `ignore` / `namespace` を設定するために使い、`path` は書きません。`target_kind` は `"directory"` / `"file"` / `"both"` のいずれかで、既定は `"directory"` です。`[scope]` を省略した場合、または空の `[scope]` を書いた場合は directory Target、description なし、`ignore = []`、Namespace なしという従来動作になります。Base Configuration に書いた `[scope]` は、その Configuration 自身を Root として使う場合だけ有効で、outer Root の default Scope へ継承されません。
 
 ```toml
 [scope]
-ignore = ["archive", "tmp-*"]
+ignore = ["archive/", "tmp-*/"]
 ```
 
 名前付き Scope は `path` を持ちます。
@@ -64,29 +64,34 @@ ignore = ["archive", "tmp-*"]
 ```toml
 [scope.work]
 path = "../work"
-ignore = ["archive", "tmp-*"]
+ignore = ["archive/", "tmp-*/"]
 
 [scope.oss]
 path = "/srv/oss"
-ignore = ["old-*"]
+ignore = ["old-*/"]
 ```
 
-`target_kind = "directory"` の Scope は直下の eligible directory だけを Target candidate とし、`target_kind = "file"` の Scope は直下の eligible regular file だけを Target candidate とします。Directory と file を同じ Scope で混在 Target として扱いません。`ignore` は現在の `target_kind` に応じた direct-child Target candidate の name を除外します。File selection の `pluck.ignore` とは役割が違います。`description` はその Scope から得た Target の Archive README context として使います。
+`target_kind = "directory"` の Scope は直下の eligible directory だけ、`target_kind = "file"` は直下の eligible regular file だけ、`target_kind = "both"` はその両方を Target candidate とします。`target_kind` は Scope 直下の entry に対する type filter として働きます。Scope `ignore` は除外側の規則として広く扱い、末尾 `/` なしは matching file / directory Target candidate の両方、末尾 `/` ありは directory candidate だけを除外します。File selection の `pluck.ignore` とは役割が違います。`description` はその Scope から得た Target の Archive README context として使います。
 
-CLI Target reference は、single Target と全展開に加え、file-kind Scope だけで使える selector を持ちます。
+CLI Target reference は、single Target と全展開に加え、すべての `target_kind` で使える Target selector を持ちます。
 
 ```text
-NAME                  -> default Scope から1 Target
-SCOPE/NAME            -> named Scope から1 Target
-/                     -> default Scope の全 Target
-SCOPE/                -> named Scope の全 Target
-:[name-a/name-b]      -> default file-kind Scope の literal list
-SCOPE:[name-a/name-b] -> named file-kind Scope の literal list
-:<regex>              -> default file-kind Scope の regular-expression selector
-SCOPE:<regex>         -> named file-kind Scope の regular-expression selector
+NAME                    -> default Scope の file Target
+./NAME                  -> default Scope の file Target (explicit form)
+./NAME/                 -> default Scope の directory Target
+SCOPE/NAME              -> named Scope の file Target
+SCOPE/NAME/             -> named Scope の directory Target
+/                       -> default Scope の全 Target
+SCOPE/                  -> named Scope の全 Target
+:[...]                  -> default Scope の typed literal Target list
+SCOPE:[...]             -> named Scope の typed literal Target list
+:<regex>                -> default Scope の regular-expression Target selector
+SCOPE:<regex>           -> named Scope の regular-expression Target selector
 ```
 
-全展開は Scope の `target_kind` に対応する direct child だけを対象とし、再帰しません。Directory mode では eligible directory、file mode では eligible regular file を展開します。File selector も direct-child regular file だけを対象とし、Scope `ignore` と link-like exclusion を適用した eligible candidate から選びます。`[...]` の内部は `/` 区切りの literal file name、`<...>` は basename 全体へ full-match する Python-compatible regular expression です。Regular-expression selector は空 pattern、`/`、512 character 超、invalid regex、0件 match を error とします。
+Literal Target reference は末尾 `/` なしを file、末尾 `/` ありを directory とし、filesystem から型を推測しません。`SCOPE/` は Scope expansion に予約されるため、default Scope の directory Target は `./NAME/` と書きます。全展開は Scope の `target_kind` に対応する direct child だけを対象とし、再帰しません。Directory mode では eligible directory、file mode では eligible regular file、both mode ではその両方を展開します。
+
+`[...]` の list item も同じ型規則を使います。`/` は item separator でもあるため、途中の directory item は `project//archive.zip` のように directory marker と separator が `//` になります。3連以上の `/` は error です。`<...>` は file candidate を `NAME`、directory candidate を `NAME/` と正規化した文字列全体へ Python-compatible regular expression を full-match します。`/?` などで両型を明示的に選べます。Pattern は空にできず、512 character 超、invalid regex、0件 match を error とします。
 
 Base chain では名前付き Scope だけを名前ごとに重ね、同名 Scope は `description` / `target_kind` / `path` / `ignore` / `namespace` を含む definition 全体として外側の Configuration が置き換え、異名 Scope は共存します。Default Scope は base から継承せず、常に root Configuration に属します。したがって Base の `[scope]` metadata / policy は outer Root では使用されませんが、その Base Configuration 自身を Root として使う場合には通常どおり有効です。名前付き Scope の root は定義元 Configuration を基準にした場所のままで rebase しません。
 

@@ -29,7 +29,9 @@ class SECTION_001:
 
         Named Invocation は root Invocation の差分ではなく独立しているため、選択した entry 自身の内容を確認してください。`config` の relative path は runtime cwd ではなく Invocation Template file 自身の directory を基準に解決し、`.dirpluck` suffix は省略できます。`config` を省略した場合は runtime cwd の `default.dirpluck` を使用します。CLI の `-i PATH` 自体は relative path なら runtime cwd 基準です。Configuration / Invocation Template document を選択・参照する path は host OS の通常の filesystem semantics に従うため、symbolic link / Windows directory junction を介した document も参照できます。Relative reference は選択した document path の directory を基準にするため、実行前に path と参照先の内容を確認してください。Invocation Template は Configuration の filesystem access capability を増やすものではありませんが、どの Configuration と Target を実行するかを選ぶため、信頼できない Template を無確認で実行しないでください。
 
-        File-kind Scope の regular-expression selector は Python-compatible regular expression を direct-child file name に適用します。File content や recursive path へ適用するものではなく pattern length も制限しますが、backtracking 型 regular expression は pattern と file name の組み合わせによって CPU time を大きく消費する可能性があります。第三者由来の Invocation Template の `targets` に `:<...>` / `SCOPE:<...>` が含まれる場合は、他の実行指示と同様に pattern を確認してから実行してください。
+        Regular-expression Target selector は Python-compatible regular expression を eligible direct-child Target の normalized name に適用します。File は `NAME`、directory は `NAME/` として照合し、`/` を pattern に含めても recursive path へ探索範囲を広げません。Pattern length も制限しますが、backtracking 型 regular expression は pattern と Target name の組み合わせによって CPU time を大きく消費する可能性があります。第三者由来の Invocation Template の `targets` に `:<...>` / `SCOPE:<...>` が含まれる場合は、他の実行指示と同様に pattern を確認してから実行してください。
+
+        Configuration の Selection では `{ match = "..." }` によって Selection root 配下の root-relative path 全体へ Python-compatible regular expression を適用できます。この form は通常の guided Selection pattern より広く filesystem tree を走査する場合があり、regular expression 自体の backtracking cost も加わり得ます。第三者由来の Configuration では、他の `must` / `may` / `ignore` と同様に `match` の内容も実行指示の一部として確認してください。
         """
         title @= 'Invocation Template も実行指示です'
 
@@ -48,7 +50,7 @@ class SECTION_001:
 
     class SECTION_004:
         r"""
-        Directory を `must` / `may` で選ぶと、その配下の regular file / directory が収集候補になります。`ignore` は name pattern に加えて Selection root からの `./...` concrete path reference も使え、dirpluck がその entry を selection 対象として扱わない明示指示として、link-like / special entry の種類による診断より優先します。Directory name ignore または directory path reference に一致した subtree は内部へ入る前に枝刈りし、ignored entry は skipped-link count や特殊 entry の diagnostic にも使いません。認識した non-ignored symbolic link / Windows directory junction は選択も traversal もせず Archive に含めません。FIFO、socket、device などその他の non-regular entry も Archive に含めません。`must` がそのような特殊 entry だけに一致した場合は理由付き error、`may` では optional missing とします。Hidden file、repository metadata、environment file、key material などを filename や内容から推論して自動 ignore することはありません。
+        Directory を `must` / `may` で選ぶと、その配下の regular file / directory が収集候補になります。`ignore` は name pattern、Selection root からの `./...` concrete path reference、root-relative path 全体へ適用する structured `{ match = "..." }` を使え、dirpluck がその entry を selection 対象として扱わない明示指示として、link-like / special entry の種類による診断より優先します。Directory name ignore、directory path reference、または directory path に一致する structured `match` の subtree は内部へ入る前に枝刈りし、ignored entry は skipped-link count や特殊 entry の diagnostic にも使いません。認識した non-ignored symbolic link / Windows directory junction は選択も traversal もせず Archive に含めません。FIFO、socket、device などその他の non-regular entry も Archive に含めません。`must` がそのような特殊 entry だけに一致した場合は理由付き error、`may` では optional missing とします。Hidden file、repository metadata、environment file、key material などを filename や内容から推論して自動 ignore することはありません。
 
         Selection traversal 中に non-ignored link-like entry を認識して除外した場合、CLI の `--preview` と通常 build は除外件数を注記します。個々の path は列挙せず、ignored entry と `ignore` で走査前に枝刈りされた subtree 内の entry は count しません。
 

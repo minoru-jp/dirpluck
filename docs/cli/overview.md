@@ -12,15 +12,15 @@ dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--
 dirpluck --version
 ```
 
-If the selected Effective Configuration has a Pluck, continue to supply one or more `TARGET` references. Without a Pluck, positional references are still allowed for file-kind Scopes. Directory Targets require Pluck. An Always-only Configuration may still run without positional arguments.
+If the selected Effective Configuration has a Pluck, continue to supply one or more `TARGET` references. Without a Pluck, positional references may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck. An Always-only Configuration may still run without positional arguments.
 
 ```console
-dirpluck example
-dirpluck work/project-a work/project-b
+dirpluck ./example/
+dirpluck work/project-a/ work/project-b/
 dirpluck --config snapshot
 ```
 
-Target references keep the existing `NAME`, `SCOPE/NAME`, `/`, and `SCOPE/` forms. File-kind Scopes additionally support literal-list selectors `:[...]` / `SCOPE:[...]` and regular-expression selectors `:<...>` / `SCOPE:<...>`. Every form selects Targets from a Scope.
+Target references use literal references, Scope expansion, and Target selectors. A literal reference without a trailing `/` denotes a file, while a trailing `/` denotes a directory. Default-Scope directories use `./NAME/`; named-Scope directories use `SCOPE/NAME/`. `/` / `SCOPE/` expand a Scope, `:[...]` / `SCOPE:[...]` are typed literal-list selectors, and `:<...>` / `SCOPE:<...>` are regular-expression Target selectors. Every form selects Targets from a Scope.
 
 ## Selecting a Configuration
 
@@ -29,9 +29,9 @@ Configuration documents use TOML syntax but the filename extension is `.dirpluck
 Select any other Configuration explicitly with `--config PATH`. `PATH` uses the same `/`-separator notation as a filesystem location. A relative path is resolved from the runtime cwd, while an absolute path is resolved on the host filesystem. If the path does not end in `.dirpluck`, that suffix is appended, so document names containing dots can be used directly. Use `/`, not `\`, as the CLI path separator even on Windows.
 
 ```console
-dirpluck example --config review
-dirpluck example --config configs/release-1.2
-dirpluck example --config ../shared/review.dirpluck
+dirpluck ./example/ --config review
+dirpluck ./example/ --config configs/release-1.2
+dirpluck ./example/ --config ../shared/review.dirpluck
 ```
 
 When `--config` is supplied, dirpluck uses only the single Configuration document named by that path. It does not search another directory for a file with the same name, and it does not accept a directory and complete it with `default.dirpluck`. Configuration document paths follow the host OS's normal filesystem semantics, including paths that contain symbolic links or Windows directory junctions. dirpluck retains the selected path's absolute spelling as the document location, and relative paths inside that document are anchored to that location's directory. It does not infer Configuration candidates from file contents, automatically select or enumerate arbitrary `*.dirpluck` files, or fall back to `.toml` Configuration files.

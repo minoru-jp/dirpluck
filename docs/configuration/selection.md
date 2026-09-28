@@ -8,7 +8,11 @@ This guide explains Selection authoring. Exact pattern grammar and validation ar
 
 Directory-Target Pluck, Always sources, and Cases each contain an independent Selection. A Selection uses `must`, `may`, `ignore`, and optionally `allow_empty`; use `description` only when you want to attach a human-readable explanation. File Targets are atomic sources and do not contain a Selection.
 
-Selection patterns and the regular-expression selector for file-kind Scopes intentionally use different pattern languages. `must`, `may`, and `ignore` use a restricted path/name pattern language so directory-tree traversal and exclusion stay predictable. By contrast, the `<...>` selector for a file-kind Scope uses a Python-compatible regular expression only as an optional way to further filter the basenames of already-eligible direct-child files. See [Targets and Cases](../cli/targets.md) for regular-expression selector syntax.
+Ordinary Selection strings and Scope regular-expression Target selectors intentionally use different pattern languages. Ordinary `must` / `may` strings use restricted path patterns for predictable directory traversal, while ordinary `ignore` strings use restricted name patterns. When a Selection needs more expressive matching, a `{ match = "..." }` inline table can apply a Python-compatible regular expression to a full root-relative path below the Selection root. The Scope `<...>` Target selector also uses a Python-compatible regular expression, but only to filter normalized names of already-eligible direct-child Targets. These differences are intentional. See [Targets and Cases](../cli/targets.md) for Target-selector syntax.
+
+When an inclusion entry reference could denote either a file or a directory, dirpluck does not infer the type from the filesystem. Ordinary `must` / `may` strings use no trailing `/` for a file and a trailing `/` for a directory on the final component. Intermediate components are directories by construction because traversal continues through them. Structured `match` paths are likewise type-explicit: files have no trailing `/`, while directories do.
+
+`ignore` is intentionally broad on the exclusion side. Ordinary ignore strings and concrete path references without a trailing `/` exclude matching files and directories; a trailing `/` narrows the exclusion to directories only. Use structured `match` when an exclusion must be file-only.
 
 ### `description`
 
@@ -28,7 +32,7 @@ Candidates that are required to exist and are included when present.
 must = ["report.pdf", "data/*.csv"]
 ```
 
-If a pattern matches nothing, the Selection does not succeed.
+If a pattern matches nothing, the Selection does not succeed. The final component without a trailing `/` requires a file; a trailing `/` requires a directory. For example, write `src/` when selecting that directory.
 
 ### `may`
 
@@ -38,11 +42,37 @@ Candidates that are included when present but whose absence is not an error.
 may = ["generated/*.pdf", "coverage.xml"]
 ```
 
-`must` and `may` can be used together in one Selection.
+`must` and `may` can be used together in one Selection. The final-component type notation is the same as for `must`. If a `may` entry has no match of the requested type but the same pattern matches an entry of the opposite type, it remains optional missing rather than becoming an error. Dirpluck records a source-labelled non-fatal diagnostic suggesting the relevant trailing-`/` adjustment; the CLI prints it as a warning in both normal builds and `--preview`, and the Python API returns it in `RunResult.warnings`. The diagnostic does not change `may` semantics. The same mismatch on `must` remains an unsatisfied error in a normal build, while `--preview` keeps it missing and also reports the type-marker hint as a warning.
+
+### `{ match = "..." }`
+
+When ordinary string patterns are not expressive enough, `must`, `may`, and `ignore` can contain a `{ match = "..." }` inline table. Its value is a Python-compatible regular expression applied with full-match semantics to the **entire root-relative path** of entries below the Selection root.
+
+```toml
+must = [
+    "src/",
+    { match = 'packages/(core|ui)/dist/.*\.whl' },
+]
+```
+
+Paths always use `/` as the separator, regardless of the host OS. A regular file is matched as a path such as `src/main.py`; a regular directory is matched as `src/package/`, with a trailing `/` only for directories. This lets the regular expression distinguish files from directories or deliberately match both, for example with a suffix such as `/?`. The Selection root itself is not a `match` candidate.
+
+A `must` match must find at least one non-ignored selectable entry; a `may` match may find none. If one expression matches several entries, all of them are selected. Matching a directory has the same meaning as selecting a directory with an ordinary pattern: its subtree is collected subject to `ignore`. If ordinary patterns and `match` entries ultimately select the same file, the Archive still contains that file only once.
+
+The same form is available in `ignore`. Matching a directory path there prunes that directory subtree.
+
+```toml
+ignore = [
+    { match = 'build/' },
+    { match = 'src/.*\.tmp' },
+]
+```
+
+A structured `match` may scan a broad portion of the Selection root to test candidate paths. Dirpluck does not need to infer an optimized traversal route from the regular expression. Ordinary string patterns remain the simpler choice for straightforward path selection; use `match` when its added expressiveness is useful. A `match` expression must be non-empty, no longer than 512 characters, and valid as a Python-compatible regular expression.
 
 ### `ignore`
 
-Use `ignore` for entries that should not be plucked from areas already selected as candidates by `must` or `may`. A normal string continues to match a file or directory **name**.
+Use `ignore` for entries that should not be plucked from areas already selected as candidates by `must` or `may`. A normal string continues to match a file or directory **name**. To exclude by a regular expression over a full root-relative path, use the structured `{ match = "..." }` form described above.
 
 ```toml
 ignore = [
@@ -65,9 +95,9 @@ ignore = [
 ]
 ```
 
-For Pluck, `./` means the current Target root. For an Always source, it means that Always source root. A trailing `/` marks a directory path; without the trailing `/`, the reference is a file path. Dirpluck does not infer file-versus-directory meaning from the current filesystem state. Path references must stay inside the Selection root and do not accept `..`, absolute paths, globs, or backslashes.
+For Pluck, `./` means the current Target root. For an Always source, it means that Always source root. Without a trailing `/`, a concrete path reference excludes either a file or a directory at that path; if it is a directory, its subtree is excluded as well. A trailing `/` narrows the exclusion to a directory only. Path references must stay inside the Selection root and do not accept `..`, absolute paths, globs, or backslashes.
 
-Name patterns, Shared ignore references, and path references are combined as one set of exclusion conditions. It is valid for several conditions to match the same entry. A directory matching either a directory name ignore or a directory path reference is excluded before traversal, and its contents are not inspected. Evaluation order is not part of the semantics.
+Ordinary name patterns follow the same broad-exclusion rule: without a trailing `/` they exclude matching files and directories, while a trailing `/` narrows the exclusion to directories. Name patterns, Shared ignore references, path references, and structured `match` entries are combined as one set of exclusion conditions. It is valid for several conditions to match the same entry. Any name ignore, path reference, or structured `match` that matches a directory excludes that directory before traversal, and its contents are not inspected. Evaluation order is not part of the semantics.
 
 `ignore` takes precedence over diagnostics based on an entry's filesystem type: once an entry is ignored, it is treated as handled rather than as evidence for a symbolic-link, Windows-junction, or special-entry diagnostic. A `must` pattern that matches only ignored entries therefore fails as an ordinary unsatisfied `must`.
 
@@ -89,16 +119,16 @@ When the same pattern set is used by multiple Selections, define it as a named S
 
 ```toml
 [shared.must]
-project = ["src", "pyproject.toml"]
+project = ["src/", "pyproject.toml"]
 
 [shared.may]
-docs = ["README.md", "docs"]
+docs = ["README.md", "docs/"]
 
 [shared.ignore]
 python-noise = ["__pycache__/", "*.pyc"]
 ```
 
-A normal string in a Selection array is a direct pattern. In `must` and `may`, a one-element nested array is a Shared reference. In `ignore`, a one-element nested array is a Shared reference when it contains a plain name, or a Selection-relative path reference when the string begins with `./`.
+A normal string in a Selection array is a direct pattern, while `{ match = "..." }` is a direct structured match. In `must` and `may`, a one-element nested array is a Shared reference. In `ignore`, a one-element nested array is a Shared reference when it contains a plain name, or a Selection-relative path reference when the string begins with `./`. Shared pattern sets may themselves contain direct strings and `{ match = "..." }` entries, but they cannot nest Shared references or path references.
 
 ```toml
 [pluck]
@@ -118,7 +148,7 @@ ignore = [
 
 The referenced namespace is determined by the field containing the reference. `must = [["project"]]` refers to `shared.must.project`; references in `may` use `shared.may`; `ignore = [["python-noise"]]` refers to `shared.ignore.python-noise`. Only an `ignore` nested-array string beginning with `./`, such as `ignore = [["./tests/fixtures/"]]`, refers to a Selection-relative path instead of the Shared namespace.
 
-Nested arrays such as `[]`, `["a", "b"]`, and `[123]` are invalid references. In `must` and `may`, nested arrays are reserved for Shared references. `ignore` reserves the `./` prefix inside a nested array for path references, without changing the syntax of ordinary direct-string patterns.
+Nested arrays such as `[]`, `["a", "b"]`, and `[123]` are invalid references. In `must` and `may`, nested arrays are reserved for Shared references. `ignore` reserves the `./` prefix inside a nested array for path references, without changing the syntax of ordinary direct-string patterns or structured `match` entries.
 
 See [Specification](../specification/INDEX.md) for name resolution and duplicate validation along a base chain.
 ## Cases
@@ -128,15 +158,15 @@ Use a Case to provide another complete Selection for the same source.
 ```toml
 [pluck]
 description = "Normal review."
-must = ["documents", "metadata.json"]
+must = ["documents/", "metadata.json"]
 
 [pluck.case.audit]
 description = "Audit review."
-must = ["documents", "metadata.json", "records"]
+must = ["documents/", "metadata.json", "records/"]
 ```
 
 ```console
-dirpluck acme --case audit
+dirpluck ./acme/ --case audit
 ```
 
 A Case is not a delta applied to the base Selection. Write all required `must`, `may`, `ignore`, Shared references, and `allow_empty` values in the Case itself.

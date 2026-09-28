@@ -4,21 +4,21 @@ This page explains positional Target references, Scope expansion, and Case selec
 
 ## Specifying Targets
 
-A positional `TARGET` resolves either a directory or a regular file according to the Scope's `target_kind`. The effective Pluck selection is applied independently to each directory Target. A file Target is included as an atomic file and does not use Pluck.
+A positional `TARGET` resolves a directory, a regular file, or either kind according to the Scope's `target_kind`. The effective Pluck selection is applied independently to each directory Target. A file Target is included as an atomic file and does not use Pluck.
 
-To select one Target from the always-present default Scope, supply only the direct-child entry name. Whether that entry must be a directory or a regular file is determined by the Scope's `target_kind`. The default Scope always uses the directory containing the Root Configuration file as its root. Moving the Configuration to another directory therefore moves the default Scope with it; define a named Scope when a different Target root is needed.
-
-```console
-dirpluck acme contoso
-```
-
-To select from a named Scope, use `<scope>/<name>`.
+Literal Target references declare the entry type in the syntax. No trailing `/` means file; a trailing `/` means directory. Dirpluck does not infer that type from the current filesystem. In the default Scope, `NAME` or `./NAME` denotes a file and `./NAME/` denotes a directory. `NAME/` is reserved for named-Scope expansion, so default-Scope directories use the explicit `./` form. The default Scope always uses the directory containing the Root Configuration file as its root.
 
 ```console
-dirpluck work/acme
+dirpluck ./acme/ ./contoso/
 ```
 
-`work/acme` selects only `acme` directly under Scope `work`. If Scope `work` is undefined, the command fails instead of falling back to another relative-path interpretation.
+In a named Scope, `<scope>/<name>` denotes a file and `<scope>/<name>/` denotes a directory.
+
+```console
+dirpluck work/acme/
+```
+
+`work/acme/` selects only directory `acme/` directly under Scope `work`. If Scope `work` is undefined, the command fails instead of falling back to another relative-path interpretation. A syntax-declared type that the Scope's `target_kind` does not permit is also an error. If a literal Target requests one type but an entry of the other type exists at the same name, the error diagnostic suggests adding or removing the trailing `/`.
 
 To select every eligible Target directly under a Scope, use an expansion form.
 
@@ -27,29 +27,31 @@ dirpluck /
 dirpluck work/
 ```
 
-`/` expands the default Scope, while `work/` expands named Scope `work`. `/` does not mean the filesystem root. With `target_kind = "directory"`, expansion includes only eligible direct-child directories. With `target_kind = "file"`, it includes only eligible direct-child regular files. Expansion is never recursive, and candidates matching the Scope's `ignore` are removed. A missing named-Scope path does not affect a run that does not use that Scope.
+`/` expands the default Scope, while `work/` expands named Scope `work`. `/` does not mean the filesystem root. With `target_kind = "directory"`, expansion includes only eligible direct-child directories. With `target_kind = "file"`, it includes only eligible direct-child regular files. With `target_kind = "both"`, it includes both. Expansion is never recursive, and candidates matching the Scope's `ignore` are removed. A missing named-Scope path does not affect a run that does not use that Scope.
 
-File-kind Scopes can also select direct-child file Targets with selector syntax. `[...]` is a literal file-name list whose items are separated by `/`. Only the first `[` and final `]` are selector syntax; brackets and other characters inside an item are treated as part of the literal file name.
-
-```console
-dirpluck 'returned:[repo-a.zip/repo-b.zip]'
-```
-
-`<...>` is a regular-expression selector. It uses a Python-compatible regular expression and matches the complete basename of each eligible direct-child file rather than searching for a substring. The pattern must be non-empty, contain no `/`, and be no more than 512 characters. Invalid regular expressions and selectors that match no eligible files are errors.
-
-This regular-expression syntax is intentionally separate from the pattern language used by `must`, `may`, and `ignore` in Pluck and Always selections. Selection patterns control predictable traversal through a directory tree; a regular-expression selector only performs additional filtering over eligible direct-child file names. See [Configuration selection](../configuration/selection.md) for the Selection pattern language.
+Target selectors are available with every `target_kind`. `[...]` is a typed literal Target list. Each item uses the same type rule: no trailing `/` means file and a trailing `/` means directory. `/` is also the item separator, so a non-final directory item naturally produces two consecutive slashes: one directory marker and one separator. Three or more consecutive slashes are invalid. Only the outermost `[` and `]` are selector syntax; brackets and similar characters inside an item remain ordinary Target-name characters.
 
 ```console
-dirpluck 'returned:<repo-[0-9]+\.zip>'
+dirpluck 'work:[repo-a//repo-b.zip]'
 ```
 
-For a default file-kind Scope, use `:[a.zip/b.zip]` or `:<.*\.zip>`. For a named file-kind Scope, use forms such as `returned:[a.zip/b.zip]` or `returned:<.*\.zip>`. Selector syntax is valid only when that Scope has `target_kind = "file"`; using it with a directory-kind Scope is an error. Scope `ignore` and link-like-entry exclusion are applied before a selector evaluates the eligible files.
+The example selects directory `repo-a/` and file `repo-b.zip`.
+
+`<...>` is a regular-expression selector. Eligible direct-child files are matched as `NAME`, while directories are matched as `NAME/`. The Python-compatible regular expression is applied to that complete normalized name with full-match semantics. Therefore `<repo>` selects a file, `<repo/>` selects a directory, and `<repo/?>` can select either type explicitly. The pattern must be non-empty and no more than 512 characters. Invalid regular expressions and selectors that match no eligible Targets are errors. `/` may appear in the expression, but candidate discovery remains limited to direct children of the Scope and is never recursive.
+
+This regular-expression Target selector has a different role from ordinary Selection strings. Ordinary Selection strings control predictable directory traversal and name-based exclusion; when needed, Selection also provides `{ match = "..." }` for regular expressions over full root-relative paths. By contrast, a `<...>` Target selector only performs additional filtering over normalized eligible direct-child Target names. See [Configuration selection](../configuration/selection.md) for ordinary Selection patterns and structured `match`.
+
+```console
+dirpluck 'work:<repo-.*/?>'
+```
+
+For the default Scope, forms such as `:[file-a/dir-b/]` and `:<regex>` are available. For a named Scope, use forms such as `work:[file-a/dir-b/]` and `work:<regex>`. Selector syntax is valid with `target_kind = "directory"`, `"file"`, or `"both"`. The Scope type filter, `ignore`, and link-like-entry exclusion determine the eligible Targets before the selector is applied. In `both` mode, directory results use Pluck while file results remain atomic sources.
 
 When invoking dirpluck from a shell, quote the entire selector reference so the shell does not interpret `[]`, `<>`, or regular-expression metacharacters.
 
-`./`, `./acme`, `/acme`, `work/team/acme`, and absolute filesystem paths are not accepted as Target references.
+`./` by itself, `/acme`, `work/team/acme`, and absolute filesystem paths are not accepted as Target references. `./acme` and `./acme/` are valid explicit default-Scope file and directory forms, respectively.
 
-A Configuration without a Pluck may still use Target references from file-kind Scopes. Directory Targets require Pluck. An Always-only Configuration can continue to run without positional Target arguments.
+A Configuration without a Pluck may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck. An Always-only Configuration can continue to run without positional Target arguments.
 
 ```console
 dirpluck --config project-snapshot
@@ -62,7 +64,7 @@ For Scope and `ignore` definitions, see [Configuration guide](../configuration/I
 Select a named Case with `--case NAME`.
 
 ```console
-dirpluck acme --case audit
+dirpluck ./acme/ --case audit
 ```
 
 Only one Case can be selected per run. [Specification](../specification/INDEX.md) defines how Pluck and Always sources select Cases.

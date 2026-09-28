@@ -36,7 +36,7 @@ class CLI_PART:
         """
         title @= 'Preview'
 
-        example_011 @= "dirpluck acme --preview"
+        example_011 @= "dirpluck ./acme/ --preview"
 
         merge @= TERMS.TERM_1
 
@@ -54,7 +54,7 @@ class CLI_PART:
         """
         title @= 'Archive index の source path'
 
-        example_012 @= "dirpluck acme --paths"
+        example_012 @= "dirpluck ./acme/ --paths"
 
         merge @= TERMS.TERM_1
         merge @= TERMS.TERM_10
@@ -88,13 +88,13 @@ class CLI_PART:
         title @= 'Runtime Output'
 
         example_013 @= """
-        dirpluck acme --here
-        dirpluck acme --here=context.zip
+        dirpluck ./acme/ --here
+        dirpluck ./acme/ --here=context.zip
         """
 
         example_014 @= """
-        dirpluck acme -o artifacts/context.zip
-        dirpluck acme -o artifacts/snapshots/
+        dirpluck ./acme/ -o artifacts/context.zip
+        dirpluck ./acme/ -o artifacts/snapshots/
         """
 
         merge @= TERMS.TERM_1
@@ -138,9 +138,9 @@ class CLI_PART:
         title @= 'Archive entry の mtime'
 
         example_016 @= """
-        dirpluck example --archive-mtime 2026-01-01T00:00:00
+        dirpluck ./example/ --archive-mtime 2026-01-01T00:00:00
         dirpluck -i release --archive-mtime zip-epoch
-        dirpluck example --archive-mtime now
+        dirpluck ./example/ --archive-mtime now
         """
 
         merge @= TERMS.TERM_1

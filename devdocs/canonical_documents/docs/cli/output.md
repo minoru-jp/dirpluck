@@ -39,7 +39,7 @@ Configuration 側の Output authoring は `../configuration/output.md`、厳密�
 `--preview` は Archive file を作らず、解決した ZIP contents を tree として表示します。
 
 ```console
-dirpluck acme --preview
+dirpluck ./acme/ --preview
 ```
 
 Configuration や workspace を変更した後、実際に Archive を書き込む前の確認に使えます。通常実行との差分は書き込みで、base chain、Scope / Target、Case、selection、archive planning の主要な解決処理は共通です。`--preview` は root Configuration に Output declaration がなくても使用できます。Output を解決・書き込みしないため、`--here` / `--output` / `--force` / `--sequence` とは組み合わせません。
@@ -53,7 +53,7 @@ Selection traversal で non-ignored symbolic link / Windows directory junction �
 Source filesystem path も各 source section へ含めたい場合だけ `--paths` を指定します。
 
 ```console
-dirpluck acme --paths
+dirpluck ./acme/ --paths
 ```
 
 `--paths` は各 source section に解決済み source filesystem path を追加します。Directory source では directory path、file Target では file path を表示します。Absolute path を含む local filesystem 情報を Archive に残し得るため、外部へ配布する Archive では必要性を確認して使用してください。
@@ -65,8 +65,8 @@ dirpluck acme --paths
 現在の cwd へ書き出す場合は `--here` を使います。
 
 ```console
-dirpluck acme --here
-dirpluck acme --here=context.zip
+dirpluck ./acme/ --here
+dirpluck ./acme/ --here=context.zip
 ```
 
 `--here` だけなら cwd に automatic timestamp filename を生成します。明示 filename は `--here=FILENAME` の形で `=` に続けて指定し、directory component は受理しません。Path を指定する場合は `--output` を使います。`-h` は `--help` の short option として保持し、`--here` に short option はありません。
@@ -74,8 +74,8 @@ dirpluck acme --here=context.zip
 任意の runtime path へ書き出す場合は `-o PATH` / `--output PATH` を使います。
 
 ```console
-dirpluck acme -o artifacts/context.zip
-dirpluck acme -o artifacts/snapshots/
+dirpluck ./acme/ -o artifacts/context.zip
+dirpluck ./acme/ -o artifacts/snapshots/
 ```
 
 末尾 `/` がない `PATH` は exact output file path、末尾 `/` がある `PATH` は output directory です。Directory form では automatic timestamp filename をその directory 直下へ生成します。Filesystem の既存状態から file / directory を推測せず、directory marker は OS にかかわらず `/` です。Relative `PATH` は runtime cwd を基準にします。Backslash は path separator として受理しません。
@@ -101,9 +101,9 @@ dirpluck --config project-snapshot --sequence 2
 `--archive-mtime VALUE` は、生成する ZIP のすべての entry に1個の共通 timestamp を設定します。Configuration の `[output]` / `[output.timestamp]` には保存せず、CLI または Invocation Template の runtime policy として指定します。
 
 ```console
-dirpluck example --archive-mtime 2026-01-01T00:00:00
+dirpluck ./example/ --archive-mtime 2026-01-01T00:00:00
 dirpluck -i release --archive-mtime zip-epoch
-dirpluck example --archive-mtime now
+dirpluck ./example/ --archive-mtime now
 ```
 
 `VALUE` は次のいずれかです。

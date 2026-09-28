@@ -8,7 +8,12 @@ from typing import Mapping
 
 @dataclass(frozen=True)
 class ExclusionPattern:
-    """One simple case-sensitive name filter for selected source contents."""
+    """One simple case-sensitive name filter for selected source contents.
+
+    ``directory`` is true only when the spelling explicitly ends in ``/``.
+    A false value is intentionally broad for ignore semantics and may match
+    either a file or a directory name.
+    """
 
     raw: str
     value: str
@@ -17,7 +22,12 @@ class ExclusionPattern:
 
 @dataclass(frozen=True)
 class PathExclusion:
-    """One concrete Selection-root-relative path excluded from one source tree."""
+    """One concrete Selection-root-relative path excluded from one source tree.
+
+    ``directory`` is true only when the spelling explicitly ends in ``/``.
+    Without that marker the concrete ignore is intentionally broad and may
+    refer to either an existing file or directory.
+    """
 
     raw: str
     path: str
@@ -25,11 +35,24 @@ class PathExclusion:
 
 @dataclass(frozen=True)
 class TargetIgnorePattern:
-    """One simple case-sensitive direct-child Target name filter."""
+    """One simple case-sensitive direct-child Target exclusion filter.
+
+    ``directory`` is true only when the spelling explicitly ends in ``/``.
+    Without that marker the filter intentionally applies to both file and
+    directory Targets.
+    """
 
     raw: str
     value: str
     match: str
+    directory: bool
+
+
+@dataclass(frozen=True)
+class MatchPattern:
+    """One full-path regular-expression Selection matcher."""
+
+    raw: str
 
 @dataclass(frozen=True)
 class SharedReference:
@@ -41,18 +64,18 @@ class SharedReference:
 class SharedPatterns:
     """Named reusable pattern sets split by Selection role."""
 
-    must: Mapping[str, tuple[str, ...]]
-    may: Mapping[str, tuple[str, ...]]
-    ignore: Mapping[str, tuple[ExclusionPattern, ...]]
+    must: Mapping[str, tuple[str | MatchPattern, ...]]
+    may: Mapping[str, tuple[str | MatchPattern, ...]]
+    ignore: Mapping[str, tuple[ExclusionPattern | MatchPattern, ...]]
 
 @dataclass(frozen=True)
 class SelectionDefinition:
     """One parsed Selection whose Shared references are not yet materialized."""
 
     description: str | None
-    must: tuple[str | SharedReference, ...]
-    may: tuple[str | SharedReference, ...]
-    ignore: tuple[ExclusionPattern | PathExclusion | SharedReference, ...]
+    must: tuple[str | MatchPattern | SharedReference, ...]
+    may: tuple[str | MatchPattern | SharedReference, ...]
+    ignore: tuple[ExclusionPattern | PathExclusion | MatchPattern | SharedReference, ...]
     allow_empty: bool
 
 @dataclass(frozen=True)
@@ -60,9 +83,9 @@ class Selection:
     """One effective Selection with every Shared reference materialized."""
 
     description: str | None
-    must: tuple[str, ...]
-    may: tuple[str, ...]
-    ignore: tuple[ExclusionPattern | PathExclusion, ...]
+    must: tuple[str | MatchPattern, ...]
+    may: tuple[str | MatchPattern, ...]
+    ignore: tuple[ExclusionPattern | PathExclusion | MatchPattern, ...]
     allow_empty: bool
 
 @dataclass(frozen=True)

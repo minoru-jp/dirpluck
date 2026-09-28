@@ -60,12 +60,12 @@ Configuration はひとつの最終 Archive intent を表します。実行時�
 ```toml
 [pluck]
 description = "The project currently under review."
-may = ["README.md", "src", "tests"]
+may = ["README.md", "src/", "tests/"]
 ignore = [".git/", "__pycache__/", "*.pyc"]
 allow_empty = true
 
 [scope]
-ignore = ["archive", "tmp-*"]
+ignore = ["archive/", "tmp-*/"]
 
 [always.guidelines]
 path = "review-guidelines"

@@ -70,9 +70,10 @@ def _parser() -> argparse.ArgumentParser:
         nargs="*",
         metavar="TARGET",
         help=(
-            "Target reference: NAME (default Scope), SCOPE/NAME (named Scope), "
-            "/ (all in default Scope), SCOPE/ (all in named Scope), or for file-kind "
-            "Scopes :[NAMES] / SCOPE:[NAMES] and :<REGEX> / SCOPE:<REGEX>; "
+            "Target reference: NAME or ./NAME (default file), ./NAME/ (default directory), "
+            "SCOPE/NAME (named file), SCOPE/NAME/ (named directory), "
+            "/ or SCOPE/ (Scope expansion), :[...] / SCOPE:[...] (literal Target lists), "
+            "or :<REGEX> / SCOPE:<REGEX> (regular-expression Target selectors); "
             "one or more required when [pluck] is defined"
         ),
     )
@@ -230,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
             output=selected_output,
             force=args.force,
         )
+        for warning in result.warnings:
+            print(f"dirpluck: warning: {warning}", file=sys.stderr)
         if args.preview:
             print(result.preview_text)
         else:

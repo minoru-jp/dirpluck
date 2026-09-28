@@ -7,7 +7,7 @@ This page covers preview, optional source paths in the generated Archive README,
 `--preview` shows the resolved ZIP contents as a tree without creating an Archive file.
 
 ```console
-dirpluck acme --preview
+dirpluck ./acme/ --preview
 ```
 
 Use it after changing a Configuration or workspace to inspect the result before writing an Archive. The difference from a normal run is the write itself; the main resolution path for the base chain, Scope and Target handling, Cases, selection, and archive planning is shared. `--preview` can be used even when the selected Root Configuration has no Output declaration. Because preview does not resolve or write an Output, it cannot be combined with `--here`, `--output`, `--force`, or `--sequence`. If Selection traversal excludes non-ignored entries recognized as symbolic links or Windows directory junctions, the number skipped is reported as a note after the tree; individual paths are not listed. Entries matched by `ignore` are not included in that count. See [Specification](../specification/INDEX.md) and [Trust model](../TRUST.md) for exact preview and link-like-entry semantics.
@@ -19,7 +19,7 @@ By default, the generated Archive README is a compact index in which each final 
 Specify `--paths` only when source filesystem paths should also appear in each source section.
 
 ```console
-dirpluck acme --paths
+dirpluck ./acme/ --paths
 ```
 
 `--paths` adds the resolved source filesystem path to each source section: a directory path for directory sources and a file path for file Targets. Because this can leave local filesystem information such as absolute paths in the Archive, consider whether it is needed when the Archive will be distributed externally.
@@ -31,8 +31,8 @@ A normal build can temporarily choose its Output destination from the CLI. When 
 Use `--here` to write under the current runtime cwd.
 
 ```console
-dirpluck acme --here
-dirpluck acme --here=context.zip
+dirpluck ./acme/ --here
+dirpluck ./acme/ --here=context.zip
 ```
 
 `--here` alone creates an automatic timestamp filename in the cwd. An explicit filename is supplied only in the `--here=FILENAME` form with `=`; directory components are not accepted. Use `--output` when a path is needed. `-h` remains the short option for `--help`, so `--here` has no short form.
@@ -40,8 +40,8 @@ dirpluck acme --here=context.zip
 Use `-o PATH` / `--output PATH` to choose any runtime output path.
 
 ```console
-dirpluck acme -o artifacts/context.zip
-dirpluck acme -o artifacts/snapshots/
+dirpluck ./acme/ -o artifacts/context.zip
+dirpluck ./acme/ -o artifacts/snapshots/
 ```
 
 A `PATH` without trailing `/` is an exact output file path. A `PATH` ending in `/` is an output directory, and an automatic timestamp filename is generated directly beneath it. dirpluck does not infer file versus directory form from existing filesystem state. `/` is the directory marker on every OS, relative paths are resolved from the runtime cwd, and backslash is not accepted as a path separator.
@@ -67,9 +67,9 @@ dirpluck --config project-snapshot --sequence 2
 `--archive-mtime VALUE` assigns one common timestamp to every entry written to the ZIP. It is a runtime policy supplied by the CLI or an Invocation Template, not a field in Configuration `[output]` or `[output.timestamp]`.
 
 ```console
-dirpluck example --archive-mtime 2026-01-01T00:00:00
+dirpluck ./example/ --archive-mtime 2026-01-01T00:00:00
 dirpluck -i release --archive-mtime zip-epoch
-dirpluck example --archive-mtime now
+dirpluck ./example/ --archive-mtime now
 ```
 
 `VALUE` is one of:

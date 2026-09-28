@@ -16,18 +16,18 @@ from dirpluck.cli import main
 CONFIG = '''
 [pluck]
 description = "Default development target."
-must = ["src"]
+must = ["src/"]
 
 [pluck.case.review]
 description = "Review target."
-must = ["tests"]
+must = ["tests/"]
 
 [scope]
 
 [always.framework]
 path = "framework"
 description = "Fixed framework."
-must = ["src"]
+must = ["src/"]
 
 [output]
 path = "result.zip"
@@ -64,7 +64,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app"])
+                    result = main(["./app/"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -169,7 +169,7 @@ class CliTests(unittest.TestCase):
                     redirect_stderr(stderr),
                     self.assertRaises(SystemExit) as caught,
                 ):
-                    main(["app"])
+                    main(["./app/"])
             finally:
                 os.chdir(previous)
 
@@ -186,7 +186,7 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            app_two = root / "app-two"
+            app_two = root / "./app-two/"
             (app_two / "src").mkdir(parents=True)
             (app_two / "tests").mkdir()
             (app_two / "src" / "app.py").write_text("APP = 2\n", encoding="utf-8")
@@ -195,7 +195,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "app-two"])
+                    result = main(["./app/", "./app-two/"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -209,7 +209,7 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            app_two = root / "app-two"
+            app_two = root / "./app-two/"
             (app_two / "src").mkdir(parents=True)
             (app_two / "tests").mkdir()
             (app_two / "src" / "app.py").write_text("APP = 2\n", encoding="utf-8")
@@ -218,7 +218,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "app-two", "--case", "review"])
+                    result = main(["./app/", "./app-two/", "--case", "review"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -257,7 +257,7 @@ class CliTests(unittest.TestCase):
             config.write_text(textwrap.dedent('''
                 [pluck]
                 description = "Default development target."
-                must = ["src"]
+                must = ["src/"]
 
                 [output]
                 path = "result.zip"
@@ -266,7 +266,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--config", ".dirpluck/default"])
+                    result = main(["./app/", "--config", ".dirpluck/default"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -283,7 +283,7 @@ class CliTests(unittest.TestCase):
                 try:
                     os.chdir(root)
                     with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                        main(["app"])
+                        main(["./app/"])
                 finally:
                     os.chdir(previous)
                 self.assertEqual(caught.exception.code, 2)
@@ -301,7 +301,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app"])
+                    main(["./app/"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
@@ -317,7 +317,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app"])
+                    result = main(["./app/"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -331,7 +331,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--case", "review"])
+                    result = main(["./app/", "--case", "review"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -352,7 +352,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--paths"])
+                    result = main(["./app/", "--paths"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -370,7 +370,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "--case", "release"])
+                    main(["./app/", "--case", "release"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
@@ -422,7 +422,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["documents"])
+                    main(["./documents/"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
@@ -456,11 +456,11 @@ class CliTests(unittest.TestCase):
                 [always.documents]
                 path = "documents"
                 description = "Current documents."
-                must = ["current"]
+                must = ["current/"]
 
                 [always.documents.case.archive]
                 description = "Archived documents."
-                must = ["current", "archive"]
+                must = ["current/", "archive/"]
 
                 [always.assets]
                 path = "assets"
@@ -491,7 +491,7 @@ class CliTests(unittest.TestCase):
     def test_case_option_cannot_be_repeated(self):
         stderr = StringIO()
         with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-            main(["app", "--case", "review", "--case", "release"])
+            main(["./app/", "--case", "review", "--case", "release"])
         self.assertEqual(caught.exception.code, 2)
         self.assertIn("--case may be specified at most once", stderr.getvalue())
 
@@ -500,7 +500,7 @@ class CliTests(unittest.TestCase):
             with self.subTest(value=value):
                 stderr = StringIO()
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "--sequence", value])
+                    main(["./app/", "--sequence", value])
                 self.assertEqual(caught.exception.code, 2)
                 self.assertIn("integer greater than or equal to 1", stderr.getvalue())
 
@@ -528,7 +528,7 @@ class CliTests(unittest.TestCase):
     def test_sequence_option_cannot_be_repeated(self):
         stderr = StringIO()
         with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-            main(["app", "--sequence", "1", "--sequence", "2"])
+            main(["./app/", "--sequence", "1", "--sequence", "2"])
         self.assertEqual(caught.exception.code, 2)
         self.assertIn("--sequence may be specified at most once", stderr.getvalue())
 
@@ -549,7 +549,7 @@ class CliTests(unittest.TestCase):
                 os.chdir(root)
                 preview_output = StringIO()
                 with redirect_stdout(preview_output):
-                    result = main(["app", "--preview"])
+                    result = main(["./app/", "--preview"])
                 self.assertEqual(result, 0)
                 self.assertIn(
                     "Note: 2 link-like filesystem entries (symbolic links or Windows junctions) "
@@ -560,7 +560,7 @@ class CliTests(unittest.TestCase):
 
                 build_output = StringIO()
                 with redirect_stdout(build_output):
-                    result = main(["app"])
+                    result = main(["./app/"])
                 self.assertEqual(result, 0)
                 self.assertIn(
                     "Note: 2 link-like filesystem entries (symbolic links or Windows junctions) "
@@ -581,8 +581,8 @@ class CliTests(unittest.TestCase):
             manifest = root / "default.dirpluck"
             manifest.write_text(
                 manifest.read_text(encoding="utf-8").replace(
-                    'must = ["src"]',
-                    'must = ["src"]\nignore = ["linked.py"]',
+                    'must = ["src/"]',
+                    'must = ["src/"]\nignore = ["linked.py"]',
                 ),
                 encoding="utf-8",
             )
@@ -599,13 +599,13 @@ class CliTests(unittest.TestCase):
                 os.chdir(root)
                 preview_output = StringIO()
                 with redirect_stdout(preview_output):
-                    result = main(["app", "--preview"])
+                    result = main(["./app/", "--preview"])
                 self.assertEqual(result, 0)
                 self.assertNotIn("link-like filesystem", preview_output.getvalue())
 
                 build_output = StringIO()
                 with redirect_stdout(build_output):
-                    result = main(["app"])
+                    result = main(["./app/"])
                 self.assertEqual(result, 0)
                 self.assertNotIn("link-like filesystem", build_output.getvalue())
                 with zipfile.ZipFile(root / "result.zip") as archive:
@@ -624,7 +624,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(stdout):
-                    result = main(["app", "--preview"])
+                    result = main(["./app/", "--preview"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -642,6 +642,69 @@ class CliTests(unittest.TestCase):
                 ]),
             )
 
+
+    def test_wrong_type_may_diagnostic_is_reported_for_preview_and_build(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "src" / "main.py").write_text("x", encoding="utf-8")
+            (root / "app" / "README.md").write_text("readme", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent('''
+                    [pluck]
+                    must = ["README.md"]
+                    may = ["src"]
+
+                    [output]
+                    path = "result.zip"
+                    overwrite = false
+                '''),
+                encoding="utf-8",
+            )
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                for arguments in (["./app/", "--preview"], ["./app/"]):
+                    stderr = StringIO()
+                    with redirect_stdout(StringIO()), redirect_stderr(stderr):
+                        result = main(arguments)
+                    self.assertEqual(result, 0)
+                    self.assertIn("dirpluck: warning:", stderr.getvalue())
+                    self.assertIn("directory 'src/' exists", stderr.getvalue())
+                    self.assertIn("add a trailing '/'", stderr.getvalue())
+            finally:
+                os.chdir(previous)
+
+
+    def test_wrong_type_must_diagnostic_is_reported_during_preview(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "src" / "main.py").write_text("x", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    '''
+                    [pluck]
+                    must = ["src"]
+                    '''
+                ),
+                encoding="utf-8",
+            )
+            previous = Path.cwd()
+            stdout = StringIO()
+            stderr = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    result = main(["./app/", "--preview"])
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(result, 0)
+            self.assertIn("src [missing]", stdout.getvalue())
+            self.assertIn("dirpluck: warning: target: file pattern 'src' did not match", stderr.getvalue())
+            self.assertIn("add a trailing '/'", stderr.getvalue())
+
     def test_paths_can_be_combined_with_preview_without_changing_tree_output(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
@@ -651,7 +714,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(stdout):
-                    result = main(["app", "--preview", "--paths"])
+                    result = main(["./app/", "--preview", "--paths"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -669,7 +732,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--preview"])
+                    result = main(["./app/", "--preview"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -682,11 +745,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 0)
         text = stdout.getvalue()
         normalized = " ".join(text.split())
-        self.assertIn("NAME (default Scope)", normalized)
-        self.assertIn("SCOPE/NAME (named Scope)", normalized)
-        self.assertIn("/ (all in default Scope)", normalized)
-        self.assertIn("SCOPE/ (all in named Scope)", normalized)
-        self.assertIn(":[NAMES] / SCOPE:[NAMES]", normalized)
+        self.assertIn("NAME or ./NAME (default file)", normalized)
+        self.assertIn("./NAME/ (default directory)", normalized)
+        self.assertIn("SCOPE/NAME (named file)", normalized)
+        self.assertIn("SCOPE/NAME/ (named directory)", normalized)
+        self.assertIn("/ or SCOPE/ (Scope expansion)", normalized)
+        self.assertIn(":[...] / SCOPE:[...]", normalized)
         self.assertIn(":<REGEX> / SCOPE:<REGEX>", normalized)
         self.assertIn("--preview", text)
         self.assertNotIn("--dry-run", text)
@@ -706,7 +770,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--config", "review"])
+                    result = main(["./app/", "--config", "review"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -747,7 +811,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--config", "release-1.2"])
+                    result = main(["./app/", "--config", "release-1.2"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -763,7 +827,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--config", "review"])
+                    result = main(["./app/", "--config", "review"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -785,7 +849,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--config", ".dirpluck/review"])
+                    result = main(["./app/", "--config", ".dirpluck/review"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -797,7 +861,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
                 case = "review"
             """), encoding="utf-8")
             previous = Path.cwd()
@@ -819,7 +883,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "set-2.1.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
             """), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -836,7 +900,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
             """), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -855,7 +919,7 @@ class CliTests(unittest.TestCase):
             invocation.parent.mkdir()
             invocation.write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
             """), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -905,7 +969,7 @@ class CliTests(unittest.TestCase):
             invocation.parent.mkdir()
             invocation.write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
             """), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -923,13 +987,13 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "default.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["missing"]
+                targets = ["./missing/"]
             """), encoding="utf-8")
             previous = Path.cwd()
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app"])
+                    result = main(["./app/"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -940,10 +1004,10 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
 
                 [invocation.review]
-                targets = ["app"]
+                targets = ["./app/"]
                 case = "review"
             """), encoding="utf-8")
             previous = Path.cwd()
@@ -965,7 +1029,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation.review]
-                targets = ["app"]
+                targets = ["./app/"]
                 case = "review"
             """), encoding="utf-8")
             previous = Path.cwd()
@@ -1016,7 +1080,7 @@ class CliTests(unittest.TestCase):
             """), encoding="utf-8")
             (root / "library.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation.named]
-                targets = ["unused"]
+                targets = ["./unused/"]
             """), encoding="utf-8")
             stdout = StringIO()
             previous = Path.cwd()
@@ -1067,7 +1131,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
             """), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -1088,7 +1152,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
                 case = "missing"
             """), encoding="utf-8")
             previous = Path.cwd()
@@ -1117,7 +1181,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
             """), encoding="utf-8")
             stdout = StringIO()
             previous = Path.cwd()
@@ -1137,7 +1201,7 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
             """), encoding="utf-8")
             previous = Path.cwd()
             try:
@@ -1261,7 +1325,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(stdout):
-                    result = main(["app", "-o", "artifacts/out.zip"])
+                    result = main(["./app/", "-o", "artifacts/out.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -1286,7 +1350,7 @@ class CliTests(unittest.TestCase):
                     ),
                     redirect_stdout(StringIO()),
                 ):
-                    result = main(["app", "--here"])
+                    result = main(["./app/", "--here"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -1301,7 +1365,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "--here=context.zip"])
+                    result = main(["./app/", "--here=context.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -1312,7 +1376,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "--here=nested/context.zip"])
+                    main(["./app/", "--here=nested/context.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
@@ -1332,7 +1396,7 @@ class CliTests(unittest.TestCase):
                     ),
                     redirect_stdout(StringIO()),
                 ):
-                    result = main(["app", "--output", "artifacts/"])
+                    result = main(["./app/", "--output", "artifacts/"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -1368,7 +1432,7 @@ class CliTests(unittest.TestCase):
                     redirect_stdout(StringIO()),
                 ):
                     result = main(
-                        ["app", "--output", "runtime/", "--sequence", "4"]
+                        ["./app/", "--output", "runtime/", "--sequence", "4"]
                     )
             finally:
                 os.chdir(previous)
@@ -1403,7 +1467,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "-o", "runtime/exact.zip"])
+                    result = main(["./app/", "-o", "runtime/exact.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -1422,7 +1486,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    result = main(["app", "-o", "runtime.zip"])
+                    result = main(["./app/", "-o", "runtime.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
@@ -1440,8 +1504,8 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    self.assertEqual(main(["app", "-o", "runtime.zip", "-f"]), 0)
-                    self.assertEqual(main(["app", "--force"]), 0)
+                    self.assertEqual(main(["./app/", "-o", "runtime.zip", "-f"]), 0)
+                    self.assertEqual(main(["./app/", "--force"]), 0)
             finally:
                 os.chdir(previous)
             with zipfile.ZipFile(runtime) as archive:
@@ -1459,7 +1523,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "-o", "runtime.zip"])
+                    main(["./app/", "-o", "runtime.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
@@ -1482,7 +1546,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "-o", r"artifacts\out.zip"])
+                    main(["./app/", "-o", r"artifacts\out.zip"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
@@ -1497,7 +1561,7 @@ class CliTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-                    main(["app", "-o", "out.zip", "--sequence", "2"])
+                    main(["./app/", "-o", "out.zip", "--sequence", "2"])
             finally:
                 os.chdir(previous)
             self.assertEqual(caught.exception.code, 2)
@@ -1516,7 +1580,7 @@ class CliTests(unittest.TestCase):
             (root / "default.dirpluck").write_text(textwrap.dedent(f'''
                 [pluck]
                 description = "Projects."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope.work]
                 path = {projects.as_posix()!r}

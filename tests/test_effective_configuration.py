@@ -50,7 +50,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [output]
                 path = "derived.zip"
             '''))
-            plan = plan_archive(config, BuildRequest.create("base/project"))
+            plan = plan_archive(config, BuildRequest.create("base/project/"))
             self.assertEqual(tuple(plan.entries), ("project/outer.txt",))
 
     def test_unresolved_shared_reference_is_rejected_after_composition(self):
@@ -66,7 +66,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 path = "out.zip"
             '''))
             with self.assertRaisesRegex(ConfigurationError, "unknown Shared pattern set"):
-                resolve_sources(config, BuildRequest.create("project"))
+                resolve_sources(config, BuildRequest.create("./project/"))
 
     def test_shared_expansion_rejects_duplicate_effective_patterns(self):
         with resolved_temporary_directory() as temp:
@@ -83,7 +83,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 path = "out.zip"
             '''))
             with self.assertRaisesRegex(ConfigurationError, "duplicate effective pattern"):
-                resolve_sources(config, BuildRequest.create("project"))
+                resolve_sources(config, BuildRequest.create("./project/"))
 
     def test_only_four_target_reference_forms_are_accepted(self):
         invalid = ("./", "/project", "work/project/extra", "work//project", "C:/project")
@@ -116,7 +116,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 description = "P."
                 must = ["file.txt"]
                 [scope]
-                ignore = ["tmp-*"]
+                ignore = ["tmp-*/"]
                 [output]
                 path = "out.zip"
             '''))
@@ -141,7 +141,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            source = resolve_sources(config, BuildRequest.create("project"))[0]
+            source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.namespace, "base")
             self.assertEqual(source.source_root, "project")
             self.assertEqual(source.archive_root, "base/project")
@@ -160,7 +160,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 path = "out.zip"
             '''))
             with self.assertRaisesRegex(ConfigurationError, "unknown Namespace 'missing'"):
-                resolve_sources(config, BuildRequest.create("project"))
+                resolve_sources(config, BuildRequest.create("./project/"))
 
     def test_unknown_always_namespace_reference_is_rejected(self):
         with resolved_temporary_directory() as temp:
@@ -203,7 +203,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            sources = resolve_sources(config, BuildRequest.create("docs", "work/docs"))
+            sources = resolve_sources(config, BuildRequest.create("./docs/", "work/docs/"))
             self.assertEqual(
                 {source.archive_root for source in sources},
                 {"local/docs", "work/docs"},
@@ -225,7 +225,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 path = "out.zip"
             '''))
             with self.assertRaisesRegex(SelectionError, "both resolve to 'docs'"):
-                resolve_sources(config, BuildRequest.create("docs", "work/docs"))
+                resolve_sources(config, BuildRequest.create("./docs/", "work/docs/"))
 
     def test_outer_timestamp_boundary_conflicts_with_ancestor_timestamp(self):
         with resolved_temporary_directory() as temp:
@@ -441,7 +441,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [output]
                 path = "derived.zip"
             '''))
-            plan = plan_archive(config, BuildRequest.create("project", case="audit"))
+            plan = plan_archive(config, BuildRequest.create("./project/", case="audit"))
             self.assertIn("project/outer.txt", plan.entries)
             self.assertIn("Outer audit.", plan.readme)
 

@@ -18,11 +18,11 @@
 
 dirpluck の現在の開発段階、互換性方針、および 1.0 へ向けた判断基準を示します。
 
-0.12.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 では runtime Output と公開文書体系を現在の設計へ揃えました。以後はこの公開面を実運用で検証しながら、互換性を積極的に維持します。
+0.13.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 では runtime Output と公開文書体系を現在の設計へ揃えました。以後はこの公開面を実運用で検証しながら、互換性を積極的に維持します。
 
 ## 現在のステータス
 
-現在の公開 version 系列は `0.12.x`、開発段階は **Beta** です。
+現在の公開 version 系列は `0.13.x`、開発段階は **Beta** です。
 
 Beta 期間は公開 interface を自由に作り直すための期間ではありません。Configuration、CLI、公式 Python API、Archive semantics を現在の設計で継続利用できることを実運用の中で確認し、必要な改善を可能な限り additive に行います。
 
@@ -31,6 +31,8 @@ Beta 期間は公開 interface を自由に作り直すための期間ではあ�
 0.10.0 以降、公開された Configuration language、CLI、公式 Python API、Archive semantics の破壊的変更は重大な理由がある場合を除いて行いません。
 
 重大な理由には、維持することで正確性・安全性・中核的な設計整合性を損なう欠陥などが含まれます。通常の機能追加や改善は additive に行い、既存 interface を置き換える必要が生じた場合は、可能な限り deprecation と移行期間を設けます。
+
+`0.13.0` ではこの例外として、include Selection と Target reference で filesystem entry の file / directory 型を filesystem から暗黙推論していた初期設計を修正し、末尾 `/` による明示型へ統一しました。`ignore` は除外規則として安全側に広く扱い、末尾 `/` なしを file / directory の両方、末尾 `/` ありを directory-only とする従来の広い除外意味を維持します。この破壊的変更の移行方法は CHANGELOG に記録します。この例外によって、以後の互換性方針を緩めるものではありません。
 
 一方、generated Archive README、診断 message など、人間が読むことを主目的とした生成出力の exact wording / formatting は安定した machine-readable interface とはみなしません。可読性や明瞭性の改善に伴い、これらの書式や文言は今後の release でも変更する場合があります。Programmatic integration は Configuration、CLI、公式 Python API、Archive semantics など明示された公開契約に依存させてください。
 

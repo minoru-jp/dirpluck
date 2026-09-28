@@ -16,7 +16,7 @@
 
 # Package surface
 
-0.12.x の公式 package-root export は次の4名です。
+0.13.x の公式 package-root export は次の4名です。
 
 ```python
 from dirpluck import DirpluckError, RunResult, __version__, run

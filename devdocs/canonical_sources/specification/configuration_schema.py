@@ -40,7 +40,7 @@ class SPECIFICATION_PART:
         condition @= "`[about]` を定義する場合"
 
     class SPEC_014:
-        r"""各 Configuration layer は Pluck を0個または1個、名前付き Scope、Always source、Shared pattern、{{TERM_18}}を0個以上持てる。`[scope]` は root Configuration で常設される default Scope の optional `description` / `target_kind` / `ignore` / `namespace` 設定であり、Scope の存在宣言ではない。Named Scope は required `path` と同じ optional field を持つ。`target_kind` は `"directory"` または `"file"` で、既定は `"directory"` とする。Pluck / Always は Case を0個以上持てる。"""
+        r"""各 Configuration layer は Pluck を0個または1個、名前付き Scope、Always source、Shared pattern、{{TERM_18}}を0個以上持てる。`[scope]` は root Configuration で常設される default Scope の optional `description` / `target_kind` / `ignore` / `namespace` 設定であり、Scope の存在宣言ではない。Named Scope は required `path` と同じ optional field を持つ。`target_kind` は `"directory"` / `"file"` / `"both"` のいずれかで、既定は `"directory"` とする。Pluck / Always は Case を0個以上持てる。"""
         merge @= TERMS.TERM_18
         level @= MUST
 
@@ -52,7 +52,7 @@ class SPECIFICATION_PART:
         condition @= "Archive file を書き込む build"
 
     class SPEC_016:
-        r"""ひとつの Configuration layer が local source definition を持たなくてもよい。Base composition 後の{{TERM_15}}には Pluck、Always source、または `target_kind = "file"` の Scope の少なくとも一つが必要である。Default Scope は root Configuration に常に存在するため、Effective Pluck のために別途 Scope declaration を要求しない。File-kind Scope だけで構成する場合、Archive source を得る実行では positional Target reference を必要とする。"""
+        r"""ひとつの Configuration layer が local source definition を持たなくてもよい。Base composition 後の{{TERM_15}}には Pluck、Always source、または file Target を許可する `target_kind = "file"` / `"both"` の Scope の少なくとも一つが必要である。Default Scope は root Configuration に常に存在するため、Effective Pluck のために別途 Scope declaration を要求しない。Pluck / Always がなく file-capable Scope だけで構成する場合、Archive source を得る実行では positional Target reference を必要とする。"""
         merge @= TERMS.TERM_15
         level @= MUST
         condition @= "Base composition 後"

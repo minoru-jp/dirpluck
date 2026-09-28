@@ -14,7 +14,7 @@ package_exports = test_target_field("package-root exports")
 @canonical_source('Package surface', filename='surface.md', order=40, placeholders=False, heading="title")
 class API_REFERENCE_PART:
     r"""
-    0.12.x の公式 package-root export は次の4名です。
+    0.13.x の公式 package-root export は次の4名です。
 
     ```python
     {{package_exports}}

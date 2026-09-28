@@ -25,13 +25,13 @@ class CLI_PART:
         {{example_001}}
         ```
 
-        選択した{{TERM_15}}に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても file-kind Scope の file Target は positional argument から選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
+        選択した{{TERM_15}}に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
 
         ```console
         {{example_002}}
         ```
 
-        Target reference は既存の `NAME`、`SCOPE/NAME`、`/`、`SCOPE/` に加え、file-kind Scope では `:[...]` / `SCOPE:[...]` の literal list selector と `:<...>` / `SCOPE:<...>` の regular-expression selector を使用できます。どの形式も{{TERM_16}}から{{TERM_3}}を選びます。
+        Target reference は literal reference、Scope expansion、Target selector を使えます。Literal reference は末尾 `/` なしを file、末尾 `/` ありを directory とし、default Scope の directory は `./NAME/`、named Scope では `SCOPE/NAME/` と書きます。`/` / `SCOPE/` は Scope expansion、`:[...]` / `SCOPE:[...]` は typed literal list selector、`:<...>` / `SCOPE:<...>` は regular-expression selector です。どの形式も{{TERM_16}}から{{TERM_3}}を選びます。
         """
         title @= '基本形'
 
@@ -42,8 +42,8 @@ class CLI_PART:
         """
 
         example_002 @= """
-        dirpluck example
-        dirpluck work/project-a work/project-b
+        dirpluck ./example/
+        dirpluck work/project-a/ work/project-b/
         dirpluck --config snapshot
         """
 
@@ -69,9 +69,9 @@ class CLI_PART:
         title @= 'Configuration を選ぶ'
 
         example_003 @= """
-        dirpluck example --config review
-        dirpluck example --config configs/release-1.2
-        dirpluck example --config ../shared/review.dirpluck
+        dirpluck ./example/ --config review
+        dirpluck ./example/ --config configs/release-1.2
+        dirpluck ./example/ --config ../shared/review.dirpluck
         """
 
         merge @= TERMS.TERM_1

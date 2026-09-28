@@ -38,7 +38,7 @@ condition: when `[about]` is defined
 
 ## SPEC_014
 
-Each Configuration layer may contain zero or one Pluck and zero or more named Scopes, Always sources, Shared patterns, and Namespaces. `[scope]` is an optional `description` / `target_kind` / `ignore` / `namespace` configuration for the always-present default Scope of the Root Configuration; it is not a declaration that creates a Scope. A named Scope has required `path` plus the same optional fields. `target_kind` is either `"directory"` or `"file"` and defaults to `"directory"`. Pluck and Always sources may contain zero or more Cases.
+Each Configuration layer may contain zero or one Pluck and zero or more named Scopes, Always sources, Shared patterns, and Namespaces. `[scope]` is an optional `description` / `target_kind` / `ignore` / `namespace` configuration for the always-present default Scope of the Root Configuration; it is not a declaration that creates a Scope. A named Scope has required `path` plus the same optional fields. `target_kind` is `"directory"`, `"file"`, or `"both"` and defaults to `"directory"`. Pluck and Always sources may contain zero or more Cases.
 
 level: MUST
 
@@ -52,7 +52,7 @@ condition: when Output is declared; when a build writes an Archive file
 
 ## SPEC_016
 
-A single Configuration layer may have no local source definition. After base composition, the Effective Configuration must contain at least one of Pluck, an Always source, or a Scope with `target_kind = "file"`. The default Scope always exists for the Root Configuration, so an effective Pluck does not require a separate Scope declaration. When an Effective Configuration is composed only of file-kind Scopes, an invocation that needs an Archive source requires at least one positional Target reference.
+A single Configuration layer may have no local source definition. After base composition, the Effective Configuration must contain at least one of Pluck, an Always source, or a Scope that permits file Targets with `target_kind = "file"` or `"both"`. The default Scope always exists for the Root Configuration, so an effective Pluck does not require a separate Scope declaration. When an Effective Configuration has no Pluck or Always source and is composed only of file-capable Scopes, an invocation that needs an Archive source requires at least one positional Target reference.
 
 level: MUST
 

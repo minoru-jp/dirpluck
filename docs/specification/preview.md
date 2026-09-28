@@ -12,7 +12,7 @@ related: [SPEC_028](composition.md#spec_028), [SPEC_037](runtime-targets.md#spec
 
 ## SPEC_146
 
-A missing `must` pattern is displayed as `[missing]`; a missing `may` pattern is displayed as `[optional missing]`. A final Selection containing zero files is displayed as either `empty, allowed` or `empty, would error` according to policy.
+A missing ordinary `must` path pattern is displayed as `[missing]`; a missing ordinary `may` path pattern is displayed as `[optional missing]`. A non-path Selection expression such as `{ match = "..." }` is displayed as an opaque unmatched Selection entry rather than being split into path components even when its expression contains `/`. A final Selection containing zero files is displayed as either `empty, allowed` or `empty, would error` according to policy. If an opposite-type entry exists for a `must` or `may` string pattern, preview preserves the normal missing / optional-missing Selection semantics and also records a source-labelled non-fatal type-marker diagnostic. CLI `--preview` prints it as a warning to stderr; Python API `preview=True` returns it in `RunResult.warnings`.
 
 level: MUST
 

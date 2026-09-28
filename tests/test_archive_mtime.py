@@ -166,11 +166,11 @@ class ArchiveMtimeTests(unittest.TestCase):
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''\n[pluck]\nmust = ["src"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
+                '''\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
                 encoding="utf-8",
             )
 
-            result = dirpluck.run("app", archive_mtime="zip-epoch", cwd=root)
+            result = dirpluck.run("./app/", archive_mtime="zip-epoch", cwd=root)
             self.assertIsNotNone(result.output_path)
             with zipfile.ZipFile(result.output_path) as archive:
                 self.assertEqual(
@@ -186,7 +186,7 @@ class ArchiveMtimeTests(unittest.TestCase):
             (root / "default.dirpluck").write_text(
                 '''
 [pluck]
-must = ["src"]
+must = ["src/"]
 
 [output]
 path = "result.zip"
@@ -199,7 +199,7 @@ overwrite = true
                 "dirpluck._archive_mtime._current_local_time",
                 return_value=current,
             ) as clock:
-                result = dirpluck.run("app", archive_mtime="now", cwd=root)
+                result = dirpluck.run("./app/", archive_mtime="now", cwd=root)
 
             clock.assert_called_once_with()
             self.assertIsNotNone(result.output_path)
@@ -217,7 +217,7 @@ overwrite = true
             (root / "default.dirpluck").write_text(
                 '''
 [pluck]
-must = ["src"]
+must = ["src/"]
 
 [output]
 path = "result.zip"
@@ -230,7 +230,7 @@ overwrite = true
                 import os
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
-                    code = main(["app", "--archive-mtime", "zip-epoch"])
+                    code = main(["./app/", "--archive-mtime", "zip-epoch"])
             finally:
                 os.chdir(previous)
             self.assertEqual(code, 0)
@@ -246,11 +246,11 @@ overwrite = true
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''\n[pluck]\nmust = ["src"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
+                '''\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
                 encoding="utf-8",
             )
             (root / "release.dirpluck-inv").write_text(
-                '''\n[invocation]\ntargets = ["app"]\narchive_mtime = "zip-epoch"\n''',
+                '''\n[invocation]\ntargets = ["./app/"]\narchive_mtime = "zip-epoch"\n''',
                 encoding="utf-8",
             )
 
@@ -268,11 +268,11 @@ overwrite = true
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''\n[pluck]\nmust = ["src"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
+                '''\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
                 encoding="utf-8",
             )
             (root / "release.dirpluck-inv").write_text(
-                '''\n[invocation]\ntargets = ["app"]\narchive_mtime = "zip-epoch"\n''',
+                '''\n[invocation]\ntargets = ["./app/"]\narchive_mtime = "zip-epoch"\n''',
                 encoding="utf-8",
             )
 

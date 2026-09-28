@@ -2,11 +2,11 @@
 
 This document describes dirpluck's current development stage, compatibility policy, and the criteria for moving toward 1.0.
 
-The `0.12.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and 0.10.0 aligns runtime Output and the published documentation structure with the current design. From this point, the project will validate that public surface in real use while actively preserving compatibility.
+The `0.13.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and 0.10.0 aligns runtime Output and the published documentation structure with the current design. From this point, the project will validate that public surface in real use while actively preserving compatibility.
 
 ## Current status
 
-The current public version line is `0.12.x`, and the development stage is **Beta**.
+The current public version line is `0.13.x`, and the development stage is **Beta**.
 
 Beta is not a period for freely redesigning public interfaces. The goal is to verify in real use that the current Configuration, CLI, official Python API, and Archive semantics can be used continuously, while making necessary improvements additively wherever possible.
 
@@ -15,6 +15,8 @@ Beta is not a period for freely redesigning public interfaces. The goal is to ve
 From 0.10.0 onward, breaking changes to the published Configuration language, CLI, official Python API, and Archive semantics will be avoided except for compelling reasons.
 
 Compelling reasons include defects where preserving the existing behavior would damage correctness, safety, or core design consistency. Ordinary feature additions and improvements should be additive. If an existing interface must be replaced, the project will provide deprecation and a migration period where practical.
+
+`0.13.0` is an explicit exception: it corrects an early design in which inclusion Selection and Target references inferred file-versus-directory meaning from the current filesystem, and replaces that inference with trailing-`/` type notation. `ignore` remains intentionally broad on the exclusion side: no trailing `/` applies to files and directories, while a trailing `/` narrows the exclusion to directories only. Migration is documented in the CHANGELOG. This exception does not relax the compatibility policy for later releases.
 
 Human-facing generated output, such as the generated Archive README and diagnostic messages, is different: its exact wording and formatting are not treated as a stable machine-readable interface. Those details may change in later releases to improve readability or clarity. Programmatic integrations should depend on the explicitly documented public contracts such as Configuration, CLI, the official Python API, and Archive semantics rather than parsing the exact presentation of human-facing output.
 

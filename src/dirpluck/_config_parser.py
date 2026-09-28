@@ -62,9 +62,9 @@ def _parse_scope_target_kind(value: object, where: str) -> str:
     if value is None:
         return "directory"
     if not isinstance(value, str):
-        raise ConfigurationError(f"{where}: expected 'directory' or 'file'")
-    if value not in {"directory", "file"}:
-        raise ConfigurationError(f"{where}: expected 'directory' or 'file'")
+        raise ConfigurationError(f"{where}: expected 'directory', 'file', or 'both'")
+    if value not in {"directory", "file", "both"}:
+        raise ConfigurationError(f"{where}: expected 'directory', 'file', or 'both'")
     return value
 
 

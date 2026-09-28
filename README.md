@@ -24,7 +24,11 @@ If you record decisions such as "collect README, `src/`, and `tests/`" or "exclu
 
 The Scope from which a Target is selected is defined separately, so the Configuration and the actual project tree do not need to live in the same place.
 
-Directory-Target `must`, `may`, and `ignore` rules use a restricted Selection pattern language so directory-tree traversal stays predictable. File-kind Scopes also provide a regular-expression selector for narrower direct-child file-name filtering. These are intentionally different selection languages with different scopes and roles. See [Configuration selection](docs/configuration/selection.md) and [Targets and Cases](docs/cli/targets.md) for details.
+Inclusion references and Target references that could denote either a file or a directory declare the type in their syntax. No trailing `/` means file; a trailing `/` means directory. Dirpluck does not infer that type from the current filesystem. For example, Selection `"pyproject.toml"` denotes a file while `"src/"` denotes a directory. Target references follow the same principle: a default-Scope directory Target is written as `./project/`, while a named-Scope directory Target can be written as `work/project/`. If a `may` entry misses because the opposite entry type exists, its optional semantics do not change. Dirpluck records a source-labelled diagnostic suggesting the relevant trailing-`/` adjustment; the CLI prints it as a warning in both normal builds and `--preview`, while the Python API returns it in `RunResult.warnings`. A `must` entry keeps its normal build-time error semantics, but preview reports the same hint as a warning while leaving the entry missing. Literal-Target errors include the same type-marker hint.
+
+`ignore` is intentionally broader on the exclusion side. A normal ignore string or concrete ignore path without a trailing `/` excludes matching files and directories; a trailing `/` narrows it to directories only. Use structured `{ match = "..." }` when an exclusion must be file-only.
+
+Directory-Target `must`, `may`, and `ignore` strings use a restricted Selection pattern language so directory-tree traversal stays predictable. When a Selection needs more expressive matching, `{ match = "..." }` can apply a Python-compatible regular expression to full root-relative paths. Scope `<...>` Target selectors also use regular expressions, but only to filter normalized eligible direct-child Target names. This separation is intentional. See [Configuration selection](docs/configuration/selection.md) and [Targets and Cases](docs/cli/targets.md) for details.
 
 ## Why keep it declarative
 
@@ -63,7 +67,7 @@ For Configuration fields and composition, see [Configuration guide](docs/configu
 
 ## Installation
 
-The current version is **0.12.0**.
+The current version is **0.13.0**.
 
 Python 3.11 or later is required.
 

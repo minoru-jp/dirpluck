@@ -17,7 +17,7 @@ from dirpluck.cli import main
 
 CONFIG = '''
 [pluck]
-must = ["src"]
+must = ["src/"]
 
 [always.guidelines]
 path = "guidelines"
@@ -65,7 +65,7 @@ class PythonApiTests(unittest.TestCase):
             root = Path(temp)
             self._workspace(root)
 
-            result = dirpluck.run("app", cwd=root)
+            result = dirpluck.run("./app/", cwd=root)
             self.assertEqual(result.output_path, root / "result.zip")
             self.assertEqual(
                 result.archive_entries,
@@ -84,7 +84,7 @@ class PythonApiTests(unittest.TestCase):
             root = Path(temp)
             self._workspace(root)
 
-            result = dirpluck.run("app", preview=True, cwd=root)
+            result = dirpluck.run("./app/", preview=True, cwd=root)
             self.assertIsNone(result.output_path)
             self.assertFalse((root / "result.zip").exists())
 
@@ -93,11 +93,64 @@ class PythonApiTests(unittest.TestCase):
             try:
                 os.chdir(root)
                 with redirect_stdout(output):
-                    code = main(["app", "--preview"])
+                    code = main(["./app/", "--preview"])
             finally:
                 os.chdir(previous)
             self.assertEqual(code, 0)
             self.assertEqual(output.getvalue().rstrip("\n"), result.preview_text)
+
+
+    def test_run_returns_wrong_type_warnings_without_changing_may_semantics(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "README.md").write_text("readme", encoding="utf-8")
+            (root / "app" / "src" / "main.py").write_text("x", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    '''
+                    [pluck]
+                    must = ["README.md"]
+                    may = ["src"]
+
+                    [output]
+                    path = "result.zip"
+                    overwrite = true
+                    '''
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run("./app/", cwd=root)
+
+            self.assertEqual(result.archive_entries, ("README.md", "app/README.md"))
+            self.assertEqual(len(result.warnings), 1)
+            self.assertIn("target: optional file pattern 'src' did not match", result.warnings[0])
+            self.assertIn("directory 'src/' exists", result.warnings[0])
+
+    def test_run_keeps_wrong_type_warnings_distinct_per_target(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            for name in ("projA", "projB"):
+                (root / name / "src").mkdir(parents=True)
+                (root / name / "README.md").write_text(name, encoding="utf-8")
+                (root / name / "src" / "main.py").write_text(name, encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    '''
+                    [pluck]
+                    must = ["README.md"]
+                    may = ["src"]
+                    '''
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run("./projA/", "./projB/", preview=True, cwd=root)
+
+            self.assertEqual(len(result.warnings), 2)
+            self.assertTrue(any("target 'projA':" in warning for warning in result.warnings))
+            self.assertTrue(any("target 'projB':" in warning for warning in result.warnings))
 
     def test_preview_rejects_runtime_output_and_force(self):
         with self.assertRaises(dirpluck.DirpluckError) as output_error:
@@ -116,7 +169,7 @@ class PythonApiTests(unittest.TestCase):
             output.write_bytes(b"old")
 
             result = dirpluck.run(
-                "app",
+                "./app/",
                 output="runtime.zip",
                 force=True,
                 cwd=root,
@@ -148,7 +201,7 @@ class PythonApiTests(unittest.TestCase):
                 return_value="20260923-022000",
             ):
                 result = dirpluck.run(
-                    "app",
+                    "./app/",
                     output="runtime/",
                     sequence=2,
                     cwd=root,
@@ -169,10 +222,10 @@ class PythonApiTests(unittest.TestCase):
                 textwrap.dedent(
                     '''
                     [pluck]
-                    must = ["src"]
+                    must = ["src/"]
 
                     [pluck.case.audit]
-                    must = ["tests"]
+                    must = ["tests/"]
 
                     [output]
                     path = "result.zip"
@@ -185,7 +238,7 @@ class PythonApiTests(unittest.TestCase):
                 textwrap.dedent(
                     '''
                     [invocation.review]
-                    targets = ["app"]
+                    targets = ["./app/"]
                     case = "missing-on-purpose"
                     '''
                 ),
@@ -255,7 +308,7 @@ class PythonApiTests(unittest.TestCase):
                 dirpluck.run(**kwargs)
 
         with self.assertRaisesRegex(dirpluck.DirpluckError, "targets cannot be combined"):
-            dirpluck.run("app", invocation="calls")
+            dirpluck.run("./app/", invocation="calls")
 
 
 if __name__ == "__main__":

@@ -27,13 +27,13 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
                 [always.other]
                 path = "b/common"
                 description = "Always source."
-                must = ["src"]
+                must = ["src/"]
             ''')
-            output = build_archive(config, BuildRequest.create("common"))
+            output = build_archive(config, BuildRequest.create("./common/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("common/src/module.py", names)
@@ -109,12 +109,12 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Project."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope.work]
                 path = "work"
             """)
-            sources = resolve_sources(config, BuildRequest.create("work/project"))
+            sources = resolve_sources(config, BuildRequest.create("work/project/"))
             self.assertEqual(len(sources), 1)
             self.assertEqual(sources[0].directory, project.resolve())
             self.assertEqual(sources[0].archive_root, "project")
@@ -180,11 +180,11 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Projects selected for review."
-                must = ["src"]
+                must = ["src/"]
             ''')
             output = build_archive(
                 config,
-                BuildRequest.create("project-a", "project-b"),
+                BuildRequest.create("./project-a/", "./project-b/"),
             )
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
@@ -207,15 +207,15 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Default projects."
-                must = ["src"]
+                must = ["src/"]
 
                 [pluck.case.review]
                 description = "Projects prepared for review."
-                must = ["tests"]
+                must = ["tests/"]
             ''')
             output = build_archive(
                 config,
-                BuildRequest.create("project-a", "project-b", case="review"),
+                BuildRequest.create("./project-a/", "./project-b/", case="review"),
             )
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
@@ -231,12 +231,12 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaises(SelectionError):
                 resolve_sources(
                     config,
-                    BuildRequest.create("project", "project"),
+                    BuildRequest.create("./project/", "project"),
                 )
 
     def test_target_cannot_be_current_working_directory(self):
@@ -246,7 +246,7 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target cwd."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaisesRegex(SelectionError, "direct child"):
                 resolve_sources(config, BuildRequest.create("."))
@@ -262,12 +262,12 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Default source."
-                must = ["src"]
+                must = ["src/"]
                 [pluck.case.review]
                 description = "Review tests only."
-                must = ["tests"]
+                must = ["tests/"]
             ''')
-            output = build_archive(config, BuildRequest.create("application", case="review"))
+            output = build_archive(config, BuildRequest.create("./application/", case="review"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
                 readme = archive.read("README.md").decode("utf-8")
@@ -286,12 +286,12 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Default source."
-                must = ["src"]
+                must = ["src/"]
                 [pluck.case.review]
                 description = "Review."
-                must = ["tests"]
+                must = ["tests/"]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("## `application/`\n\nFiles: 1\n\nDefault source.", readme)
@@ -305,10 +305,10 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck.case.review]
                 description = "Review."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaises(SelectionError):
-                build_archive(config, BuildRequest.create("application"))
+                build_archive(config, BuildRequest.create("./application/"))
 
     def test_unknown_case_is_rejected(self):
         with resolved_temporary_directory() as temp:
@@ -317,13 +317,13 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [pluck.case.review]
                 description = "Review."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaises(SelectionError):
-                build_archive(config, BuildRequest.create("application", case="release"))
+                build_archive(config, BuildRequest.create("./application/", case="release"))
 
     def test_always_case_overrides_selection_and_other_always_falls_back(self):
         with resolved_temporary_directory() as temp:
@@ -340,20 +340,20 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Default target."
-                must = ["src"]
+                must = ["src/"]
 
                 [pluck.case.review]
                 description = "Review target."
-                must = ["tests"]
+                must = ["tests/"]
 
                 [always.framework]
                 path = "framework"
                 description = "Default framework."
-                must = ["src"]
+                must = ["src/"]
 
                 [always.framework.case.review]
                 description = "Framework review material."
-                must = ["tests"]
+                must = ["tests/"]
 
                 [always.guidelines]
                 path = "guidelines"
@@ -361,7 +361,7 @@ class SourceResolutionTests(BuilderTestCase):
                 must = ["README.md"]
             ''')
             output = build_archive(
-                config, BuildRequest.create("application", case="review")
+                config, BuildRequest.create("./application/", case="review")
             )
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
@@ -413,11 +413,11 @@ class SourceResolutionTests(BuilderTestCase):
                 [always.documents]
                 path = "documents"
                 description = "Current documents."
-                must = ["current"]
+                must = ["current/"]
 
                 [always.documents.case.archive]
                 description = "Archive documents."
-                must = ["current", "history"]
+                must = ["current/", "history/"]
 
                 [always.assets]
                 path = "assets"
@@ -443,7 +443,7 @@ class SourceResolutionTests(BuilderTestCase):
             target_config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaisesRegex(SelectionError, "TARGET is required"):
                 resolve_sources(target_config, BuildRequest.create())
@@ -459,7 +459,7 @@ class SourceResolutionTests(BuilderTestCase):
                 must = ["*.txt"]
             ''')
             with self.assertRaisesRegex(SelectionError, "must not be specified"):
-                resolve_sources(companion_config, BuildRequest.create("documents"))
+                resolve_sources(companion_config, BuildRequest.create("./documents/"))
 
     def test_always_only_unknown_case_is_rejected(self):
         with resolved_temporary_directory() as temp:
@@ -544,7 +544,7 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaises(SelectionError):
                 build_archive(config, BuildRequest.create(outside))
@@ -559,30 +559,36 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, f'''
                 [pluck]
                 description = "Application."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope.work]
                 path = {projects.as_posix()!r}
             ''')
-            sources = resolve_sources(config, BuildRequest.create("work/app"))
+            sources = resolve_sources(config, BuildRequest.create("work/app/"))
             target_source = next(source for source in sources if source.kind == "target")
             self.assertEqual(target_source.directory, target.resolve())
             self.assertEqual(target_source.archive_root, "app")
-            plan = plan_archive(config, BuildRequest.create("work/app"))
+            plan = plan_archive(config, BuildRequest.create("work/app/"))
             self.assertIn("app/src/main.py", plan.entries)
             self.assertFalse(any(path.startswith("work/") for path in plan.entries))
 
-    def test_dot_slash_target_reference_is_rejected(self):
+    def test_dot_slash_target_reference_explicitly_addresses_default_scope(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "project" / "src").mkdir(parents=True)
+            (root / "artifact.bin").write_bytes(b"x")
             config = self._config(root, '''
                 [pluck]
                 description = "Application."
-                must = ["src"]
+                must = ["src/"]
+
+                [scope]
+                target_kind = "both"
             ''')
-            with self.assertRaisesRegex(SelectionError, "direct child"):
-                resolve_sources(config, BuildRequest.create("./project"))
+            directory = resolve_sources(config, BuildRequest.create("./project/"))[0]
+            file_source = resolve_sources(config, BuildRequest.create("./artifact.bin"))[0]
+            self.assertEqual((directory.source_root, directory.source_kind), ("project", "directory"))
+            self.assertEqual((file_source.source_root, file_source.source_kind), ("artifact.bin", "file"))
 
     def test_scope_expansion_selects_only_direct_child_directories(self):
         with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
@@ -596,7 +602,7 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, f'''
                 [pluck]
                 description = "Project."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope.work]
                 path = {projects.as_posix()!r}
@@ -788,7 +794,7 @@ class SourceResolutionTests(BuilderTestCase):
                 [scope]
                 description = "Project supplied for review."
             ''')
-            plan = plan_archive(config, BuildRequest.create("project"))
+            plan = plan_archive(config, BuildRequest.create("./project/"))
             self.assertIn(
                 "## `project/`\n\nFiles: 1\n\n"
                 "Project supplied for review.\n\n"
@@ -805,7 +811,7 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Directory-only selection description."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope.returned]
                 path = "returned"
@@ -830,7 +836,7 @@ class SourceResolutionTests(BuilderTestCase):
                 [namespace.bundle]
 
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
 
                 [scope]
                 namespace = "bundle"
@@ -840,7 +846,7 @@ class SourceResolutionTests(BuilderTestCase):
                 target_kind = "file"
             ''')
 
-            for targets in (("project", "returned/bundle"), ("returned/bundle", "project")):
+            for targets in (("./project/", "returned/bundle"), ("returned/bundle", "./project/")):
                 with self.subTest(targets=targets):
                     with self.assertRaisesRegex(SelectionError, "archive file/directory path conflict"):
                         plan_archive(config, BuildRequest.create(*targets))
@@ -858,13 +864,13 @@ class SourceResolutionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Directory contents."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
             ''')
-            plan = plan_archive(config, BuildRequest.create("project", "returned/repo.zip"))
+            plan = plan_archive(config, BuildRequest.create("./project/", "returned/repo.zip"))
             self.assertEqual(set(plan.entries), {"project/src/main.py", "repo.zip"})
 
 
@@ -973,25 +979,191 @@ class SourceResolutionTests(BuilderTestCase):
             sources = resolve_sources(config, BuildRequest.create(r"returned:<.*\.zip>"))
             self.assertEqual([source.source_root for source in sources], ["keep.zip"])
 
-    def test_file_target_selector_requires_file_kind_scope(self):
+    def test_directory_target_selectors_select_directories_and_apply_pluck(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             work = root / "work"
-            project = work / "project"
-            project.mkdir(parents=True)
-            (project / "src").mkdir()
+            for name in ("project-a", "project-b"):
+                project = work / name
+                (project / "src").mkdir(parents=True)
+                (project / "src" / "main.py").write_text(name, encoding="utf-8")
+            (work / "project-a.zip").write_bytes(b"zip")
             config = self._config(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
 
                 [scope.work]
                 path = "work"
             ''')
 
-            with self.assertRaisesRegex(SelectionError, "target_kind = 'file'"):
-                resolve_sources(config, BuildRequest.create("work:[project]"))
-            with self.assertRaisesRegex(SelectionError, "target_kind = 'file'"):
-                resolve_sources(config, BuildRequest.create("work:<project>"))
+            listed = resolve_sources(config, BuildRequest.create("work:[project-b//project-a/]"))
+            self.assertEqual([source.source_root for source in listed], ["project-b", "project-a"])
+            self.assertTrue(all(source.source_kind == "directory" for source in listed))
+
+            matched = resolve_sources(config, BuildRequest.create(r"work:<project-[ab]/>"))
+            self.assertEqual([source.source_root for source in matched], ["project-a", "project-b"])
+            self.assertTrue(all(source.selection is not None for source in matched))
+
+    def test_both_target_scope_expands_files_and_directories_and_applies_pluck_only_to_directories(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            mixed = root / "mixed"
+            project = mixed / "repo-a"
+            (project / "src").mkdir(parents=True)
+            (project / "src" / "main.py").write_text("a", encoding="utf-8")
+            archive = mixed / "repo-b.zip"
+            archive.write_bytes(b"zip")
+            config = self._config(root, '''
+                [pluck]
+                description = "Directory contents."
+                must = ["src/"]
+
+                [scope.mixed]
+                path = "mixed"
+                target_kind = "both"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create("mixed/"))
+            self.assertEqual(
+                [(source.source_root, source.source_kind) for source in sources],
+                [("repo-a", "directory"), ("repo-b.zip", "file")],
+            )
+            self.assertIsNotNone(sources[0].selection)
+            self.assertIsNone(sources[1].selection)
+
+            plan = plan_archive(config, BuildRequest.create("mixed/"))
+            self.assertEqual(set(plan.entries), {"repo-a/src/main.py", "repo-b.zip"})
+
+    def test_both_target_scope_selectors_match_files_and_directories(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            mixed = root / "mixed"
+            for name in ("repo-a", "other"):
+                project = mixed / name
+                (project / "src").mkdir(parents=True)
+                (project / "src" / "main.py").write_text(name, encoding="utf-8")
+            (mixed / "repo-b.zip").write_bytes(b"zip")
+            (mixed / "notes.txt").write_text("notes", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                must = ["src/"]
+
+                [scope.mixed]
+                path = "mixed"
+                target_kind = "both"
+            ''')
+
+            listed = resolve_sources(config, BuildRequest.create("mixed:[repo-b.zip/repo-a/]"))
+            self.assertEqual(
+                [(source.source_root, source.source_kind) for source in listed],
+                [("repo-b.zip", "file"), ("repo-a", "directory")],
+            )
+
+            matched = resolve_sources(config, BuildRequest.create(r"mixed:<repo-.*/?>"))
+            self.assertEqual(
+                [(source.source_root, source.source_kind) for source in matched],
+                [("repo-a", "directory"), ("repo-b.zip", "file")],
+            )
+
+    def test_both_target_scope_without_pluck_allows_files_but_rejects_directories(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            mixed = root / "mixed"
+            mixed.mkdir()
+            (mixed / "repo.zip").write_bytes(b"zip")
+            project = mixed / "project"
+            project.mkdir()
+            (project / "file.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, '''
+                [scope.mixed]
+                path = "mixed"
+                target_kind = "both"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create("mixed/repo.zip"))
+            self.assertEqual([(source.source_root, source.source_kind) for source in sources], [("repo.zip", "file")])
+            with self.assertRaisesRegex(SelectionError, "does not define Pluck"):
+                resolve_sources(config, BuildRequest.create("mixed/project/"))
+            with self.assertRaisesRegex(SelectionError, "does not define Pluck"):
+                resolve_sources(config, BuildRequest.create("mixed/"))
+
+    def test_both_target_scope_case_applies_only_to_directory_targets(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            mixed = root / "mixed"
+            project = mixed / "project"
+            project.mkdir(parents=True)
+            (project / "default.txt").write_text("default", encoding="utf-8")
+            (project / "review.txt").write_text("review", encoding="utf-8")
+            (mixed / "repo.zip").write_bytes(b"zip")
+            config = self._config(root, '''
+                [pluck]
+                must = ["default.txt"]
+
+                [pluck.case.review]
+                must = ["review.txt"]
+
+                [scope.mixed]
+                path = "mixed"
+                target_kind = "both"
+            ''')
+
+            plan = plan_archive(config, BuildRequest.create("mixed/", case="review"))
+            self.assertEqual(set(plan.entries), {"project/review.txt", "repo.zip"})
+
+    def test_both_target_scope_ignore_filters_files_and_directories_before_selectors(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            mixed = root / "mixed"
+            for name in ("keep-dir", "skip-dir"):
+                project = mixed / name
+                (project / "src").mkdir(parents=True)
+                (project / "src" / "main.py").write_text(name, encoding="utf-8")
+            (mixed / "keep.zip").write_bytes(b"keep")
+            (mixed / "skip.zip").write_bytes(b"skip")
+            config = self._config(root, '''
+                [pluck]
+                must = ["src/"]
+
+                [scope.mixed]
+                path = "mixed"
+                target_kind = "both"
+                ignore = ["skip*"]
+            ''')
+
+            expanded = resolve_sources(config, BuildRequest.create("mixed/"))
+            self.assertEqual(
+                [(source.source_root, source.source_kind) for source in expanded],
+                [("keep-dir", "directory"), ("keep.zip", "file")],
+            )
+            matched = resolve_sources(config, BuildRequest.create(r"mixed:<.*/?>"))
+            self.assertEqual(
+                [(source.source_root, source.source_kind) for source in matched],
+                [("keep-dir", "directory"), ("keep.zip", "file")],
+            )
+            with self.assertRaisesRegex(SelectionError, "ignored by"):
+                resolve_sources(config, BuildRequest.create("mixed:[skip-dir/]"))
+
+    def test_default_scope_both_selector_can_mix_directory_and_file_targets(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "repo-dir"
+            (project / "src").mkdir(parents=True)
+            (project / "src" / "main.py").write_text("x", encoding="utf-8")
+            (root / "repo-file.zip").write_bytes(b"zip")
+            config = self._config(root, '''
+                [pluck]
+                must = ["src/"]
+
+                [scope]
+                target_kind = "both"
+            ''')
+
+            sources = resolve_sources(config, BuildRequest.create(r":<repo-.*/?>"))
+            self.assertEqual(
+                [(source.source_root, source.source_kind) for source in sources],
+                [("repo-dir", "directory"), ("repo-file.zip", "file")],
+            )
 
     def test_file_target_list_selector_rejects_malformed_or_missing_items(self):
         with resolved_temporary_directory() as temp:
@@ -1008,7 +1180,7 @@ class SourceResolutionTests(BuilderTestCase):
             cases = (
                 ("returned:[a.zip", "must end with"),
                 ("returned:[]", "must not be empty"),
-                ("returned:[a.zip//b.zip]", "empty file name"),
+                ("returned:[a.zip///b.zip]", "three or more"),
                 ("returned:[missing.zip]", "does not exist"),
             )
             for reference, message in cases:
@@ -1030,7 +1202,7 @@ class SourceResolutionTests(BuilderTestCase):
             cases = (
                 (r"returned:<.*\.zip", "must end with"),
                 ("returned:<>", "must not be empty"),
-                ("returned:<foo/bar>", "must not contain '/'"),
+                ("returned:<foo/bar>", "matched no eligible"),
                 ("returned:<(>", "invalid regular-expression selector"),
                 ("returned:<" + "a" * 513 + ">", "512-character limit"),
             )

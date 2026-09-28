@@ -15,7 +15,7 @@ class ConfigSchemaTests(ConfigTestCase):
             without_about = load_config(self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
             '''))
             self.assertIsNone(without_about.about_description)
 
@@ -25,7 +25,7 @@ class ConfigSchemaTests(ConfigTestCase):
 
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
             '''))
             self.assertEqual(
                 with_about.about_description,
@@ -38,14 +38,14 @@ class ConfigSchemaTests(ConfigTestCase):
             [about]
             [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             ''',
             '''
             [about]
             description = "   "
             [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             ''',
             '''
             [about]
@@ -53,7 +53,7 @@ class ConfigSchemaTests(ConfigTestCase):
             title = "Not supported"
             [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             ''',
         )
         for body in bodies:
@@ -71,7 +71,7 @@ class ConfigSchemaTests(ConfigTestCase):
 
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope]
                 namespace = "work"
@@ -96,7 +96,7 @@ class ConfigSchemaTests(ConfigTestCase):
 
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                 """))
 
     def test_namespace_definition_rejects_attributes_and_nonportable_names(self):
@@ -106,13 +106,13 @@ class ConfigSchemaTests(ConfigTestCase):
             directory = "work"
             [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             ''',
             '''
             [namespace."bad/name"]
             [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             ''',
         )
         for body in invalid:
@@ -146,7 +146,7 @@ class ConfigSchemaTests(ConfigTestCase):
                 load_config(self._write(root, '''
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     [bundle.review]
                     description = "Old model"
                 '''))
@@ -158,11 +158,11 @@ class ConfigSchemaTests(ConfigTestCase):
                 load_config(self._write(root, '''
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     [always.framework]
                     path = "framework"
                     description = "Framework."
-                    must = ["src"]
+                    must = ["src/"]
                     case = "review"
                 '''))
 
@@ -172,10 +172,10 @@ class ConfigSchemaTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [always.framework]
                 description = "Framework."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
@@ -189,11 +189,11 @@ class ConfigSchemaTests(ConfigTestCase):
                     config = load_config(self._write(root, f'''
                         [pluck]
                         description = "Default."
-                        must = ["src"]
+                        must = ["src/"]
                         [always.framework]
                         path = {path!r}
                         description = "Framework."
-                        must = ["src"]
+                        must = ["src/"]
                     '''))
                     self.assertEqual(config.always["framework"].path, path)
 
@@ -203,11 +203,11 @@ class ConfigSchemaTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [always.framework]
                 path = "framework*"
                 description = "Framework."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
@@ -218,11 +218,11 @@ class ConfigSchemaTests(ConfigTestCase):
             manifest = self._write(root, r'''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [always.framework]
                 path = 'shared\framework'
                 description = "Framework."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaisesRegex(ConfigurationError, "backslashes"):
                 load_config(manifest)
@@ -233,7 +233,7 @@ class ConfigSchemaTests(ConfigTestCase):
             manifest = self._write(root, """
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
             """, add_output=False)
             config = load_config(manifest)
             self.assertIsNone(config.output)
@@ -244,7 +244,7 @@ class ConfigSchemaTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [output]
                 path = "out.zip"
                 if_exists = "rename"
@@ -258,7 +258,7 @@ class ConfigSchemaTests(ConfigTestCase):
             manifest = self._write(root, """
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [output]
                 path = "out.zip"
                 overwrite = false
@@ -274,7 +274,7 @@ class ConfigSchemaTests(ConfigTestCase):
             manifest = self._write(root, """
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [output]
                 directory = "snapshots"
                 timestamp = true
@@ -305,7 +305,7 @@ class ConfigSchemaTests(ConfigTestCase):
                 manifest = self._write(root, f"""
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     {textwrap.dedent(body)}
                 """, add_output=False)
                 with self.assertRaises(ConfigurationError):
@@ -328,7 +328,7 @@ class ConfigSchemaTests(ConfigTestCase):
                 manifest = self._write(root, f"""
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     [output]
                     {extra}
                     timestamp = true
@@ -343,7 +343,7 @@ class ConfigSchemaTests(ConfigTestCase):
                 manifest = self._write(root, f'''
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     [output]
                     path = {path!r}
                     overwrite = false
@@ -360,7 +360,7 @@ class ConfigSchemaTests(ConfigTestCase):
                     config = load_config(self._write(root, f'''
                         [pluck]
                         description = "Default."
-                        must = ["src"]
+                        must = ["src/"]
                         [output]
                         path = {path!r}
                         overwrite = false
@@ -433,7 +433,7 @@ class ConfigSchemaTests(ConfigTestCase):
                     load_config(self._write(root, f'''
                         [pluck]
                         description = "Default."
-                        must = ["src"]
+                        must = ["src/"]
                         skip = [{pattern!r}]
                     '''))
 
@@ -441,25 +441,25 @@ class ConfigSchemaTests(ConfigTestCase):
         invalid_bodies = (
             '''            [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             [scope."work.dev"]
             path = "projects"
             ''',
             '''            [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             [scope.work]
             ''',
             '''            [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             [scope.work]
             path = "projects"
             extra = true
             ''',
             r'''            [pluck]
             description = "Default."
-            must = ["src"]
+            must = ["src/"]
             [scope.work]
             path = 'projects\nested'
             ''',
@@ -476,7 +476,7 @@ class ConfigSchemaTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
 
                 [scope]
                 description = "Default workspace."
@@ -491,16 +491,23 @@ class ConfigSchemaTests(ConfigTestCase):
             self.assertEqual(config.scopes["returned"].description, "Returned archives.")
             self.assertEqual(config.scopes["returned"].target_kind, "file")
 
+            both = load_config(self._write(root, '''
+                [scope.mixed]
+                path = "mixed"
+                target_kind = "both"
+            '''))
+            self.assertEqual(both.scopes["mixed"].target_kind, "both")
+
     def test_scope_target_kind_rejects_unknown_and_non_string_values(self):
         invalid_values = ('"archive"', 'true', '1')
         for value in invalid_values:
             with self.subTest(value=value), resolved_temporary_directory() as temp:
                 root = Path(temp)
-                with self.assertRaisesRegex(ConfigurationError, "expected 'directory' or 'file'"):
+                with self.assertRaisesRegex(ConfigurationError, "expected 'directory', 'file', or 'both'"):
                     load_config(self._write(root, f'''
                         [pluck]
                         description = "Default."
-                        must = ["src"]
+                        must = ["src/"]
 
                         [scope.work]
                         path = "work"
@@ -514,7 +521,7 @@ class ConfigSchemaTests(ConfigTestCase):
                 load_config(self._write(root, '''
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
 
                     [scope.work]
                     path = "work"

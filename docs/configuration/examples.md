@@ -21,22 +21,22 @@ python-dev = [
 
 [pluck]
 description = "The project currently under review."
-may = ["README.md", "src", "tests"]
+may = ["README.md", "src/", "tests/"]
 ignore = [["python-dev"]]
 allow_empty = true
 
 [pluck.case.full]
 description = "The project with all review material."
-may = ["README.md", "src", "tests", "docs"]
+may = ["README.md", "src/", "tests/", "docs/"]
 ignore = [["python-dev"]]
 allow_empty = true
 
 [scope]
-ignore = ["archive"]
+ignore = ["archive/"]
 
 [scope.projects]
 path = "/srv/projects"
-ignore = ["archive", "tmp-*"]
+ignore = ["archive/", "tmp-*/"]
 
 [always.guidelines]
 path = "review-guidelines"
@@ -48,8 +48,8 @@ path = "artifacts/review.zip"
 ```
 
 ```console
-dirpluck projects/example
-dirpluck projects/example --case full --preview
+dirpluck projects/example/
+dirpluck projects/example/ --case full --preview
 dirpluck projects/
 ```
 

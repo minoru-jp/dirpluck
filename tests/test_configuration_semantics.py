@@ -79,7 +79,7 @@ class ConfigurationSemanticsTests(unittest.TestCase):
                 path = "out.zip"
             '''))
             (root / "project").mkdir()
-            selection = resolve_sources(config, BuildRequest.create("project"))[0].selection
+            selection = resolve_sources(config, BuildRequest.create("./project/"))[0].selection
             self.assertEqual(selection.must, ("LICENSE", "src", "pyproject.toml"))
             self.assertEqual(selection.may, ("README.md", "docs"))
             self.assertEqual(
@@ -249,8 +249,8 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            self.assertEqual(resolve_sources(config, BuildRequest.create("one"))[0].archive_root, "one")
-            self.assertEqual(resolve_sources(config, BuildRequest.create("work/three"))[0].archive_root, "three")
+            self.assertEqual(resolve_sources(config, BuildRequest.create("./one/"))[0].archive_root, "one")
+            self.assertEqual(resolve_sources(config, BuildRequest.create("work/three/"))[0].archive_root, "three")
             self.assertEqual({s.archive_root for s in resolve_sources(config, BuildRequest.create("/"))}, {"one", "two", "work"})
             self.assertEqual({s.archive_root for s in resolve_sources(config, BuildRequest.create("work/"))}, {"three", "four"})
 
@@ -264,12 +264,12 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 description = "P."
                 must = ["file.txt"]
                 [scope]
-                ignore = ["archive"]
+                ignore = ["archive/"]
                 [output]
                 path = "out.zip"
             '''))
             with self.assertRaises(SelectionError):
-                resolve_sources(config, BuildRequest.create("archive"))
+                resolve_sources(config, BuildRequest.create("./archive/"))
             self.assertEqual([s.archive_root for s in resolve_sources(config, BuildRequest.create("/"))], ["keep"])
 
     def test_scope_name_is_not_part_of_archive_path(self):
@@ -286,7 +286,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            plan = plan_archive(config, BuildRequest.create("work/project"))
+            plan = plan_archive(config, BuildRequest.create("work/project/"))
             self.assertIn("project/file.txt", plan.entries)
             self.assertNotIn("work/project/file.txt", plan.entries)
 
@@ -320,10 +320,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "derived-out.zip"
             '''))
-            self.assertEqual(resolve_sources(config, BuildRequest.create("work/derived-target"))[0].directory, derived_work / "derived-target")
-            self.assertEqual(resolve_sources(config, BuildRequest.create("oss/oss-target"))[0].directory, base_oss / "oss-target")
+            self.assertEqual(resolve_sources(config, BuildRequest.create("work/derived-target/"))[0].directory, derived_work / "derived-target")
+            self.assertEqual(resolve_sources(config, BuildRequest.create("oss/oss-target/"))[0].directory, base_oss / "oss-target")
             with self.assertRaises(SelectionError):
-                resolve_sources(config, BuildRequest.create("work/base-target"))
+                resolve_sources(config, BuildRequest.create("work/base-target/"))
 
     def test_unused_missing_named_scope_does_not_fail_default_scope_run(self):
         with resolved_temporary_directory() as temp:
@@ -338,10 +338,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            source = resolve_sources(config, BuildRequest.create("project"))[0]
+            source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.directory, root / "project")
             with self.assertRaisesRegex(SelectionError, "Scope 'external' root does not exist"):
-                resolve_sources(config, BuildRequest.create("external/project"))
+                resolve_sources(config, BuildRequest.create("external/project/"))
 
     def test_default_scope_uses_configuration_directory_even_when_named_dot_dirpluck(self):
         with resolved_temporary_directory() as temp:
@@ -355,7 +355,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            source = resolve_sources(config, BuildRequest.create("project"))[0]
+            source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.directory, dot_dir / "project")
 
     def test_dot_dirpluck_name_has_no_special_scope_semantics(self):
@@ -373,8 +373,8 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            default_source = resolve_sources(config, BuildRequest.create("default-project"))[0]
-            named_source = resolve_sources(config, BuildRequest.create("work/named-project"))[0]
+            default_source = resolve_sources(config, BuildRequest.create("./default-project/"))[0]
+            named_source = resolve_sources(config, BuildRequest.create("work/named-project/"))[0]
             self.assertEqual(default_source.directory, dot_dir / "default-project")
             self.assertEqual(named_source.directory, dot_dir / "work" / "named-project")
 
@@ -399,7 +399,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "base.zip"
             """)
             base_config = load_config(base_path)
-            base_source = resolve_sources(base_config, BuildRequest.create("base-target"))[0]
+            base_source = resolve_sources(base_config, BuildRequest.create("./base-target/"))[0]
             self.assertEqual(base_source.archive_root, "base/base-target")
 
             config = load_config(self._write(derived_dir / "default.dirpluck", """
@@ -408,13 +408,13 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "derived.zip"
             """))
-            derived_source = resolve_sources(config, BuildRequest.create("derived-target"))[0]
+            derived_source = resolve_sources(config, BuildRequest.create("./derived-target/"))[0]
             self.assertEqual(derived_source.directory, derived_dir / "derived-target")
             self.assertEqual(derived_source.archive_root, "derived-target")
             with self.assertRaises(SelectionError):
-                resolve_sources(config, BuildRequest.create("base-target"))
+                resolve_sources(config, BuildRequest.create("./base-target/"))
             # Base [scope].ignore / namespace are root-local and do not move outward.
-            ignored_source = resolve_sources(config, BuildRequest.create("ignored"))[0]
+            ignored_source = resolve_sources(config, BuildRequest.create("./ignored/"))[0]
             self.assertEqual(ignored_source.directory, derived_dir / "ignored")
             self.assertEqual(ignored_source.archive_root, "ignored")
 
@@ -432,7 +432,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "out.zip"
             '''))
             with self.assertRaisesRegex(ConfigurationError, "Scope roots must be distinct"):
-                resolve_sources(config, BuildRequest.create("project"))
+                resolve_sources(config, BuildRequest.create("./project/"))
 
     def test_duplicate_effective_scope_roots_are_rejected(self):
         with resolved_temporary_directory() as temp:
@@ -450,7 +450,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "out.zip"
             '''))
             with self.assertRaisesRegex(ConfigurationError, "Scope roots must be distinct"):
-                resolve_sources(config, BuildRequest.create("local/x"))
+                resolve_sources(config, BuildRequest.create("local/x/"))
 
     def test_outer_shared_definition_rebinds_inner_selection(self):
         with resolved_temporary_directory() as temp:
@@ -479,7 +479,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "derived.zip"
             '''))
-            plan = plan_archive(config, BuildRequest.create("base/project"))
+            plan = plan_archive(config, BuildRequest.create("base/project/"))
             self.assertIn("project/outer.txt", plan.entries)
 
     def test_symlinked_root_configuration_uses_link_location_for_default_scope(self):
@@ -507,7 +507,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 self.skipTest("symbolic links are not available")
             config = load_config(link)
             self.assertEqual(config.manifest, link.absolute())
-            sources = resolve_sources(config, BuildRequest.create("app"))
+            sources = resolve_sources(config, BuildRequest.create("./app/"))
             self.assertEqual(len(sources), 1)
             self.assertEqual(sources[0].directory, target.resolve())
 
@@ -722,7 +722,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 [output]
                 path = "out.zip"
             '''))
-            source = resolve_sources(config, BuildRequest.create("project"))[0]
+            source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.directory, root / "project")
 
     def test_source_less_effective_configuration_is_rejected(self):

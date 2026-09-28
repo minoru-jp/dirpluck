@@ -16,7 +16,7 @@ class SPECIFICATION_PART:
         level @= MUST
 
     class SPEC_089:
-        r"""Runtime Target は対応する Scope root の direct child として解決する。`target_kind = "directory"` の Target はその directory 自体を Selection boundary とし、`target_kind = "file"` の Target は regular file 自体を atomic source として扱い、その内部への Selection traversal は行わない。Scope root は Target candidate を探す base である。"""
+        r"""Runtime Target は対応する Scope root の direct child として解決する。Scope の `target_kind` は direct-child Target candidate の type filter であり、`"directory"` は directory、`"file"` は regular file、`"both"` はその両方を許可する。解決後の directory Target はその directory 自体を Selection boundary とし、file Target は regular file 自体を atomic source として扱い、その内部への Selection traversal は行わない。Scope root は Target candidate を探す base である。"""
         level @= MUST
 
     class SPEC_090:

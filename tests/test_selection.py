@@ -20,6 +20,196 @@ from dirpluck.errors import SelectionError
 
 
 class SelectionTests(BuilderTestCase):
+    def test_match_selects_full_root_relative_file_paths(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            for branch in ("core", "ui", "old"):
+                dist = project / "packages" / branch / "dist"
+                dist.mkdir(parents=True)
+                (dist / f"pkg-{branch}.whl").write_text(branch, encoding="utf-8")
+                (dist / f"pkg-{branch}.txt").write_text(branch, encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = [{ match = 'packages/(core|ui)/dist/.*\.whl' }]
+            """)
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/packages/core/dist/pkg-core.whl", names)
+            self.assertIn("application/packages/ui/dist/pkg-ui.whl", names)
+            self.assertNotIn("application/packages/old/dist/pkg-old.whl", names)
+            self.assertFalse(any(name.endswith(".txt") for name in names))
+
+    def test_match_directory_path_uses_trailing_slash_and_selects_subtree(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application" / "plugins"
+            for name in ("plugin-core", "plugin-ui", "plugin-old"):
+                directory = project / name
+                directory.mkdir(parents=True)
+                (directory / "inside.txt").write_text(name, encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = [{ match = 'plugins/plugin-(core|ui)/' }]
+            """)
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/plugins/plugin-core/inside.txt", names)
+            self.assertIn("application/plugins/plugin-ui/inside.txt", names)
+            self.assertNotIn("application/plugins/plugin-old/inside.txt", names)
+
+    def test_match_without_trailing_slash_does_not_match_directory(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            directory = root / "application" / "cache"
+            directory.mkdir(parents=True)
+            (directory / "inside.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = [{ match = 'cache' }]
+            """)
+            with self.assertRaisesRegex(SelectionError, "no matches"):
+                build_archive(config, BuildRequest.create("./application/"))
+
+    def test_match_may_allows_zero_matches(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            project.mkdir()
+            (project / "README.md").write_text("readme", encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = ["README.md"]
+                may = [{ match = 'docs/.*\.md' }]
+            """)
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("application/README.md", archive.namelist())
+
+    def test_match_and_ordinary_patterns_deduplicate_selected_files(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            src = root / "application" / "src"
+            src.mkdir(parents=True)
+            (src / "main.py").write_text("main", encoding="utf-8")
+            (src / "helper.py").write_text("helper", encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = [
+                    "src/main.py",
+                    { match = 'src/.*\.py' },
+                ]
+            """)
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = archive.namelist()
+            self.assertEqual(names.count("application/src/main.py"), 1)
+            self.assertEqual(names.count("application/src/helper.py"), 1)
+
+    def test_match_ignore_excludes_files_and_directory_subtrees(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            src = root / "application" / "src"
+            src.mkdir(parents=True)
+            (src / "keep.py").write_text("keep", encoding="utf-8")
+            (src / "skip.tmp").write_text("skip", encoding="utf-8")
+            generated = src / "generated"
+            generated.mkdir()
+            (generated / "inside.py").write_text("generated", encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = ["src/"]
+                ignore = [
+                    { match = 'src/.*\.tmp' },
+                    { match = 'src/generated/' },
+                ]
+            """)
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/src/keep.py", names)
+            self.assertNotIn("application/src/skip.tmp", names)
+            self.assertNotIn("application/src/generated/inside.py", names)
+
+    def test_match_ignore_overrides_required_match(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            src = root / "application" / "src"
+            src.mkdir(parents=True)
+            (src / "secret.py").write_text("x", encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = [{ match = 'src/secret\.py' }]
+                ignore = [{ match = 'src/secret\.py' }]
+            """)
+            with self.assertRaisesRegex(SelectionError, "no matches"):
+                build_archive(config, BuildRequest.create("./application/"))
+
+    def test_match_is_available_to_always_sources(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "documents"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            (docs / "notes.txt").write_text("notes", encoding="utf-8")
+            config = self._config(root, r"""
+                [always.documents]
+                path = "documents"
+                must = [{ match = '.*\.md' }]
+            """)
+            output = build_archive(config, BuildRequest.create())
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("documents/guide.md", names)
+            self.assertNotIn("documents/notes.txt", names)
+
+    def test_match_shared_reference_materializes_and_selects(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            src = root / "application" / "src"
+            src.mkdir(parents=True)
+            (src / "main.py").write_text("x", encoding="utf-8")
+            (src / "main.txt").write_text("x", encoding="utf-8")
+            config = self._config(root, r"""
+                [shared.must]
+                python = [{ match = 'src/.*\.py' }]
+
+                [pluck]
+                must = [["python"]]
+            """)
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/src/main.py", names)
+            self.assertNotIn("application/src/main.txt", names)
+
+    def test_match_is_available_in_pluck_cases(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            src = project / "src"
+            src.mkdir(parents=True)
+            (project / "README.md").write_text("readme", encoding="utf-8")
+            (src / "main.py").write_text("python", encoding="utf-8")
+            (src / "main.txt").write_text("text", encoding="utf-8")
+            config = self._config(root, r"""
+                [pluck]
+                must = ["README.md"]
+
+                [pluck.case.review]
+                must = [{ match = 'src/.*\.py' }]
+            """)
+            output = build_archive(
+                config, BuildRequest.create("./application/", case="review")
+            )
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/src/main.py", names)
+            self.assertNotIn("application/src/main.txt", names)
+            self.assertNotIn("application/README.md", names)
+
     def test_required_symlink_entry_is_not_selectable(self):
         with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
             root = Path(temp)
@@ -83,10 +273,10 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["*.pem"]
             """)
-            plan = plan_archive(config, BuildRequest.create("application"))
+            plan = plan_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(plan.skipped_link_count, 0)
             self.assertIn("application/src/main.py", plan.entries)
             self.assertNotIn("application/src/secret.pem", plan.entries)
@@ -126,7 +316,7 @@ class SelectionTests(BuilderTestCase):
                 [always.data]
                 path = "data"
                 description = "Data."
-                may = ["*"]
+                may = ["*", "*/"]
             """)
             plan = plan_archive(config, BuildRequest.create())
             self.assertIn("data/regular.txt", plan.entries)
@@ -163,7 +353,7 @@ class SelectionTests(BuilderTestCase):
                 [always.data]
                 path = "data"
                 description = "Data."
-                must = ["nested"]
+                must = ["nested/"]
             """)
             plan = plan_archive(config, BuildRequest.create())
             self.assertIn("data/nested/regular.txt", plan.entries)
@@ -246,7 +436,7 @@ class SelectionTests(BuilderTestCase):
                 [always.root]
                 path = {filesystem_root.as_posix()!r}
                 description = "Filesystem root."
-                may = ["*"]
+                may = ["*", "*/"]
                 allow_empty = true
             ''')
             with self.assertRaisesRegex(SelectionError, "filesystem root"):
@@ -272,10 +462,10 @@ class SelectionTests(BuilderTestCase):
                 must = [
                     "dist/package-*.whl",
                     "packages/*/dist/pkg-*.whl",
-                    "plugins/foo*bar",
+                    "plugins/foo*bar/",
                 ]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertEqual(names, {
@@ -299,7 +489,7 @@ class SelectionTests(BuilderTestCase):
                 must = ["README.md"]
             ''')
             with self.assertRaises(SelectionError):
-                build_archive(config, BuildRequest.create("application"))
+                build_archive(config, BuildRequest.create("./application/"))
 
     def test_must_star_is_case_sensitive(self):
         with resolved_temporary_directory() as temp:
@@ -313,7 +503,7 @@ class SelectionTests(BuilderTestCase):
                 description = "Case-sensitive."
                 must = ["dist/pkg-*.whl"]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(archive.namelist(), ["README.md", "application/dist/pkg-one.whl"])
 
@@ -328,7 +518,7 @@ class SelectionTests(BuilderTestCase):
                 description = "Wheel."
                 must = ["dist/shikumi-0.1.0-py3-none-any.whl"]
             ''')
-            output = build_archive(config, BuildRequest.create("shikumi"))
+            output = build_archive(config, BuildRequest.create("./shikumi/"))
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(archive.namelist(), ["README.md", "shikumi/dist/shikumi-0.1.0-py3-none-any.whl"])
 
@@ -343,10 +533,10 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Optional extras."
-                must = ["src"]
-                may = ["tests", "docs", "CHANGELOG.md"]
+                must = ["src/"]
+                may = ["tests/", "docs/", "CHANGELOG.md"]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("application/src/main.py", names)
@@ -360,10 +550,10 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Optional."
-                may = ["src", "README.md"]
+                may = ["src/", "README.md"]
             ''')
             with self.assertRaises(SelectionError):
-                build_archive(config, BuildRequest.create("application"))
+                build_archive(config, BuildRequest.create("./application/"))
 
     def test_allow_empty_preserves_empty_target_directory(self):
         with resolved_temporary_directory() as temp:
@@ -372,10 +562,10 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Greenfield target."
-                may = ["src", "README.md"]
+                may = ["src/", "README.md"]
                 allow_empty = true
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(set(archive.namelist()), {"README.md", "application/"})
                 readme = archive.read("README.md").decode("utf-8")
@@ -389,11 +579,28 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Greenfield target."
-                may = ["src"]
+                may = ["src/"]
                 allow_empty = true
             ''')
-            plan = plan_archive(config, BuildRequest.create("application"), allow_missing=True)
+            plan = plan_archive(config, BuildRequest.create("./application/"), allow_missing=True)
             self.assertIn("target (`application/`): empty, allowed", render_archive_tree(plan))
+
+
+    def test_preview_renders_missing_match_expression_as_opaque_label(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "application").mkdir()
+            config = self._config(root, r'''
+                [pluck]
+                may = [{ match = 'src/.*\.py' }]
+                allow_empty = true
+            ''')
+            plan = plan_archive(config, BuildRequest.create("./application/"), allow_missing=True)
+            tree = render_archive_tree(plan)
+            self.assertIn("Unmatched selection entries:", tree)
+            self.assertIn("{ match = 'src/.*", tree.split("Unmatched selection entries:", 1)[1])
+            self.assertIn("[optional missing]", tree.split("Unmatched selection entries:", 1)[1])
+            self.assertNotIn("{ match = 'src/", tree.split("Unmatched selection entries:", 1)[0])
 
     def test_preview_distinguishes_required_and_optional_missing_patterns(self):
         with resolved_temporary_directory() as temp:
@@ -402,13 +609,13 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Dry run."
-                must = ["src"]
-                may = ["tests"]
+                must = ["src/"]
+                may = ["tests/"]
             ''')
-            plan = plan_archive(config, BuildRequest.create("application"), allow_missing=True)
+            plan = plan_archive(config, BuildRequest.create("./application/"), allow_missing=True)
             tree = render_archive_tree(plan)
-            self.assertIn("src [missing]", tree)
-            self.assertIn("tests [optional missing]", tree)
+            self.assertIn("src/ [missing]", tree)
+            self.assertIn("tests/ [optional missing]", tree)
             self.assertIn("empty, would error", tree)
 
     def test_directory_must_is_recursive_and_name_ignores_apply(self):
@@ -418,10 +625,10 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Recursive directory."
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["generated/", "__pycache__/", ".DS_Store", "*.pyc"]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("application/src/module.py", names)
@@ -443,10 +650,10 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Filters."
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["exact.tmp", "prefix-*", "*-suffix.py", "*draft*", "cache/", "temp*/", "*generated/", "*junk*/"]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("application/src/keep.py", names)
@@ -467,11 +674,11 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             """)
-            plan = plan_archive(config, BuildRequest.create("application"))
+            plan = plan_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(plan.skipped_link_count, 1)
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertNotIn("application/src/external-dir", names)
@@ -491,9 +698,9 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("application/src/real/inside.py", names)
@@ -515,9 +722,9 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             """)
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("application/src/main.py", names)
@@ -535,7 +742,7 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["node_modules/"]
             """)
             original_iterdir = Path.iterdir
@@ -546,7 +753,7 @@ class SelectionTests(BuilderTestCase):
                 return original_iterdir(path)
 
             with patch.object(Path, "iterdir", new=guarded_iterdir):
-                output = build_archive(config, BuildRequest.create("application"))
+                output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("application/src/main.py", names)
@@ -576,9 +783,9 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             """)
-            plan = plan_archive(config, BuildRequest.create("application"))
+            plan = plan_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(plan.skipped_link_count, 1)
             self.assertIn("application/src/main.py", plan.entries)
             self.assertNotIn("application/src/junction/secret.py", plan.entries)
@@ -596,11 +803,11 @@ class SelectionTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Project."
-                may = ["src"]
+                may = ["src/"]
                 allow_empty = true
             """)
             with self.assertRaisesRegex(SelectionError, "symbolic link"):
-                resolve_sources(config, BuildRequest.create("linked"))
+                resolve_sources(config, BuildRequest.create("./linked/"))
 
 class IgnorePathReferenceSelectionTests(BuilderTestCase):
     def test_file_path_reference_excludes_only_the_exact_selection_relative_file(self):
@@ -613,10 +820,10 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
             (project / "other" / "big.bin").write_text("keep", encoding="utf-8")
             config = self._config(root, '''
                 [pluck]
-                must = ["tests", "other"]
+                must = ["tests/", "other/"]
                 ignore = [["./tests/fixtures/big.bin"]]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertNotIn("application/tests/fixtures/big.bin", names)
@@ -633,7 +840,7 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
             (project / "tests" / "keep.txt").write_text("keep", encoding="utf-8")
             config = self._config(root, '''
                 [pluck]
-                must = ["tests"]
+                must = ["tests/"]
                 ignore = [
                     ["./tests/fixtures/big.bin"],
                     "big.bin",
@@ -648,29 +855,91 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
                 return original_iterdir(path)
 
             with patch.object(Path, "iterdir", new=guarded_iterdir):
-                output = build_archive(config, BuildRequest.create("application"))
+                output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("application/tests/keep.txt", names)
             self.assertNotIn("application/tests/fixtures/big.bin", names)
             self.assertNotIn("application/tests/fixtures/small.txt", names)
 
-    def test_path_reference_without_trailing_slash_does_not_exclude_directory(self):
+    def test_path_reference_without_trailing_slash_broadly_excludes_file_or_directory(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             project = root / "application"
             fixtures = project / "tests" / "fixtures"
             fixtures.mkdir(parents=True)
-            (fixtures / "keep.txt").write_text("keep", encoding="utf-8")
+            (fixtures / "drop.txt").write_text("drop", encoding="utf-8")
+            (project / "tests" / "keep.txt").write_text("keep", encoding="utf-8")
             config = self._config(root, '''
                 [pluck]
-                must = ["tests"]
+                must = ["tests/"]
                 ignore = [["./tests/fixtures"]]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
-            self.assertIn("application/tests/fixtures/keep.txt", names)
+            self.assertIn("application/tests/keep.txt", names)
+            self.assertNotIn("application/tests/fixtures/drop.txt", names)
+
+    def test_name_ignore_without_trailing_slash_broadly_excludes_files_and_directories(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            (project / "a").mkdir(parents=True)
+            (project / "a" / "noise").write_text("drop", encoding="utf-8")
+            (project / "b" / "noise").mkdir(parents=True)
+            (project / "b" / "noise" / "drop.txt").write_text("drop", encoding="utf-8")
+            (project / "a" / "keep.txt").write_text("keep", encoding="utf-8")
+            (project / "b" / "keep.txt").write_text("keep", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                must = ["a/", "b/"]
+                ignore = ["noise"]
+            ''')
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/a/keep.txt", names)
+            self.assertIn("application/b/keep.txt", names)
+            self.assertNotIn("application/a/noise", names)
+            self.assertNotIn("application/b/noise/drop.txt", names)
+
+    def test_name_ignore_with_trailing_slash_is_directory_only(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            (project / "a").mkdir(parents=True)
+            (project / "a" / "noise").write_text("keep", encoding="utf-8")
+            (project / "b" / "noise").mkdir(parents=True)
+            (project / "b" / "noise" / "drop.txt").write_text("drop", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                must = ["a/", "b/"]
+                ignore = ["noise/"]
+            ''')
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/a/noise", names)
+            self.assertNotIn("application/b/noise/drop.txt", names)
+
+
+    def test_directory_path_reference_does_not_exclude_same_path_when_it_is_a_file(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            project = root / "application"
+            tests = project / "tests"
+            tests.mkdir(parents=True)
+            (tests / "noise").write_text("keep", encoding="utf-8")
+            config = self._config(root, '''
+                [pluck]
+                must = ["tests/"]
+                ignore = [["./tests/noise/"]]
+            ''')
+            output = build_archive(config, BuildRequest.create("./application/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+            self.assertIn("application/tests/noise", names)
 
     def test_path_reference_ignore_suppresses_link_like_diagnostic(self):
         with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
@@ -688,10 +957,10 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
                 self.skipTest(f"symbolic links are unavailable: {exc}")
             config = self._config(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
                 ignore = [["./src/external.py"]]
             ''')
-            plan = plan_archive(config, BuildRequest.create("application"))
+            plan = plan_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(plan.skipped_link_count, 0)
             self.assertIn("application/src/main.py", plan.entries)
             self.assertNotIn("application/src/external.py", plan.entries)
@@ -712,10 +981,10 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
 
                 [always.assets]
                 path = "assets"
-                must = ["nested"]
+                must = ["nested/"]
                 ignore = [["./nested/secret.txt"]]
             ''')
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
             self.assertIn("assets/nested/keep.txt", names)

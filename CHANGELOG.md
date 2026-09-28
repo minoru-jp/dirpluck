@@ -2,6 +2,31 @@
 
 Release history for dirpluck.
 
+## 0.13.0
+
+Allow a Scope to expose directory and file Targets together, generalize Target selectors across all Target kinds, and add structured full-path regular-expression matching to Selection.
+
+### Added
+
+- Add `target_kind = "both"` to `[scope]` and `[scope.<name>]`. Both mode exposes eligible direct-child regular directories and regular files as Target candidates. Directory Targets use the effective Pluck Selection, while file Targets remain atomic sources. A both-kind Scope may still select files without a Pluck, but resolving any directory Target requires Pluck.
+- Add `{ match = "..." }` structured Selection entries to `must`, `may`, `ignore`, and Shared pattern sets. `match` applies a Python-compatible regular expression with full-match semantics to complete root-relative POSIX-style paths below the Selection root. Regular-directory paths carry a trailing `/`, regular-file paths do not, expressions must be non-empty and at most 512 characters, and invalid regular expressions are Configuration errors.
+- Structured `must` / `may` matches can select both files and directories; a matching directory behaves like an ordinary directory leaf and collects its subtree. Structured `ignore` matches exclude files and prune matching directory subtrees. If ordinary string patterns, Shared expansion, and structured matches select the same file, the final Selection contains it only once.
+
+### Changed
+
+- Generalize `:[...]` / `SCOPE:[...]` and `:<...>` / `SCOPE:<...>` from file Target selectors to Target selectors available with `target_kind = "directory"`, `"file"`, or `"both"`. List selectors are typed literal Target lists, while regular-expression selectors full-match normalized eligible direct-child Target names: files are `NAME`, directories are `NAME/`.
+- Treat `target_kind` as the type filter for direct-child Target candidates. Scope expansion, literal Target resolution, list selectors, and regular-expression selectors share the same type filter, Scope `ignore`, and link-like-entry exclusion. In `both` mode, each resolved Target retains its actual directory/file kind for downstream processing.
+- Keep ordinary Selection string patterns as the existing restricted guided-traversal grammar, while structured `match` provides the more expressive full-path regular-expression form. Implementations may scan the Selection root for `match` candidates rather than inferring a guided traversal plan from the regular expression.
+- Keep `ignore` intentionally broad: ordinary Selection ignore strings, concrete ignore path references, and Scope ignore patterns without a trailing `/` exclude matching files and directories; a trailing `/` narrows the exclusion to directories only. This preserves the broad exclusion behavior while inclusion-side references become type-explicit. Use structured `{ match = "..." }` when a file-only ignore is required.
+- **Breaking:** Make file-versus-directory type explicit for inclusion and Target references. Ordinary `must` / `may` strings, literal Target references, and Target-list items now use no trailing `/` for files and a trailing `/` for directories; dirpluck no longer infers the type from the current filesystem for those references. Migrate directory Selection entries such as `must = ["src"]` to `must = ["src/"]`, and named-Scope directory Targets such as `work/project` to `work/project/`.
+- **Breaking:** Add `./NAME/` as the literal form for a default-Scope directory Target because `NAME/` remains reserved for named-Scope expansion. `NAME` / `./NAME` denote default-Scope files. Target lists use `/` both as the item separator and as the directory marker, so a non-final directory item appears as `NAME//NEXT`; three or more consecutive `/` characters are invalid.
+- Regular-expression Target selectors now match files as `NAME` and directories as `NAME/`; `/` is therefore allowed in the expression. `<repo>` selects a file, `<repo/>` a directory, and `<repo/?>` can select either. Selector discovery remains limited to direct children of the Scope, so `/` in the expression does not enable recursive traversal.
+
+### Fixed
+
+- Improve strict entry-type migration diagnostics. If a `may` string pattern requests one type but matches only a non-ignored regular entry of the opposite type, it remains optional missing and dirpluck records a source-labelled warning suggesting the relevant trailing-`/` adjustment. A `must` mismatch keeps its normal unsatisfied error during a build, while `--preview` leaves it missing and records the same hint as a warning. The CLI prints these warnings to stderr in normal builds and `--preview`; the official Python API returns the same messages in `RunResult.warnings`. Warnings from different sources remain distinct because they include the source label, and Selection errors now use `source: detail` wording. Existing literal-Target errors keep the same type-marker hint.
+- Fix `--preview` rendering for unmatched structured `{ match = "..." }` expressions containing `/`. Such expressions are displayed as opaque unmatched Selection entries instead of being split into a fake directory tree.
+
 ## 0.12.0
 
 Add selector syntax to file-kind Scope Target references so direct-child regular files can be selected either by explicit name lists or by regular expressions. Existing literal Target references and whole-Scope expansion keep their previous meanings.

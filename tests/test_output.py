@@ -27,9 +27,9 @@ class OutputTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''', output="artifacts/context.zip")
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(output, root / "artifacts" / "context.zip")
             self.assertTrue(output.is_file())
 
@@ -41,10 +41,10 @@ class OutputTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''', overwrite=False)
             with self.assertRaises(SelectionError):
-                build_archive(config, BuildRequest.create("application"))
+                build_archive(config, BuildRequest.create("./application/"))
             self.assertEqual((root / "out.zip").read_bytes(), b"old")
 
     def test_existing_output_is_rejected_before_archive_planning(self):
@@ -59,7 +59,7 @@ class OutputTests(BuilderTestCase):
 
             with patch("dirpluck._archive.plan_archive", side_effect=AssertionError("planning should not run")):
                 with self.assertRaisesRegex(SelectionError, "output archive already exists"):
-                    build_archive(config, BuildRequest.create("application"))
+                    build_archive(config, BuildRequest.create("./application/"))
 
     def test_fixed_output_sequence_is_rejected_before_archive_planning(self):
         with resolved_temporary_directory() as temp:
@@ -72,7 +72,7 @@ class OutputTests(BuilderTestCase):
 
             with patch("dirpluck._archive.plan_archive", side_effect=AssertionError("planning should not run")):
                 with self.assertRaisesRegex(SelectionError, "sequence can only be used with timestamp output"):
-                    build_archive(config, BuildRequest.create("application", sequence=1))
+                    build_archive(config, BuildRequest.create("./application/", sequence=1))
 
     def test_fixed_output_overwrite_replaces_existing_archive(self):
         with resolved_temporary_directory() as temp:
@@ -84,9 +84,9 @@ class OutputTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''', overwrite=True)
-            build_archive(config, BuildRequest.create("application"))
+            build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(root / "out.zip") as archive:
                 self.assertIn("application/src/main.py", archive.namelist())
 
@@ -99,12 +99,12 @@ class OutputTests(BuilderTestCase):
             (project / "main.py").write_text("x", encoding="utf-8")
             config = self._config(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
             ''')
 
             previous_umask = os.umask(0o027)
             try:
-                output = build_archive(config, BuildRequest.create("application"))
+                output = build_archive(config, BuildRequest.create("./application/"))
             finally:
                 os.umask(previous_umask)
 
@@ -122,12 +122,12 @@ class OutputTests(BuilderTestCase):
             output.chmod(0o600)
             config = self._config(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
             ''', overwrite=True)
 
             previous_umask = os.umask(0o022)
             try:
-                build_archive(config, BuildRequest.create("application"))
+                build_archive(config, BuildRequest.create("./application/"))
             finally:
                 os.umask(previous_umask)
 
@@ -145,14 +145,14 @@ class OutputTests(BuilderTestCase):
             parent_config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
                 [output]
                 path = "../parent.zip"
                 overwrite = false
             ''')
             parent_output = build_archive(
                 parent_config,
-                BuildRequest.create("application"),
+                BuildRequest.create("./application/"),
             )
             self.assertEqual(parent_output, workspace / "parent.zip")
             self.assertTrue(parent_output.is_file())
@@ -161,14 +161,14 @@ class OutputTests(BuilderTestCase):
             absolute_config = self._config(root, f'''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
                 [output]
                 path = {absolute.as_posix()!r}
                 overwrite = false
             ''')
             absolute_output = build_archive(
                 absolute_config,
-                BuildRequest.create("application"),
+                BuildRequest.create("./application/"),
             )
             self.assertEqual(absolute_output, absolute)
             self.assertTrue(absolute_output.is_file())
@@ -180,12 +180,12 @@ class OutputTests(BuilderTestCase):
             config = self._config(root, """
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             """)
             with self.assertRaises(SelectionError):
                 build_archive(
                     config,
-                    BuildRequest.create("application", sequence=1),
+                    BuildRequest.create("./application/", sequence=1),
                 )
 
     def test_output_path_may_resolve_through_parent_symlink(self):
@@ -201,9 +201,9 @@ class OutputTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 description = "Target."
-                must = ["src"]
+                must = ["src/"]
             ''', output="artifacts/out.zip")
-            output = build_archive(config, BuildRequest.create("application"))
+            output = build_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(output, Path(other) / "out.zip")
             self.assertTrue((Path(other) / "out.zip").is_file())
 

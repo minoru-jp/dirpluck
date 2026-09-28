@@ -6,7 +6,6 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Mapping
 import os
-import re
 
 from ._builder_common import _is_link_like
 from ._builder_models import (
@@ -21,6 +20,7 @@ from ._builder_models import (
 from ._config_models import (
     Config,
     ExclusionPattern,
+    MatchPattern,
     Namespace,
     Selection,
     SharedPatterns,
@@ -29,13 +29,18 @@ from ._config_models import (
 from ._config_values import _materialize_selection
 from .config import load_config
 from .errors import ConfigurationError, SelectionError
+from ._regex import compile_regular_expression
 
 
 _RESERVED_ARCHIVE_ROOT_NAMES = frozenset({"readme.md"})
-_FILE_SELECTOR_REGEX_MAX_LENGTH = 512
 
 
-def _target_name_matches(name: str, pattern: TargetIgnorePattern) -> bool:
+def _target_name_matches(name: str, *, directory: bool, pattern: TargetIgnorePattern) -> bool:
+    # Ignore is intentionally broad when no trailing '/' is written: the
+    # pattern excludes matching files and directories. A trailing '/' narrows
+    # the exclusion to directories only.
+    if pattern.directory and not directory:
+        return False
     if pattern.match == "exact":
         return name == pattern.value
     if pattern.match == "prefix":
@@ -47,13 +52,23 @@ def _target_name_matches(name: str, pattern: TargetIgnorePattern) -> bool:
     raise AssertionError(f"unknown Scope ignore match kind: {pattern.match}")
 
 
-def _target_is_ignored(name: str, patterns: tuple[TargetIgnorePattern, ...]) -> bool:
-    return any(_target_name_matches(name, pattern) for pattern in patterns)
-
+def _target_is_ignored(
+    name: str,
+    *,
+    directory: bool,
+    patterns: tuple[TargetIgnorePattern, ...],
+) -> bool:
+    return any(_target_name_matches(name, directory=directory, pattern=pattern) for pattern in patterns)
 
 def _validate_target_name(name: str, *, label: str, target_kind: str = "directory") -> None:
     if not name or name in {".", ".."} or "/" in name or "\\" in name:
-        noun = "directory" if target_kind == "directory" else "file"
+        noun = {
+            "directory": "directory",
+            "file": "file",
+            "both": "filesystem entry",
+        }.get(target_kind)
+        if noun is None:
+            raise AssertionError(f"unknown Scope target kind: {target_kind}")
         raise SelectionError(f"{label} must name one direct child {noun}: {name!r}")
 
 
@@ -69,6 +84,11 @@ def _resolve_target_directory(name: str, root: Path, *, label: str) -> tuple[Pat
     except FileNotFoundError as exc:
         raise SelectionError(f"{label} does not exist: {candidate}") from exc
     if not resolved.is_dir():
+        if resolved.is_file():
+            raise SelectionError(
+                f"{label} is not a directory: {candidate}; a regular file exists at that name, "
+                "so remove the trailing '/' if the file was intended"
+            )
         raise SelectionError(f"{label} is not a directory: {candidate}")
     root_resolved = root.resolve()
     try:
@@ -92,6 +112,11 @@ def _resolve_target_file(name: str, root: Path, *, label: str) -> tuple[Path, st
     except FileNotFoundError as exc:
         raise SelectionError(f"{label} does not exist: {candidate}") from exc
     if not resolved.is_file():
+        if resolved.is_dir():
+            raise SelectionError(
+                f"{label} is not a regular file: {candidate}; a directory exists at that name, "
+                "so add a trailing '/' if the directory was intended"
+            )
         raise SelectionError(f"{label} is not a regular file: {candidate}")
     root_resolved = root.resolve()
     try:
@@ -103,19 +128,59 @@ def _resolve_target_file(name: str, root: Path, *, label: str) -> tuple[Path, st
     return resolved, relative.as_posix()
 
 
+def _resolve_target_both(name: str, root: Path, *, label: str) -> tuple[Path, str, str]:
+    _validate_target_name(name, label=label, target_kind="both")
+    candidate = root / name
+    if _is_link_like(candidate):
+        raise SelectionError(
+            f"{label} is a symbolic link or Windows junction and is not a selectable Target: {candidate}"
+        )
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise SelectionError(f"{label} does not exist: {candidate}") from exc
+    if resolved.is_dir():
+        source_kind = "directory"
+    elif resolved.is_file():
+        source_kind = "file"
+    else:
+        raise SelectionError(f"{label} is not a regular file or directory: {candidate}")
+    root_resolved = root.resolve()
+    try:
+        relative = resolved.relative_to(root_resolved)
+    except ValueError as exc:
+        raise SelectionError(f"{label} resolves outside its Scope root: {resolved}") from exc
+    if len(relative.parts) != 1:
+        raise SelectionError(f"{label} must resolve to one direct child of its Scope root: {resolved}")
+    return resolved, relative.as_posix(), source_kind
+
+
+def _scope_accepts_kind(target_kind: str, expected_kind: str) -> bool:
+    if target_kind == "both":
+        return expected_kind in {"file", "directory"}
+    return target_kind == expected_kind
+
+
 def _resolve_target_entry(
     name: str,
     root: Path,
     *,
     target_kind: str,
+    expected_kind: str,
     label: str,
-) -> tuple[Path, str]:
-    if target_kind == "directory":
-        return _resolve_target_directory(name, root, label=label)
-    if target_kind == "file":
-        return _resolve_target_file(name, root, label=label)
-    raise AssertionError(f"unknown Scope target kind: {target_kind}")
-
+) -> tuple[Path, str, str]:
+    if expected_kind not in {"file", "directory"}:
+        raise AssertionError(f"unknown requested Target kind: {expected_kind}")
+    _validate_target_name(name, label=label, target_kind=expected_kind)
+    if not _scope_accepts_kind(target_kind, expected_kind):
+        raise SelectionError(
+            f"{label} requests a {expected_kind} Target, but this Scope uses target_kind = {target_kind!r}"
+        )
+    if expected_kind == "directory":
+        path, source_root = _resolve_target_directory(name, root, label=label)
+        return path, source_root, "directory"
+    path, source_root = _resolve_target_file(name, root, label=label)
+    return path, source_root, "file"
 
 def _scope_label(name: str | None) -> str:
     return "unnamed Scope" if name is None else f"Scope {name!r}"
@@ -146,52 +211,73 @@ def _target_reference_is_absolute(reference: str) -> bool:
     return pure.is_absolute() or windows.is_absolute() or bool(windows.drive)
 
 
-def _expand_scope(binding: _ScopeBinding) -> tuple[tuple[Path, str], ...]:
+def _entry_is_eligible_target(entry: Path, target_kind: str) -> bool:
+    if target_kind == "directory":
+        return entry.is_dir()
+    if target_kind == "file":
+        return entry.is_file()
+    if target_kind == "both":
+        return entry.is_dir() or entry.is_file()
+    raise AssertionError(f"unknown Scope target kind: {target_kind}")
+
+
+def _empty_scope_message(binding: _ScopeBinding) -> str:
+    scope = binding.scope
+    if scope.target_kind == "directory":
+        noun = "directories"
+    elif scope.target_kind == "file":
+        noun = "files"
+    elif scope.target_kind == "both":
+        noun = "files or directories"
+    else:
+        raise AssertionError(f"unknown Scope target kind: {scope.target_kind}")
+    return f"{_scope_label(scope.name)} contains no eligible direct child {noun}"
+
+
+def _expand_scope(binding: _ScopeBinding) -> tuple[tuple[Path, str, str], ...]:
     root = _resolve_scope_root(binding)
     scope = binding.scope
-    targets: list[tuple[Path, str]] = []
+    targets: list[tuple[Path, str, str]] = []
     for entry in sorted(root.iterdir(), key=lambda item: item.name):
-        if _target_is_ignored(entry.name, scope.ignore):
-            continue
         if _is_link_like(entry):
             continue
-        if scope.target_kind == "directory":
-            if not entry.is_dir():
-                continue
-        elif scope.target_kind == "file":
-            if not entry.is_file():
-                continue
+        if entry.is_dir():
+            source_kind = "directory"
+        elif entry.is_file():
+            source_kind = "file"
         else:
-            raise AssertionError(f"unknown Scope target kind: {scope.target_kind}")
+            continue
+        if not _entry_is_eligible_target(entry, scope.target_kind):
+            continue
+        if _target_is_ignored(entry.name, directory=source_kind == "directory", patterns=scope.ignore):
+            continue
         targets.append(
             _resolve_target_entry(
                 entry.name,
                 root,
                 target_kind=scope.target_kind,
+                expected_kind=source_kind,
                 label=f"target from {_scope_label(scope.name)}",
             )
         )
     if not targets:
-        if scope.target_kind == "directory":
-            raise SelectionError(f"{_scope_label(scope.name)} contains no eligible direct child directories")
-        raise SelectionError(f"{_scope_label(scope.name)} contains no eligible direct child files")
+        raise SelectionError(_empty_scope_message(binding))
     return tuple(targets)
 
-
-def _file_selector_binding(
+def _target_selector_binding(
     reference: str,
     effective: _EffectiveConfiguration,
 ) -> tuple[_ScopeBinding, str, str] | None:
-    """Return the Scope and selector body for one explicit file-selector reference.
+    """Return the Scope and selector body for one explicit Target-selector reference.
 
-    Only the reserved ``:[...]`` and ``:<...>`` forms are recognized.  Other
+    Only the reserved ``:[...]`` and ``:<...>`` forms are recognized. Other
     colons remain ordinary literal Target-name characters for compatibility.
     """
 
     if reference.startswith((":[", ":<")):
         return _require_scope(effective, None), reference[1:], "[scope]"
 
-    # Scope names are Configuration data rather than path syntax.  Match the
+    # Scope names are Configuration data rather than path syntax. Match the
     # longest configured name first so names containing ':' remain usable.
     named = sorted(
         (name for name in effective.scopes if name is not None),
@@ -207,7 +293,7 @@ def _file_selector_binding(
             return _require_scope(effective, scope_name), selector, f"[scope.{scope_name}]"
 
     # The selector marker reserves this reference shape even when the named
-    # Scope is unknown.  This prevents a typo such as ``missing:<...>`` from
+    # Scope is unknown. This prevents a typo such as ``missing:<...>`` from
     # silently becoming a literal default-Scope Target name.
     marker_positions = [
         index
@@ -224,104 +310,139 @@ def _file_selector_binding(
     return None
 
 
-def _require_file_selector_scope(binding: _ScopeBinding, *, label: str) -> None:
-    if binding.scope.target_kind != "file":
-        raise SelectionError(
-            f"{label} uses file Target selector syntax, but {_scope_label(binding.scope.name)} "
-            "does not set target_kind = 'file'"
-        )
+def _selector_target_noun(binding: _ScopeBinding) -> str:
+    target_kind = binding.scope.target_kind
+    if target_kind == "directory":
+        return "directory Targets"
+    if target_kind == "file":
+        return "file Targets"
+    if target_kind == "both":
+        return "Targets"
+    raise AssertionError(f"unknown Scope target kind: {target_kind}")
 
 
-def _resolve_file_list_selector(
+def _parse_target_list_items(body: str, *, label: str) -> tuple[tuple[str, str], ...]:
+    if not body:
+        raise SelectionError(f"{label} Target list selector must not be empty")
+    items: list[tuple[str, str]] = []
+    current: list[str] = []
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if char != "/":
+            current.append(char)
+            index += 1
+            continue
+        if not current:
+            raise SelectionError(f"{label} Target list selector must not contain an empty Target name")
+        run = 1
+        while index + run < len(body) and body[index + run] == "/":
+            run += 1
+        if run >= 3:
+            raise SelectionError(f"{label} Target list selector must not contain three or more consecutive '/'")
+        name = "".join(current)
+        current.clear()
+        at_end = index + run == len(body)
+        if run == 1:
+            if at_end:
+                items.append((name, "directory"))
+            else:
+                items.append((name, "file"))
+        else:  # directory marker plus list separator
+            if at_end:
+                raise SelectionError(
+                    f"{label} Target list selector must name another Target after a directory separator"
+                )
+            items.append((name, "directory"))
+        index += run
+    if current:
+        items.append(("".join(current), "file"))
+    if not items:
+        raise SelectionError(f"{label} Target list selector must not be empty")
+    return tuple(items)
+
+
+def _resolve_target_list_selector(
     selector: str,
     binding: _ScopeBinding,
     *,
     label: str,
     ignored_where: str,
-) -> tuple[tuple[Path, str], ...]:
+) -> tuple[tuple[Path, str, str], ...]:
     if not selector.endswith("]"):
-        raise SelectionError(f"{label} file Target list selector must end with ']': {selector!r}")
+        raise SelectionError(f"{label} Target list selector must end with ']': {selector!r}")
     body = selector[1:-1]
-    if not body:
-        raise SelectionError(f"{label} file Target list selector must not be empty")
-    names = body.split("/")
-    if any(not name for name in names):
-        raise SelectionError(f"{label} file Target list selector must not contain an empty file name")
+    items = _parse_target_list_items(body, label=label)
 
     root = _resolve_scope_root(binding)
     scope = binding.scope
-    targets: list[tuple[Path, str]] = []
-    for name in names:
-        if _target_is_ignored(name, scope.ignore):
-            raise SelectionError(f"{label} is ignored by {ignored_where}.ignore: {name!r}")
+    targets: list[tuple[Path, str, str]] = []
+    for name, expected_kind in items:
+        _validate_target_name(name, label=f"{label} list item", target_kind=expected_kind)
+        if _target_is_ignored(
+            name,
+            directory=expected_kind == "directory",
+            patterns=scope.ignore,
+        ):
+            rendered = name + ("/" if expected_kind == "directory" else "")
+            raise SelectionError(f"{label} is ignored by {ignored_where}.ignore: {rendered!r}")
         targets.append(
-            _resolve_target_file(
+            _resolve_target_entry(
                 name,
                 root,
+                target_kind=scope.target_kind,
+                expected_kind=expected_kind,
                 label=f"{label} list item",
             )
         )
     return tuple(targets)
 
-
-def _resolve_file_regex_selector(
+def _resolve_target_regex_selector(
     selector: str,
     binding: _ScopeBinding,
     *,
     label: str,
-) -> tuple[tuple[Path, str], ...]:
+) -> tuple[tuple[Path, str, str], ...]:
     if not selector.endswith(">"):
         raise SelectionError(f"{label} regular-expression selector must end with '>': {selector!r}")
     pattern_text = selector[1:-1]
-    if not pattern_text:
-        raise SelectionError(f"{label} regular-expression selector must not be empty")
-    if "/" in pattern_text:
-        raise SelectionError(
-            f"{label} regular-expression selector matches one direct-child file name and must not contain '/': "
-            f"{pattern_text!r}"
-        )
-    if len(pattern_text) > _FILE_SELECTOR_REGEX_MAX_LENGTH:
-        raise SelectionError(
-            f"{label} regular-expression selector exceeds the {_FILE_SELECTOR_REGEX_MAX_LENGTH}-character limit"
-        )
-    try:
-        pattern = re.compile(pattern_text)
-    except re.error as exc:
-        raise SelectionError(
-            f"{label} has an invalid regular-expression selector {pattern_text!r}: {exc}"
-        ) from exc
+    pattern = compile_regular_expression(
+        pattern_text,
+        where=label,
+        error_type=SelectionError,
+        label="regular-expression selector",
+    )
 
     eligible = _expand_scope(binding)
     matched = tuple(
-        target for target in eligible
-        if pattern.fullmatch(target[1]) is not None
+        target
+        for target in eligible
+        if pattern.fullmatch(target[1] + ("/" if target[2] == "directory" else "")) is not None
     )
     if not matched:
         raise SelectionError(
-            f"{label} regular-expression selector matched no eligible file Targets in "
+            f"{label} regular-expression selector matched no eligible {_selector_target_noun(binding)} in "
             f"{_scope_label(binding.scope.name)}: {pattern_text!r}"
         )
     return matched
 
-
-def _resolve_file_selector(
+def _resolve_target_selector(
     selector: str,
     binding: _ScopeBinding,
     *,
     label: str,
     ignored_where: str,
-) -> tuple[tuple[Path, str], ...]:
-    _require_file_selector_scope(binding, label=label)
+) -> tuple[tuple[Path, str, str], ...]:
     if selector.startswith("["):
-        return _resolve_file_list_selector(
+        return _resolve_target_list_selector(
             selector,
             binding,
             label=label,
             ignored_where=ignored_where,
         )
     if selector.startswith("<"):
-        return _resolve_file_regex_selector(selector, binding, label=label)
-    raise AssertionError(f"unknown file Target selector syntax: {selector!r}")
+        return _resolve_target_regex_selector(selector, binding, label=label)
+    raise AssertionError(f"unknown Target selector syntax: {selector!r}")
 
 
 def _require_scope(effective: _EffectiveConfiguration, name: str | None) -> _ScopeBinding:
@@ -344,37 +465,44 @@ def _resolve_target_reference(
 
     def from_scope(
         binding: _ScopeBinding,
-        targets: tuple[tuple[Path, str], ...],
+        targets: tuple[tuple[Path, str, str], ...],
     ) -> tuple[tuple[Path, str, str | None, str, str | None], ...]:
         scope = binding.scope
         return tuple(
-            (path, source_root, scope.namespace, scope.target_kind, scope.description)
-            for path, source_root in targets
+            (path, source_root, scope.namespace, source_kind, scope.description)
+            for path, source_root, source_kind in targets
         )
 
     def one_from_scope(
         binding: _ScopeBinding,
         name: str,
         *,
+        expected_kind: str,
         ignored_where: str,
     ) -> tuple[tuple[Path, str, str | None, str, str | None], ...]:
         scope = binding.scope
-        if _target_is_ignored(name, scope.ignore):
-            raise SelectionError(f"{label} is ignored by {ignored_where}.ignore: {name!r}")
-        path, source_root = _resolve_target_entry(
+        if _target_is_ignored(
+            name,
+            directory=expected_kind == "directory",
+            patterns=scope.ignore,
+        ):
+            rendered = name + ("/" if expected_kind == "directory" else "")
+            raise SelectionError(f"{label} is ignored by {ignored_where}.ignore: {rendered!r}")
+        path, source_root, source_kind = _resolve_target_entry(
             name,
             _resolve_scope_root(binding),
             target_kind=scope.target_kind,
+            expected_kind=expected_kind,
             label=label,
         )
-        return ((path, source_root, scope.namespace, scope.target_kind, scope.description),)
+        return ((path, source_root, scope.namespace, source_kind, scope.description),)
 
-    selector_binding = _file_selector_binding(reference, effective)
+    selector_binding = _target_selector_binding(reference, effective)
     if selector_binding is not None:
         binding, selector, ignored_where = selector_binding
         return from_scope(
             binding,
-            _resolve_file_selector(
+            _resolve_target_selector(
                 selector,
                 binding,
                 label=label,
@@ -391,28 +519,73 @@ def _resolve_target_reference(
 
     if _target_reference_is_absolute(reference):
         raise SelectionError(
-            f"{label} must use NAME, SCOPE/NAME, '/', SCOPE/, :[...], :<...>, SCOPE:[...], or SCOPE:<...>: {reference!r}"
+            f"{label} must use NAME, ./NAME, ./NAME/, SCOPE/NAME, SCOPE/NAME/, '/', SCOPE/, "
+            ":[...], :<...>, SCOPE:[...], or SCOPE:<...>: {reference!r}"
+        )
+
+    # ``./`` explicitly selects the unnamed Scope and avoids the intentional
+    # ``SCOPE/`` expansion grammar for unnamed-Scope directory Targets.
+    if reference.startswith("./"):
+        body = reference[2:]
+        expected_kind = "directory" if body.endswith("/") else "file"
+        name = body[:-1] if expected_kind == "directory" else body
+        _validate_target_name(name, label=label, target_kind=expected_kind)
+        binding = _require_scope(effective, None)
+        return one_from_scope(
+            binding,
+            name,
+            expected_kind=expected_kind,
+            ignored_where="[scope]",
         )
 
     if reference.endswith("/"):
-        scope_name = reference[:-1]
-        _validate_target_name(scope_name, label="Scope name")
-        binding = _require_scope(effective, scope_name)
-        return from_scope(binding, _expand_scope(binding))
+        body = reference[:-1]
+        parts = body.split("/")
+        if len(parts) == 1:
+            scope_name = parts[0]
+            _validate_target_name(scope_name, label="Scope name")
+            binding = _require_scope(effective, scope_name)
+            return from_scope(binding, _expand_scope(binding))
+        if len(parts) == 2 and all(parts):
+            scope_name, name = parts
+            _validate_target_name(scope_name, label="Scope name")
+            _validate_target_name(name, label=label, target_kind="directory")
+            binding = _require_scope(effective, scope_name)
+            return one_from_scope(
+                binding,
+                name,
+                expected_kind="directory",
+                ignored_where=f"[scope.{scope_name}]",
+            )
+        raise SelectionError(f"{label} must name one direct-child directory Target: {reference!r}")
 
     parts = reference.split("/")
     if len(parts) == 1:
         name = parts[0]
         binding = _require_scope(effective, None)
-        return one_from_scope(binding, name, ignored_where="[scope]")
+        return one_from_scope(
+            binding,
+            name,
+            expected_kind="file",
+            ignored_where="[scope]",
+        )
 
     if len(parts) == 2 and all(parts):
         scope_name, name = parts
         _validate_target_name(scope_name, label="Scope name")
+        _validate_target_name(name, label=label, target_kind="file")
         binding = _require_scope(effective, scope_name)
-        return one_from_scope(binding, name, ignored_where=f"[scope.{scope_name}]")
+        return one_from_scope(
+            binding,
+            name,
+            expected_kind="file",
+            ignored_where=f"[scope.{scope_name}]",
+        )
 
-    raise SelectionError(f"{label} must use NAME, SCOPE/NAME, '/', SCOPE/, :[...], :<...>, SCOPE:[...], or SCOPE:<...>: {reference!r}")
+    raise SelectionError(
+        f"{label} must use NAME, ./NAME, ./NAME/, SCOPE/NAME, SCOPE/NAME/, '/', SCOPE/, "
+        ":[...], :<...>, SCOPE:[...], or SCOPE:<...>: {reference!r}"
+    )
 
 def _archive_root(source_root: str, namespace: str | None) -> str:
     return source_root if namespace is None else f"{namespace}/{source_root}"
@@ -486,9 +659,9 @@ def _configuration_chain(config: Config) -> tuple[_ConfigurationLayer, ...]:
 
 
 def _compose_shared(layers: tuple[_ConfigurationLayer, ...]) -> SharedPatterns:
-    must: dict[str, tuple[str, ...]] = {}
-    may: dict[str, tuple[str, ...]] = {}
-    ignore: dict[str, tuple[ExclusionPattern, ...]] = {}
+    must: dict[str, tuple[str | MatchPattern, ...]] = {}
+    may: dict[str, tuple[str | MatchPattern, ...]] = {}
+    ignore: dict[str, tuple[ExclusionPattern | MatchPattern, ...]] = {}
     for layer in reversed(layers):
         must.update(layer.config.shared.must)
         may.update(layer.config.shared.may)
@@ -585,8 +758,8 @@ def _validate_always_selections(binding: _AlwaysBinding, shared: SharedPatterns)
 
 
 def _validate_effective_configuration(effective: _EffectiveConfiguration) -> None:
-    has_file_scope = any(binding.scope.target_kind == "file" for binding in effective.scopes.values())
-    if effective.pluck is None and not effective.always and not has_file_scope:
+    has_file_capable_scope = any(binding.scope.target_kind in {"file", "both"} for binding in effective.scopes.values())
+    if effective.pluck is None and not effective.always and not has_file_capable_scope:
         raise ConfigurationError(
             f"{effective.root.manifest}: the resolved Configuration chain defines no Pluck or Always source"
         )
@@ -668,7 +841,7 @@ def _validate_request(effective: _EffectiveConfiguration, request: BuildRequest)
     if effective.pluck is not None and not request.directories:
         raise SelectionError("TARGET is required when the effective Configuration defines Pluck (one or more may be specified)")
     if effective.pluck is None and not effective.always and not request.directories:
-        raise SelectionError("TARGET is required when the effective Configuration only defines file Target Scopes")
+        raise SelectionError("TARGET is required when the effective Configuration only defines file-capable Target Scopes")
 
     if request.case is None:
         return
@@ -728,7 +901,7 @@ def _resolve_effective_sources(effective: _EffectiveConfiguration, request: Buil
     reference_count = len(request.directories)
     for index, requested in enumerate(request.directories, start=1):
         label = f"target reference {index}" if reference_count > 1 else "target reference"
-        is_selector = _file_selector_binding(requested, effective) is not None
+        is_selector = _target_selector_binding(requested, effective) is not None
         for path, source_root, namespace, source_kind, scope_description in _resolve_target_reference(
             requested, effective, label=label
         ):

@@ -26,6 +26,7 @@ class RunResult:
     archive_readme: str
     skipped_link_count: int
     invocation_empty: bool = False
+    warnings: tuple[str, ...] = ()
 
 
 def _runtime_cwd(cwd: str | Path | None) -> Path:
@@ -200,11 +201,13 @@ def run(
     else:
         output_path, plan = _build_archive_with_plan(loaded, request)
 
-    return RunResult(
+    result = RunResult(
         output_path=output_path,
         preview_text=render_archive_tree(plan),
         archive_entries=_archive_entry_names(plan),
         archive_readme=plan.readme,
         skipped_link_count=plan.skipped_link_count,
         invocation_empty=invocation_empty,
+        warnings=plan.diagnostics,
     )
+    return result

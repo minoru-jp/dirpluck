@@ -41,7 +41,11 @@ class SECTION_001:
 
             {{TERM_3}} をどこから選ぶかは {{TERM_16}} として分けられるため、Configuration の置き場所と実際の project tree を同じ場所に揃える必要はありません。
 
-            Directory Target の `must` / `may` / `ignore` は、directory tree を予測可能に扱うための制限された Selection pattern を使います。File-kind Scope には direct-child file name をさらに絞り込む regular-expression selector もありますが、これは Python-compatible regular expression を使う別の selection language です。この違いは意図したもので、両者は適用する範囲と役割が異なります。詳細は `docs/configuration/selection.md` と `docs/cli/targets.md` を参照してください。
+            File / directory の両方になり得る **include / Target reference** は、記法だけで型を明示します。末尾 `/` なしは file、末尾 `/` ありは directory で、filesystem の現在状態から型を推測しません。たとえば Selection の `"pyproject.toml"` は file、`"src/"` は directory を表します。Target reference も同じ原則を使い、default Scope の directory Target は `./project/`、named Scope では `work/project/` のように書きます。`may` が期待型では一致せず反対型の entry が存在する場合も optional semantics は変えず、source label 付きの diagnostic で末尾 `/` の見直しを案内します。CLI は通常 build / `--preview` の両方で warning を表示し、Python API は `RunResult.warnings` に返します。`must` は通常 build の既存 error に同じ型 marker hint を含め、preview では missing のまま同じ hint を warning として確認できます。Literal Target の error も型 marker hint を含めます。
+
+            `ignore` は除外側の規則として意図的に広く扱います。通常の ignore string / concrete path は末尾 `/` がなければ matching file と directory の両方を除外し、末尾 `/` がある場合だけ directory に限定します。File だけを精密に除外したい場合は structured `{ match = "..." }` を使えます。
+
+            Directory Target の通常の `must` / `may` / `ignore` string は、directory tree を予測可能に扱うための制限された Selection pattern を使います。より表現力が必要な Selection では `{ match = "..." }` で root-relative path 全体へ Python-compatible regular expression を使えます。Scope の `<...>` Target selector も regular expression を使いますが、こちらは eligible direct-child Target の normalized name の絞り込みだけを行います。この使い分けは意図したものです。詳細は `docs/configuration/selection.md` と `docs/cli/targets.md` を参照してください。
             """
             title @= '同じ抽出方法を、別の Target に使う'
 

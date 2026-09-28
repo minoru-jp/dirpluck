@@ -39,7 +39,7 @@ class SECTION_001:
 
         [pluck]
         description = "Project files selected for review."
-        must = ["README.md", "src", "tests"]
+        must = ["README.md", "src/", "tests/"]
         ignore = [".git/", "__pycache__/", "*.pyc"]
 
         [always.guidelines]
@@ -98,7 +98,7 @@ class SECTION_001:
         """
         title @= '3. Preview で確認する'
 
-        preview_command @= "dirpluck example --preview"
+        preview_command @= "dirpluck ./example/ --preview"
         preview_output @= """
         ├── README.md
         ├── example/
@@ -129,7 +129,7 @@ class SECTION_001:
         """
         title @= '4. Archive を作る'
 
-        build_command @= "dirpluck example"
+        build_command @= "dirpluck ./example/"
         archive_readme @= """
         # Archive contents
 

@@ -24,12 +24,12 @@ A Configuration represents one final Archive intent. Use `scope` to declare wher
 ```toml
 [pluck]
 description = "The project currently under review."
-may = ["README.md", "src", "tests"]
+may = ["README.md", "src/", "tests/"]
 ignore = [".git/", "__pycache__/", "*.pyc"]
 allow_empty = true
 
 [scope]
-ignore = ["archive", "tmp-*"]
+ignore = ["archive/", "tmp-*/"]
 
 [always.guidelines]
 path = "review-guidelines"

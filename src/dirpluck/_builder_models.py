@@ -86,6 +86,9 @@ class SelectionResult:
     missing: tuple[str, ...]
     optional_missing: tuple[str, ...]
     skipped_links: tuple[Path, ...] = ()
+    opaque_missing: tuple[str, ...] = ()
+    opaque_optional_missing: tuple[str, ...] = ()
+    diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,16 @@ class EmptySelectionStatus:
 
 
 @dataclass(frozen=True)
+class MissingSelectionStatus:
+    """One non-path Selection expression that did not match during planning."""
+
+    source_label: str
+    archive_root: str
+    expression: str
+    optional: bool
+
+
+@dataclass(frozen=True)
 class ArchivePlan:
     """Exact archive entries, generated README, and preview-only status details."""
 
@@ -108,6 +121,8 @@ class ArchivePlan:
     optional_missing: tuple[str, ...] = ()
     empty_directories: tuple[str, ...] = ()
     empty_selections: tuple[EmptySelectionStatus, ...] = ()
+    missing_selections: tuple[MissingSelectionStatus, ...] = ()
+    diagnostics: tuple[str, ...] = ()
     skipped_link_count: int = 0
 
 
@@ -153,6 +168,7 @@ class _IncludeMatchResult:
     entries: tuple[Path, ...]
     skipped_links: tuple[Path, ...]
     unsupported_entries: tuple[Path, ...]
+    wrong_type_entries: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)

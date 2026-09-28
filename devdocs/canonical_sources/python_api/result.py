@@ -27,7 +27,7 @@ class API_REFERENCE_PART:
     {{result_fields}}
     ```
 
-    通常 build でも `preview_text` と `archive_readme` は実際に使用した plan から返します。そのため、呼び出し側は CLI output を parse せず、生成結果と plan の主要な public information を取得できます。
+    通常 build でも `preview_text` と `archive_readme` は実際に使用した plan から返します。Planning 中に non-fatal な診断が生じた場合は `warnings` に human-readable message の tuple として返し、CLI も同じ内容を stderr へ表示します。そのため、呼び出し側は CLI output を parse せず、生成結果、plan の主要な public information、移行上重要な warning を取得できます。
     """
 
     preview_example @= """
@@ -41,6 +41,7 @@ class API_REFERENCE_PART:
     archive_readme      root README.md として生成する Markdown
     skipped_link_count  automatic traversal で除外した link-like entry 数
     invocation_empty    選択した Invocation が config / targets / case / archive_mtime を持たなかったか
+    warnings            non-fatal な planning diagnostic の tuple
     """
 
     name @= "RunResult"
@@ -52,3 +53,4 @@ class API_REFERENCE_PART:
     output @= "archive_readme"
     output @= "skipped_link_count"
     output @= "invocation_empty"
+    output @= "warnings"

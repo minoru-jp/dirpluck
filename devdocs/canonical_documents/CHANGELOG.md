@@ -18,6 +18,33 @@
 
 dirpluck のリリースごとの変更履歴。
 
+## 0.13.0
+
+Scope の Target candidate type を `directory` / `file` / `both` から選べるようにし、Target selector を全 kind へ一般化する。あわせて Selection に full-path regular expression を使う structured `match` entry を追加する。
+
+version: 0.13.0
+
+Added:
+
+- `[scope]` / `[scope.<name>]` の `target_kind` に `"both"` を追加する。Both mode は Scope 直下の eligible regular directory と regular file の両方を Target candidate とし、directory Target には effective Pluck Selection、file Target には atomic-file semantics を適用する。Pluck がない Configuration でも both-kind Scope から file だけを選ぶ run は有効だが、directory Target が1件でも解決された場合は Pluck を必要とする。
+- Selection の `must` / `may` / `ignore` と Shared pattern set に `{ match = "..." }` structured entry を追加する。`match` は Selection root 配下の root-relative POSIX-style path 全体へ Python-compatible regular expression を full-match semantics で適用し、regular directory path は末尾 `/`、regular file path は末尾 `/` なしで照合する。Pattern は non-empty、512 character 以下とし、invalid regular expression は Configuration error とする。
+- `must` / `may` の structured `match` は file と directory の両方を selection candidate とし、directory に一致した場合は通常の directory leaf と同じく subtree を収集する。`must` は1件以上の non-ignored selectable match を必要とし、`may` は0件 match を許容する。`ignore` の structured `match` は file を除外し、directory に一致した場合は subtree を prune する。通常 string pattern、Shared expansion、structured match が同じ file を選んでも最終 Selection では1件に deduplicate する。
+
+Changed:
+
+- `:[...]` / `SCOPE:[...]` と `:<...>` / `SCOPE:<...>` を file Target selector から Target selector へ一般化し、`target_kind = "directory"` / `"file"` / `"both"` のすべてで使用できるようにする。List selector は eligible direct-child Target name の literal list、regular-expression selector は file を `NAME`、directory を `NAME/` と正規化した eligible direct-child Target name 全体への Python-compatible full-match とする。
+- `target_kind` を Scope 直下の Target candidate に対する type filter として整理する。Scope expansion、literal Target resolution、list selector、regular-expression selector は同じ type filter / Scope `ignore` / link-like exclusion を共有し、`both` で file と directory が混在しても resolved Target ごとの実際の type を保持する。
+- 通常の Selection string pattern は従来どおり guided traversal 用の制限された grammar として維持し、structured `match` だけを表現力の高い full-path regular-expression selection とする。実装は `match` の regular expression から guided traversal plan を推論する必要はなく、Selection root 配下を走査して候補 path を照合できる。
+- `ignore` は除外規則として意図的に広く扱う。通常の Selection ignore string、concrete ignore path reference、Scope ignore pattern は末尾 `/` がなければ matching file / directory の両方を除外し、末尾 `/` がある場合だけ directory に限定する。Include / Target reference を型明示へ変更しても、従来の広い exclusion semantics は維持する。File だけを除外したい場合は structured `{ match = "..." }` を使用できる。
+- **Breaking:** include Selection と Target reference の file / directory 型を末尾 `/` で明示する。通常の `must` / `may` string は最終 component の末尾 `/` なしを file、末尾 `/` ありを directory とし、literal Target reference と Target list も同じ原則へ揃える。これらの参照で filesystem 上の実体型から意味を推測する従来挙動を廃止する。Directory Selection は `must = ["src/"]`、named Scope の directory Target は `work/project/` のように移行する。
+- **Breaking:** default Scope では `NAME/` が named Scope expansion と衝突するため、directory Target の literal reference に `./NAME/` を導入する。`NAME` / `./NAME` は default Scope の file Target、`./NAME/` は directory Target とする。Target list は `/` を item separator と directory marker の両方に使い、途中の directory item は `NAME//NEXT`、末尾 directory item は `NAME/]` と表現し、3連以上の `/` を error とする。
+- Regular-expression Target selector は file candidate を `NAME`、directory candidate を `NAME/` として照合し、`/` を pattern 内で使用可能にする。`<repo>` は file、`<repo/>` は directory、`<repo/?>` は両方を明示できる。Candidate discovery は引き続き Scope 直下だけで、regex に `/` があっても再帰探索しない。
+
+Fixed:
+
+- Strict entry-type migration の diagnostic を改善する。`may` string pattern が期待型では一致せず、同名 / 同patternの反対型 regular entry が存在する場合も `may` は optional missing のまま成功可能とし、source label 付きで末尾 `/` の追加または削除を案内する warning を生成する。`must` は通常 build の既存 unsatisfied error に同じ hint を含め、`--preview` では missing semantics を維持したまま warning を生成する。CLI は通常 build / `--preview` の warning を stderr へ表示し、公式 Python API は同じ内容を `RunResult.warnings` に返す。複数 source の同内容 warning は source label により区別し、Selection error の source 接頭辞は `source: detail` 形式へ整える。Literal Target の既存 error も型 marker hint を含める。
+- `--preview` で未一致の structured `{ match = "..." }` expression に `/` が含まれる場合、それを archive path として分割して偽の directory tree を描画していた表示 bug を修正する。Structured match の未一致は opaque な Selection expression として別表示する。
+
 ## 0.12.0
 
 File-kind Scope の Target reference に selector syntax を追加し、Scope 直下の regular file を明示列挙または正規表現で選べるようにする。既存の literal Target reference と全展開の意味は変更しない。

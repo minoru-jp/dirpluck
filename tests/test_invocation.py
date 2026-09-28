@@ -28,7 +28,7 @@ class InvocationTemplateTests(unittest.TestCase):
                 '''
                 [invocation]
                 config = "release.dirpluck"
-                targets = ["work/frontend", "work/backend", "docs/"]
+                targets = ["work/frontend/", "work/backend/", "docs/"]
                 case = "publish"
                 ''',
             )
@@ -38,7 +38,7 @@ class InvocationTemplateTests(unittest.TestCase):
             self.assertEqual(invocation.config, "release.dirpluck")
             self.assertEqual(
                 invocation.targets,
-                ("work/frontend", "work/backend", "docs/"),
+                ("work/frontend/", "work/backend/", "docs/"),
             )
             self.assertEqual(invocation.case, "publish")
             self.assertIsNone(invocation.archive_mtime)
@@ -102,14 +102,14 @@ class InvocationTemplateTests(unittest.TestCase):
                 Path(temp) / "release.dirpluck-inv",
                 '''
                 [invocation.release]
-                targets = ["app"]
+                targets = ["./app/"]
                 case = "publish"
                 ''',
             )
             template = load_invocation(manifest)
             self.assertTrue(template.select().is_empty)
             release = template.select("release")
-            self.assertEqual(release.targets, ("app",))
+            self.assertEqual(release.targets, ("./app/",))
             self.assertEqual(release.case, "publish")
 
     def test_invocation_field_names_are_reserved_as_entry_names(self):
@@ -167,13 +167,13 @@ class InvocationTemplateTests(unittest.TestCase):
                 case = "default-case"
 
                 [invocation.release]
-                targets = ["app"]
+                targets = ["./app/"]
                 ''',
             )
             template = load_invocation(manifest)
             release = template.select("release")
             self.assertIsNone(release.config)
-            self.assertEqual(release.targets, ("app",))
+            self.assertEqual(release.targets, ("./app/",))
             self.assertIsNone(release.case)
 
     def test_unknown_invocation_entry_is_rejected_on_selection(self):
@@ -191,13 +191,13 @@ class InvocationTemplateTests(unittest.TestCase):
                 '''
                 [invocation.release]
                 config = "release.dirpluck"
-                targets = ["app"]
+                targets = ["./app/"]
                 case = "publish"
                 ''',
             )
             invocation = load_invocation(manifest).select("release")
             self.assertEqual(invocation.config, "release.dirpluck")
-            self.assertEqual(invocation.targets, ("app",))
+            self.assertEqual(invocation.targets, ("./app/",))
             self.assertEqual(invocation.case, "publish")
             self.assertEqual(invocation.config_path(), (root / "release.dirpluck").resolve())
 
@@ -219,7 +219,7 @@ class InvocationTemplateTests(unittest.TestCase):
                 Path(temp) / "release.dirpluck-inv",
                 '''
                 [invocation]
-                targets = ["app"]
+                targets = ["./app/"]
 
                 [other]
                 value = true

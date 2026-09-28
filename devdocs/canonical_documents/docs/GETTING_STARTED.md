@@ -44,7 +44,7 @@ description = "Review package for the example project."
 
 [pluck]
 description = "Project files selected for review."
-must = ["README.md", "src", "tests"]
+must = ["README.md", "src/", "tests/"]
 ignore = [".git/", "__pycache__/", "*.pyc"]
 
 [always.guidelines]
@@ -82,7 +82,7 @@ path = "review.zip"
 Archive を書き込む前に `--preview` で contents plan を確認します。
 
 ```console
-dirpluck example --preview
+dirpluck ./example/ --preview
 ```
 
 この例では次のように表示されます。
@@ -106,7 +106,7 @@ dirpluck example --preview
 Preview に問題がなければ、同じ Target で Archive を作成します。
 
 ```console
-dirpluck example
+dirpluck ./example/
 ```
 
 `[output]` に従って `review.zip` が作成され、preview で確認した file と生成された `README.md` が入ります。この例の Archive README は次の内容です。

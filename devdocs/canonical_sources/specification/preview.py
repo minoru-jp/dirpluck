@@ -20,7 +20,7 @@ class SPECIFICATION_PART:
         related @= (COMPOSITION_SPEC.SECTION_402.SPEC_028, RUNTIME_TARGETS_SPEC.SPEC_037, SELECTION_SPEC.SPEC_065, ARCHIVE_SPEC.SPEC_098, OUTPUT_SPEC.SPEC_107)
 
     class SPEC_146:
-        r"""不足する `must` pattern は `[missing]`、不足する `may` pattern は `[optional missing]` と表示する。最終 selection 0件は policy に応じて `empty, allowed` または `empty, would error` と表示する。"""
+        r"""不足する通常の `must` path pattern は `[missing]`、不足する通常の `may` path pattern は `[optional missing]` と tree 上に表示する。`{ match = "..." }` のような path ではない Selection expression は `/` を含んでも path component に分解せず、opaque な未一致 Selection entry として別表示する。最終 selection 0件は policy に応じて `empty, allowed` または `empty, would error` と表示する。型 marker の不一致候補が検出された `must` / `may` は selection result の missing / optional missing semantics を変えず、source label を含む non-fatal diagnostic も生成する。CLI `--preview` はそれを warning として stderr へ表示し、Python API の `preview=True` は `RunResult.warnings` に返す。"""
         level @= MUST
         condition @= "`--preview` で selection result を表示する場合"
 

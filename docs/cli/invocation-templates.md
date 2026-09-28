@@ -9,7 +9,7 @@ Reusable CLI invocations can be stored in an Invocation Template `.dirpluck-inv`
 ```toml
 [invocation]
 config = "release"
-targets = ["work/frontend", "work/backend"]
+targets = ["work/frontend/", "work/backend/"]
 
 [invocation.docs]
 config = "release"
@@ -18,7 +18,7 @@ case = "publish"
 archive_mtime = "zip-epoch"
 ```
 
-`config`, `targets`, `case`, and `archive_mtime` are all optional in both the default Invocation and every named entry. A named entry is an independent Invocation, not a difference from the default Invocation, so omitted fields are not inherited from `[invocation]`. The names `config`, `targets`, `case`, and `archive_mtime` are reserved field names and cannot also be used as named Invocation entries. `targets` stores the same Target-reference grammar accepted as normal CLI positional arguments, including literal-list and regular-expression selectors for file-kind Scopes. `config` may omit the `.dirpluck` suffix, just like CLI `--config PATH`; a relative path is resolved from the directory of the selected `.dirpluck-inv` path. Template paths and Configuration paths referenced by `config` follow the host OS's normal filesystem semantics even when they contain symbolic links or Windows directory junctions. When `config` is omitted, the runtime-cwd `default.dirpluck` is used; when `targets` is omitted, the run has no positional Targets; when `case` is omitted, normal default Case semantics apply; when `archive_mtime` is omitted, the normal per-entry timestamp behavior applies.
+`config`, `targets`, `case`, and `archive_mtime` are all optional in both the default Invocation and every named entry. A named entry is an independent Invocation, not a difference from the default Invocation, so omitted fields are not inherited from `[invocation]`. The names `config`, `targets`, `case`, and `archive_mtime` are reserved field names and cannot also be used as named Invocation entries. `targets` stores the same Target-reference grammar accepted as normal CLI positional arguments, including literal-list and regular-expression Target selectors. `config` may omit the `.dirpluck` suffix, just like CLI `--config PATH`; a relative path is resolved from the directory of the selected `.dirpluck-inv` path. Template paths and Configuration paths referenced by `config` follow the host OS's normal filesystem semantics even when they contain symbolic links or Windows directory junctions. When `config` is omitted, the runtime-cwd `default.dirpluck` is used; when `targets` is omitted, the run has no positional Targets; when `case` is omitted, normal default Case semantics apply; when `archive_mtime` is omitted, the normal per-entry timestamp behavior applies.
 
 Select the Template file explicitly with `-i PATH` or `--invocation-template PATH`. `PATH` uses the same filesystem-path notation as `--config`: a relative path is resolved from the runtime cwd and an absolute path from the host filesystem. If the path does not end in `.dirpluck-inv`, that suffix is appended. Invocation Template document paths follow the host OS's normal filesystem semantics, and the directory of the selected path is the anchor for relative `config` paths inside the Template. The Invocation Template file itself has no implicit default and dirpluck does not search another directory for it.
 

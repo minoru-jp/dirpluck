@@ -6,7 +6,13 @@ from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Mapping
 
-from ._builder_models import ArchivePlan, BuildRequest, EmptySelectionStatus, ResolvedSource
+from ._builder_models import (
+    ArchivePlan,
+    BuildRequest,
+    EmptySelectionStatus,
+    MissingSelectionStatus,
+    ResolvedSource,
+)
 from .config import Config
 from .errors import SelectionError
 from ._effective import _resolve_execution
@@ -88,16 +94,47 @@ def plan_archive(
     missing_entries: list[str] = []
     optional_missing_entries: list[str] = []
     empty_selections: list[EmptySelectionStatus] = []
+    missing_selections: list[MissingSelectionStatus] = []
+    diagnostics: list[str] = []
     selection_counts: dict[str, int] = {}
     skipped_links: set[Path] = set()
 
     for source in sources:
         result = select_files(source, allow_missing=allow_missing)
         skipped_links.update(result.skipped_links)
+        diagnostics.extend(result.diagnostics)
         selection_counts[source.key] = len(result.files)
         selected_physical_entries[source.key] = {file.resolve() for file in result.files}
-        missing_entries.extend(f"{source.archive_root}/{relative}" for relative in result.missing)
-        optional_missing_entries.extend(f"{source.archive_root}/{relative}" for relative in result.optional_missing)
+        opaque_missing = set(result.opaque_missing)
+        opaque_optional_missing = set(result.opaque_optional_missing)
+        missing_entries.extend(
+            f"{source.archive_root}/{relative}"
+            for relative in result.missing
+            if relative not in opaque_missing
+        )
+        optional_missing_entries.extend(
+            f"{source.archive_root}/{relative}"
+            for relative in result.optional_missing
+            if relative not in opaque_optional_missing
+        )
+        missing_selections.extend(
+            MissingSelectionStatus(
+                source_label=source.label,
+                archive_root=source.archive_root,
+                expression=expression,
+                optional=False,
+            )
+            for expression in result.opaque_missing
+        )
+        missing_selections.extend(
+            MissingSelectionStatus(
+                source_label=source.label,
+                archive_root=source.archive_root,
+                expression=expression,
+                optional=True,
+            )
+            for expression in result.opaque_optional_missing
+        )
 
         if not result.files:
             if source.selection is None:
@@ -169,6 +206,13 @@ def plan_archive(
         optional_missing=tuple(sorted(set(optional_missing_entries))),
         empty_directories=tuple(empty_directories),
         empty_selections=tuple(sorted(empty_selections, key=lambda item: item.key)),
+        missing_selections=tuple(
+            sorted(
+                missing_selections,
+                key=lambda item: (item.archive_root, item.optional, item.expression),
+            )
+        ),
+        diagnostics=tuple(sorted(set(diagnostics))),
         skipped_link_count=len(skipped_links),
     )
 
@@ -191,9 +235,22 @@ def render_archive_tree(plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...]
     if isinstance(plan, ArchivePlan):
         empty_roots = {status.archive_root for status in plan.empty_selections}
         directory_paths = set(plan.empty_directories) | empty_roots
-        paths = ["README.md", *plan.entries.keys(), *plan.missing, *plan.optional_missing, *directory_paths]
-        missing = set(plan.missing)
-        optional_missing = set(plan.optional_missing)
+        missing_directory_paths = {path[:-1] for path in plan.missing if path.endswith("/")}
+        optional_missing_directory_paths = {path[:-1] for path in plan.optional_missing if path.endswith("/")}
+        normalized_missing = {path[:-1] if path.endswith("/") else path for path in plan.missing}
+        normalized_optional_missing = {
+            path[:-1] if path.endswith("/") else path for path in plan.optional_missing
+        }
+        directory_paths |= missing_directory_paths | optional_missing_directory_paths
+        paths = [
+            "README.md",
+            *plan.entries.keys(),
+            *normalized_missing,
+            *normalized_optional_missing,
+            *directory_paths,
+        ]
+        missing = normalized_missing
+        optional_missing = normalized_optional_missing
     else:
         paths = list(plan.keys()) if isinstance(plan, Mapping) else list(plan)
         missing = set()
@@ -218,9 +275,9 @@ def render_archive_tree(plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...]
             current_parts = (*parts, name)
             current = PurePosixPath(*current_parts).as_posix()
             if current in missing:
-                suffix = " [missing]"
+                suffix = ("/" if current in directory_paths else "") + " [missing]"
             elif current in optional_missing:
-                suffix = " [optional missing]"
+                suffix = ("/" if current in directory_paths else "") + " [optional missing]"
             else:
                 suffix = "/" if children or current in directory_paths else ""
             lines.append(f"{prefix}{branch}{name}{suffix}")
@@ -228,6 +285,14 @@ def render_archive_tree(plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...]
                 walk(children, prefix + ("    " if last else "│   "), current_parts)
 
     walk(tree, "", ())
+    if isinstance(plan, ArchivePlan) and plan.missing_selections:
+        lines.extend(["", "Unmatched selection entries:"])
+        for status in plan.missing_selections:
+            marker = "optional missing" if status.optional else "missing"
+            lines.append(
+                f"- {status.source_label} (`{status.archive_root}/`): "
+                f"{status.expression} [{marker}]"
+            )
     if isinstance(plan, ArchivePlan) and plan.empty_selections:
         lines.extend(["", "Empty results:"])
         for status in plan.empty_selections:

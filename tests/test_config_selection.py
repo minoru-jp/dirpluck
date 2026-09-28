@@ -3,12 +3,103 @@ from pathlib import Path
 from _config_support import ConfigTestCase
 from _temp import resolved_temporary_directory
 
-from dirpluck._config_models import PathExclusion
+from dirpluck._config_models import MatchPattern, PathExclusion
+from dirpluck._builder_models import BuildRequest
+from dirpluck._effective import resolve_sources
 from dirpluck.config import SharedReference, load_config
 from dirpluck.errors import ConfigurationError
 
 
 class ConfigSelectionTests(ConfigTestCase):
+    def test_selection_accepts_structured_match_entries(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, r"""
+                [pluck]
+                must = [{ match = 'src/.*\.py' }]
+                may = [{ match = 'docs/.*\.md' }]
+                ignore = [{ match = 'src/generated/' }]
+            """))
+            assert config.pluck is not None and config.pluck.default is not None
+            selection = config.pluck.default
+            self.assertEqual(selection.must, (MatchPattern(r"src/.*\.py"),))
+            self.assertEqual(selection.may, (MatchPattern(r"docs/.*\.md"),))
+            self.assertEqual(selection.ignore, (MatchPattern(r"src/generated/"),))
+
+    def test_shared_sets_accept_structured_match_entries(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, r"""
+                [shared.must]
+                python = [{ match = 'src/.*\.py' }]
+
+                [shared.ignore]
+                generated = [{ match = 'src/generated/' }]
+
+                [pluck]
+                must = [["python"]]
+                ignore = [["generated"]]
+            """))
+            self.assertEqual(config.shared.must["python"], (MatchPattern(r"src/.*\.py"),))
+            self.assertEqual(config.shared.ignore["generated"], (MatchPattern(r"src/generated/"),))
+
+    def test_structured_match_requires_exact_schema_and_valid_regex(self):
+        invalid_entries = (
+            "{}",
+            "{ match = 1 }",
+            "{ match = '' }",
+            "{ match = '[', extra = 'x' }",
+            "{ match = '[' }",
+        )
+        for entry in invalid_entries:
+            with self.subTest(entry=entry), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f"""
+                    [pluck]
+                    must = [{entry}]
+                """)
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+    def test_structured_match_has_bounded_length(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            pattern = "a" * 513
+            manifest = self._write(root, f"""
+                [pluck]
+                must = [{{ match = {pattern!r} }}]
+            """)
+            with self.assertRaisesRegex(ConfigurationError, "512-character limit"):
+                load_config(manifest)
+
+    def test_duplicate_structured_match_entries_are_rejected(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, r"""
+                [pluck]
+                must = [
+                    { match = 'src/.*\.py' },
+                    { match = 'src/.*\.py' },
+                ]
+            """)
+            config = load_config(manifest)
+            (root / "application").mkdir()
+            with self.assertRaisesRegex(ConfigurationError, "duplicate effective pattern"):
+                resolve_sources(config, BuildRequest.create("./application/"))
+
+    def test_same_structured_match_must_and_may_is_rejected(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, r"""
+                [pluck]
+                must = [{ match = 'src/.*\.py' }]
+                may = [{ match = 'src/.*\.py' }]
+            """)
+            config = load_config(manifest)
+            (root / "application").mkdir()
+            with self.assertRaisesRegex(ConfigurationError, "must and may"):
+                resolve_sources(config, BuildRequest.create("./application/"))
+
     def test_shared_must_and_ignore_patterns_use_their_own_grammars(self):
         invalid = (
             ("must", "bad", "src/**/x.py"),
@@ -23,7 +114,7 @@ class ConfigSelectionTests(ConfigTestCase):
 
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                 ''')
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
@@ -38,7 +129,7 @@ class ConfigSelectionTests(ConfigTestCase):
 
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                 ''')
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
@@ -67,7 +158,7 @@ class ConfigSelectionTests(ConfigTestCase):
 
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
             ''')
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
@@ -78,7 +169,7 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
             '''))
             self.assertIsNotNone(config.pluck.default)
             self.assertEqual(dict(config.pluck.cases), {})
@@ -89,7 +180,7 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck.case.review]
                 description = "Review."
-                must = ["src"]
+                must = ["src/"]
             '''))
             self.assertIsNone(config.pluck.default)
             self.assertIn("review", config.pluck.cases)
@@ -100,7 +191,7 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck.case.description]
                 description = "A case literally named description."
-                must = ["src"]
+                must = ["src/"]
             '''))
             self.assertIn("description", config.pluck.cases)
 
@@ -110,15 +201,15 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["*.tmp"]
 
                 [pluck.case.review]
                 description = "Review."
-                must = ["tests"]
+                must = ["tests/"]
             '''))
-            self.assertEqual(config.pluck.default.must, ("src",))
-            self.assertEqual(config.pluck.cases["review"].must, ("tests",))
+            self.assertEqual(config.pluck.default.must, ("src/",))
+            self.assertEqual(config.pluck.cases["review"].must, ("tests/",))
             self.assertEqual(config.pluck.cases["review"].ignore, ())
 
     def test_pluck_must_define_default_or_case(self):
@@ -134,7 +225,7 @@ class ConfigSelectionTests(ConfigTestCase):
                 load_config(self._write(root, '''
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     path = "app"
                 '''))
 
@@ -217,7 +308,7 @@ class ConfigSelectionTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 allow_empty = true
             ''')
             with self.assertRaises(ConfigurationError):
@@ -241,7 +332,7 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 ignore = []
             '''))
             self.assertEqual(config.pluck.default.ignore, ())
@@ -252,7 +343,7 @@ class ConfigSelectionTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [target.case]
             ''')
             with self.assertRaises(ConfigurationError):
@@ -264,7 +355,7 @@ class ConfigSelectionTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 ignore = "*.pyc"
             ''')
             with self.assertRaises(ConfigurationError):
@@ -276,7 +367,7 @@ class ConfigSelectionTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["src/generated/"]
             ''')
             with self.assertRaises(ConfigurationError):
@@ -288,7 +379,7 @@ class ConfigSelectionTests(ConfigTestCase):
             manifest = self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["foo*bar"]
             ''')
             with self.assertRaises(ConfigurationError):
@@ -301,7 +392,7 @@ class ConfigSelectionTests(ConfigTestCase):
                 manifest = self._write(root, f'''
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     ignore = [{pattern!r}]
                 ''')
                 with self.assertRaises(ConfigurationError):
@@ -314,7 +405,7 @@ class ConfigSelectionTests(ConfigTestCase):
                 manifest = self._write(root, f'''
                     [pluck]
                     description = "Default."
-                    must = ["src"]
+                    must = ["src/"]
                     ignore = [{pattern!r}]
                 ''')
                 with self.assertRaises(ConfigurationError):
@@ -337,15 +428,15 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
                 [always.framework]
                 path = "framework"
                 description = "Framework."
-                must = ["src"]
+                must = ["src/"]
                 may = ["README.md"]
             '''))
             selection = config.always["framework"].selection
-            self.assertEqual(selection.must, ("src",))
+            self.assertEqual(selection.must, ("src/",))
             self.assertEqual(selection.may, ("README.md",))
 
     def test_always_may_define_cases(self):
@@ -354,23 +445,23 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, '''
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
 
                 [pluck.case.review]
                 description = "Review target."
-                must = ["tests"]
+                must = ["tests/"]
 
                 [always.framework]
                 path = "framework"
                 description = "Default framework."
-                must = ["src"]
+                must = ["src/"]
 
                 [always.framework.case.review]
                 description = "Framework for review."
                 must = ["src", "tests"]
             '''))
             companion = config.always["framework"]
-            self.assertEqual(companion.selection.must, ("src",))
+            self.assertEqual(companion.selection.must, ("src/",))
             self.assertEqual(companion.cases["review"].must, ("src", "tests"))
 
     def test_always_case_compatibility_is_deferred_to_effective_configuration(self):
@@ -379,20 +470,20 @@ class ConfigSelectionTests(ConfigTestCase):
             config = load_config(self._write(root, """
                 [pluck]
                 description = "Default."
-                must = ["src"]
+                must = ["src/"]
 
                 [pluck.case.review]
                 description = "Review."
-                must = ["tests"]
+                must = ["tests/"]
 
                 [always.framework]
                 path = "framework"
                 description = "Framework."
-                must = ["src"]
+                must = ["src/"]
 
                 [always.framework.case.release]
                 description = "Release framework."
-                must = ["dist"]
+                must = ["dist/"]
             """))
             self.assertIn("release", config.always["framework"].cases)
 
@@ -403,11 +494,11 @@ class ConfigSelectionTests(ConfigTestCase):
                 [always.documents]
                 path = "documents"
                 description = "Current documents."
-                must = ["current"]
+                must = ["current/"]
 
                 [always.documents.case.archive]
                 description = "Archive documents."
-                must = ["current", "history"]
+                must = ["current/", "history/"]
             '''))
             self.assertIsNone(config.pluck)
             self.assertIn("archive", config.always["documents"].cases)
@@ -420,17 +511,17 @@ class ConfigSelectionTests(ConfigTestCase):
                     text = f"""
                         [{table}]
                         description = "Nested."
-                        must = ["src"]
+                        must = ["src/"]
                     """
                 else:
                     text = f"""
                         [always.framework]
                         path = "framework"
                         description = "Framework."
-                        must = ["src"]
+                        must = ["src/"]
                         [{table}]
                         description = "Nested."
-                        must = ["tests"]
+                        must = ["tests/"]
                     """
                 with self.assertRaises(ConfigurationError):
                     load_config(self._write(root, text))
@@ -440,10 +531,10 @@ class ConfigSelectionTests(ConfigTestCase):
             root = Path(temp)
             manifest = self._write(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
                 [always.framework]
                 path = "framework"
-                must = ["src"]
+                must = ["src/"]
             ''')
             config = load_config(manifest)
             self.assertIsNone(config.always["framework"].selection.description)
@@ -453,7 +544,7 @@ class ConfigSelectionTests(ConfigTestCase):
             root = Path(temp)
             manifest = self._write(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
             ''')
             config = load_config(manifest)
             assert config.pluck is not None and config.pluck.default is not None
@@ -464,7 +555,7 @@ class ConfigSelectionTests(ConfigTestCase):
             root = Path(temp)
             manifest = self._write(root, '''
                 [pluck.case.review]
-                must = ["src"]
+                must = ["src/"]
             ''')
             config = load_config(manifest)
             assert config.pluck is not None
@@ -475,7 +566,7 @@ class ConfigSelectionTests(ConfigTestCase):
             root = Path(temp)
             config = load_config(self._write(root, """
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
 
                 [always.docs]
                 path = "docs"
@@ -494,7 +585,7 @@ class ConfigSelectionTests(ConfigTestCase):
             """
             [pluck]
             description = "   "
-            must = ["src"]
+            must = ["src/"]
             """,
             """
             [always.docs]
@@ -515,7 +606,7 @@ class IgnorePathReferenceConfigTests(ConfigTestCase):
             root = Path(temp)
             config = load_config(self._write(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
                 ignore = [
                     ["./tests/fixtures/big.bin"],
                     ["./src/generated/"],
@@ -538,7 +629,7 @@ class IgnorePathReferenceConfigTests(ConfigTestCase):
                 common = ["*.pyc"]
 
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
                 ignore = [["common"], ["./src/generated/"]]
             '''))
             ignore = config.pluck.default.ignore
@@ -559,7 +650,7 @@ class IgnorePathReferenceConfigTests(ConfigTestCase):
                 root = Path(temp)
                 manifest = self._write(root, f'''
                     [pluck]
-                    must = ["src"]
+                    must = ["src/"]
                     ignore = [[{reference!r}]]
                 ''')
                 with self.assertRaises(ConfigurationError):
@@ -570,7 +661,7 @@ class IgnorePathReferenceConfigTests(ConfigTestCase):
             root = Path(temp)
             manifest = self._write(root, '''
                 [pluck]
-                must = ["src"]
+                must = ["src/"]
                 ignore = ["tests/fixtures/big.bin"]
             ''')
             with self.assertRaisesRegex(ConfigurationError, "entity names, not paths"):

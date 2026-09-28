@@ -42,15 +42,15 @@ dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--
 dirpluck --version
 ```
 
-選択した実効設定に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても file-kind Scope の file Target は positional argument から選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
+選択した実効設定に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
 
 ```console
-dirpluck example
-dirpluck work/project-a work/project-b
+dirpluck ./example/
+dirpluck work/project-a/ work/project-b/
 dirpluck --config snapshot
 ```
 
-Target reference は既存の `NAME`、`SCOPE/NAME`、`/`、`SCOPE/` に加え、file-kind Scope では `:[...]` / `SCOPE:[...]` の literal list selector と `:<...>` / `SCOPE:<...>` の regular-expression selector を使用できます。どの形式もスコープから対象を選びます。
+Target reference は literal reference、Scope expansion、Target selector を使えます。Literal reference は末尾 `/` なしを file、末尾 `/` ありを directory とし、default Scope の directory は `./NAME/`、named Scope では `SCOPE/NAME/` と書きます。`/` / `SCOPE/` は Scope expansion、`:[...]` / `SCOPE:[...]` は typed literal list selector、`:<...>` / `SCOPE:<...>` は regular-expression selector です。どの形式もスコープから対象を選びます。
 
 ## Configuration を選ぶ
 
@@ -59,9 +59,9 @@ Configuration document は TOML syntax を使用しますが、filename extensio
 別の Configuration は `--config PATH` で明示します。`PATH` は filesystem location と同じ `/` separator の表記を使い、relative path は runtime cwd、absolute path は host filesystem を基準にします。末尾が `.dirpluck` でなければ suffix を付加するため、dot を含む document name もそのまま使えます。Windows でも CLI path separator には `\` ではなく `/` を使います。
 
 ```console
-dirpluck example --config review
-dirpluck example --config configs/release-1.2
-dirpluck example --config ../shared/review.dirpluck
+dirpluck ./example/ --config review
+dirpluck ./example/ --config configs/release-1.2
+dirpluck ./example/ --config ../shared/review.dirpluck
 ```
 
 `--config` を指定した場合は、その path が表す1個の Configuration document だけを使用し、別 directory の同名 file を探索しません。Directory 自体を指定してその中の `default.dirpluck` を補うこともありません。Configuration document path は host OS の通常の filesystem semantics に従って解決し、symbolic link / Windows directory junction を含む path も control document の選択では特別に拒否しません。dirpluck は選択した path の absolute な表記を document location として保持し、その document 内の relative path はその location の directory を基準にします。dirpluck は file 内容から Configuration らしさを推論したり、任意の `*.dirpluck` file を自動選択・列挙したりしません。`.toml` file を Configuration として扱う互換 fallback もありません。

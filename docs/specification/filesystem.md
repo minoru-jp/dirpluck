@@ -8,7 +8,7 @@ level: MUST
 
 ## SPEC_089
 
-A runtime Target is resolved as a direct child of its corresponding Scope root. A Target from `target_kind = "directory"` uses that directory itself as the Selection boundary. A Target from `target_kind = "file"` treats the regular file itself as an atomic source and performs no Selection traversal inside it. The Scope root is the base for finding Target candidates.
+A runtime Target is resolved as a direct child of its corresponding Scope root. `target_kind` is the type filter for direct-child Target candidates: `"directory"` permits directories, `"file"` permits regular files, and `"both"` permits both. After resolution, a directory Target uses that directory itself as the Selection boundary, while a file Target treats the regular file itself as an atomic source and performs no Selection traversal inside it. The Scope root is the base for finding Target candidates.
 
 level: MUST
 

@@ -10,6 +10,7 @@ from typing import Mapping
 
 from ._config_models import (
     ExclusionPattern,
+    MatchPattern,
     Pluck,
     PathExclusion,
     Selection,
@@ -19,6 +20,7 @@ from ._config_models import (
     TargetIgnorePattern,
 )
 from .errors import ConfigurationError
+from ._regex import compile_regular_expression
 
 CONFIG_NAME = "default.dirpluck"
 CONFIG_SUFFIX = ".dirpluck"
@@ -77,7 +79,11 @@ def _normalize_include_pattern(value: str, where: str) -> str:
         raise ConfigurationError(
             f"{where}: backslashes are not allowed in include patterns: {value!r}"
         )
-    pure = PurePosixPath(value)
+    directory = value.endswith("/")
+    body = value[:-1] if directory else value
+    if not body:
+        raise ConfigurationError(f"{where}: include pattern must name an entry: {value!r}")
+    pure = PurePosixPath(body)
     if pure.is_absolute() or pure == PurePosixPath(".") or ".." in pure.parts:
         raise ConfigurationError(
             f"{where}: include pattern must stay inside its directory: {value!r}"
@@ -91,7 +97,8 @@ def _normalize_include_pattern(value: str, where: str) -> str:
             raise ConfigurationError(
                 f"{where}: each path element may contain at most one '*': {value!r}"
             )
-    return pure.as_posix()
+    normalized = pure.as_posix()
+    return normalized + ("/" if directory else "")
 
 def _parse_exclusion_pattern(raw: str, where: str) -> ExclusionPattern:
     if not raw:
@@ -166,30 +173,38 @@ def _parse_path_exclusion(raw: str, where: str) -> PathExclusion:
 def _parse_target_ignore_pattern(raw: str, where: str) -> TargetIgnorePattern:
     if not raw:
         raise ConfigurationError(f"{where}: ignore pattern must not be empty")
-    if "/" in raw or "\\" in raw:
+    if "\\" in raw:
         raise ConfigurationError(
-            f"{where}: ignore patterns match direct child directory names, not paths: {raw!r}"
+            f"{where}: backslashes are not allowed in Scope ignore patterns: {raw!r}"
         )
-    if any(char in raw for char in "?[]!"):
+    directory = raw.endswith("/")
+    body = raw[:-1] if directory else raw
+    if not body:
+        raise ConfigurationError(f"{where}: ignore pattern must name one direct child entry: {raw!r}")
+    if "/" in body:
+        raise ConfigurationError(
+            f"{where}: ignore patterns match direct child Target names, not paths: {raw!r}"
+        )
+    if any(char in body for char in "?[]!"):
         raise ConfigurationError(
             f"{where}: only a leading and/or trailing '*' is supported: {raw!r}"
         )
-    star_count = raw.count("*")
+    star_count = body.count("*")
     if star_count == 0:
-        match, value = "exact", raw
-    elif star_count == 1 and raw.endswith("*"):
-        match, value = "prefix", raw[:-1]
-    elif star_count == 1 and raw.startswith("*"):
-        match, value = "suffix", raw[1:]
-    elif star_count == 2 and raw.startswith("*") and raw.endswith("*"):
-        match, value = "contains", raw[1:-1]
+        match, value = "exact", body
+    elif star_count == 1 and body.endswith("*"):
+        match, value = "prefix", body[:-1]
+    elif star_count == 1 and body.startswith("*"):
+        match, value = "suffix", body[1:]
+    elif star_count == 2 and body.startswith("*") and body.endswith("*"):
+        match, value = "contains", body[1:-1]
     else:
         raise ConfigurationError(
             f"{where}: '*' may appear only at the beginning, the end, or both: {raw!r}"
         )
     if not value:
-        raise ConfigurationError(f"{where}: '*' is not a valid ignore pattern")
-    return TargetIgnorePattern(raw=raw, value=value, match=match)
+        raise ConfigurationError(f"{where}: '*' and '*/' are not valid ignore patterns")
+    return TargetIgnorePattern(raw=raw, value=value, match=match, directory=directory)
 
 def _validate_filesystem_location(path: str, where: str, *, label: str) -> str:
     """Validate one concrete host filesystem location written with '/' separators."""
@@ -245,56 +260,83 @@ def _validate_base_path(value: object, where: str) -> str:
         )
     return path
 
+
+def _parse_match_pattern(value: object, where: str) -> MatchPattern:
+    if not isinstance(value, dict):
+        raise AssertionError("match pattern parser requires an inline table")
+    _require_only_keys(value, {"match"}, where)
+    if "match" not in value:
+        raise ConfigurationError(f"{where}: structured Selection entry requires 'match'")
+    raw = value["match"]
+    if not isinstance(raw, str):
+        raise ConfigurationError(f"{where}.match: expected a string")
+    compile_regular_expression(
+        raw,
+        where=f"{where}.match",
+        error_type=ConfigurationError,
+        label="regular expression",
+    )
+    return MatchPattern(raw=raw)
+
 def _parse_direct_include_array(
     value: object,
     where: str,
     *,
     allow_empty: bool,
-) -> tuple[str, ...]:
+) -> tuple[str | MatchPattern, ...]:
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
     if not value and not allow_empty:
         raise ConfigurationError(f"{where}: at least one entry is required")
-    if any(not isinstance(item, str) for item in value):
-        raise ConfigurationError(
-            f"{where}: Shared pattern definitions accept direct string patterns only"
-        )
-    patterns = tuple(_normalize_include_pattern(item, where) for item in value)
-    if len(set(patterns)) != len(patterns):
-        raise ConfigurationError(f"{where}: duplicate patterns are not allowed")
-    return patterns
+    patterns: list[str | MatchPattern] = []
+    for index, item in enumerate(value):
+        item_where = f"{where}[{index}]"
+        if isinstance(item, str):
+            patterns.append(_normalize_include_pattern(item, item_where))
+        elif isinstance(item, dict):
+            patterns.append(_parse_match_pattern(item, item_where))
+        else:
+            raise ConfigurationError(
+                f"{item_where}: expected a direct string pattern or {{ match = ... }} inline table"
+            )
+    _reject_duplicate_selection_entries(tuple(patterns), where)
+    return tuple(patterns)
 
 def _parse_direct_ignore_array(
     value: object,
     where: str,
     *,
     allow_empty: bool,
-) -> tuple[ExclusionPattern, ...]:
+) -> tuple[ExclusionPattern | MatchPattern, ...]:
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
     if not value and not allow_empty:
         raise ConfigurationError(f"{where}: at least one entry is required")
-    if any(not isinstance(item, str) for item in value):
-        raise ConfigurationError(
-            f"{where}: Shared pattern definitions accept direct string patterns only"
-        )
-    patterns = tuple(_parse_exclusion_pattern(item, where) for item in value)
-    raws = tuple(item.raw for item in patterns)
-    if len(set(raws)) != len(raws):
-        raise ConfigurationError(f"{where}: duplicate patterns are not allowed")
-    return patterns
+    patterns: list[ExclusionPattern | MatchPattern] = []
+    for index, item in enumerate(value):
+        item_where = f"{where}[{index}]"
+        if isinstance(item, str):
+            patterns.append(_parse_exclusion_pattern(item, item_where))
+        elif isinstance(item, dict):
+            patterns.append(_parse_match_pattern(item, item_where))
+        else:
+            raise ConfigurationError(
+                f"{item_where}: expected a direct string pattern or {{ match = ... }} inline table"
+            )
+    _reject_duplicate_exclusions(tuple(patterns), where)
+    return tuple(patterns)
 
 def _parse_shared_include_namespace(
     value: object,
     where: str,
-) -> Mapping[str, tuple[str, ...]]:
+) -> Mapping[str, tuple[str | MatchPattern, ...]]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
     if not value:
         raise ConfigurationError(f"{where}: define at least one named pattern set")
-    result: dict[str, tuple[str, ...]] = {}
+    result: dict[str, tuple[str | MatchPattern, ...]] = {}
     for raw_name, raw_patterns in value.items():
         name = _require_name(raw_name, where)
         result[name] = _parse_direct_include_array(
@@ -307,14 +349,14 @@ def _parse_shared_include_namespace(
 def _parse_shared_ignore_namespace(
     value: object,
     where: str,
-) -> Mapping[str, tuple[ExclusionPattern, ...]]:
+) -> Mapping[str, tuple[ExclusionPattern | MatchPattern, ...]]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
     if not value:
         raise ConfigurationError(f"{where}: define at least one named pattern set")
-    result: dict[str, tuple[ExclusionPattern, ...]] = {}
+    result: dict[str, tuple[ExclusionPattern | MatchPattern, ...]] = {}
     for raw_name, raw_patterns in value.items():
         name = _require_name(raw_name, where)
         result[name] = _parse_direct_ignore_array(
@@ -350,16 +392,19 @@ def _parse_shared(value: object, where: str) -> SharedPatterns:
 def _parse_include_items(
     value: object,
     where: str,
-) -> tuple[str | SharedReference, ...]:
+) -> tuple[str | MatchPattern | SharedReference, ...]:
     if value is None:
         return ()
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
-    result: list[str | SharedReference] = []
+    result: list[str | MatchPattern | SharedReference] = []
     for index, item in enumerate(value):
         item_where = f"{where}[{index}]"
         if isinstance(item, str):
             result.append(_normalize_include_pattern(item, item_where))
+            continue
+        if isinstance(item, dict):
+            result.append(_parse_match_pattern(item, item_where))
             continue
         if isinstance(item, list):
             if len(item) != 1 or not isinstance(item[0], str) or not item[0].strip():
@@ -370,23 +415,27 @@ def _parse_include_items(
             result.append(SharedReference(item[0]))
             continue
         raise ConfigurationError(
-            f"{item_where}: expected a direct string pattern or one-element Shared reference array"
+            f"{item_where}: expected a direct string pattern, {{ match = ... }} inline table, "
+            "or one-element Shared reference array"
         )
     return tuple(result)
 
 def _parse_ignore_items(
     value: object,
     where: str,
-) -> tuple[ExclusionPattern | PathExclusion | SharedReference, ...]:
+) -> tuple[ExclusionPattern | PathExclusion | MatchPattern | SharedReference, ...]:
     if value is None:
         return ()
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
-    result: list[ExclusionPattern | PathExclusion | SharedReference] = []
+    result: list[ExclusionPattern | PathExclusion | MatchPattern | SharedReference] = []
     for index, item in enumerate(value):
         item_where = f"{where}[{index}]"
         if isinstance(item, str):
             result.append(_parse_exclusion_pattern(item, item_where))
+            continue
+        if isinstance(item, dict):
+            result.append(_parse_match_pattern(item, item_where))
             continue
         if isinstance(item, list):
             if len(item) != 1 or not isinstance(item[0], str) or not item[0].strip():
@@ -400,16 +449,17 @@ def _parse_ignore_items(
                 result.append(SharedReference(reference))
             continue
         raise ConfigurationError(
-            f"{item_where}: expected a direct string pattern or one-element reference array"
+            f"{item_where}: expected a direct string pattern, {{ match = ... }} inline table, "
+            "or one-element reference array"
         )
     return tuple(result)
 
 def _expand_include_items(
-    items: tuple[str | SharedReference, ...],
-    namespace: Mapping[str, tuple[str, ...]],
+    items: tuple[str | MatchPattern | SharedReference, ...],
+    namespace: Mapping[str, tuple[str | MatchPattern, ...]],
     where: str,
-) -> tuple[str, ...]:
-    expanded: list[str] = []
+) -> tuple[str | MatchPattern, ...]:
+    expanded: list[str | MatchPattern] = []
     for item in items:
         if isinstance(item, SharedReference):
             try:
@@ -423,11 +473,11 @@ def _expand_include_items(
     return tuple(expanded)
 
 def _expand_ignore_items(
-    items: tuple[ExclusionPattern | PathExclusion | SharedReference, ...],
-    namespace: Mapping[str, tuple[ExclusionPattern, ...]],
+    items: tuple[ExclusionPattern | PathExclusion | MatchPattern | SharedReference, ...],
+    namespace: Mapping[str, tuple[ExclusionPattern | MatchPattern, ...]],
     where: str,
-) -> tuple[ExclusionPattern | PathExclusion, ...]:
-    expanded: list[ExclusionPattern | PathExclusion] = []
+) -> tuple[ExclusionPattern | PathExclusion | MatchPattern, ...]:
+    expanded: list[ExclusionPattern | PathExclusion | MatchPattern] = []
     for item in items:
         if isinstance(item, SharedReference):
             try:
@@ -440,32 +490,68 @@ def _expand_ignore_items(
             expanded.append(item)
     return tuple(expanded)
 
-def _reject_duplicate_strings(patterns: tuple[str, ...], where: str) -> None:
-    seen: set[str] = set()
-    duplicates: list[str] = []
+def _selection_entry_key(pattern: str | MatchPattern) -> tuple[str, str]:
+    if isinstance(pattern, MatchPattern):
+        return ("match", pattern.raw)
+    return ("pattern", pattern)
+
+
+def _selection_entry_repr(pattern: str | MatchPattern) -> str:
+    if isinstance(pattern, MatchPattern):
+        return f"{{ match = {pattern.raw!r} }}"
+    return repr(pattern)
+
+
+def _reject_duplicate_selection_entries(
+    patterns: tuple[str | MatchPattern, ...], where: str
+) -> None:
+    seen: set[tuple[str, str]] = set()
+    duplicates: list[str | MatchPattern] = []
+    duplicate_keys: set[tuple[str, str]] = set()
     for pattern in patterns:
-        if pattern in seen and pattern not in duplicates:
+        key = _selection_entry_key(pattern)
+        if key in seen and key not in duplicate_keys:
             duplicates.append(pattern)
-        seen.add(pattern)
+            duplicate_keys.add(key)
+        seen.add(key)
     if duplicates:
         raise ConfigurationError(
             f"{where}: duplicate effective pattern(s): "
-            + ", ".join(repr(item) for item in duplicates)
+            + ", ".join(_selection_entry_repr(item) for item in duplicates)
         )
 
+def _exclusion_entry_key(
+    pattern: ExclusionPattern | PathExclusion | MatchPattern,
+) -> tuple[str, str]:
+    if isinstance(pattern, MatchPattern):
+        return ("match", pattern.raw)
+    if isinstance(pattern, PathExclusion):
+        return ("path", pattern.raw)
+    return ("pattern", pattern.raw)
+
+
+def _exclusion_entry_repr(pattern: ExclusionPattern | PathExclusion | MatchPattern) -> str:
+    if isinstance(pattern, MatchPattern):
+        return f"{{ match = {pattern.raw!r} }}"
+    return repr(pattern.raw)
+
+
 def _reject_duplicate_exclusions(
-    patterns: tuple[ExclusionPattern | PathExclusion, ...], where: str
+    patterns: tuple[ExclusionPattern | PathExclusion | MatchPattern, ...], where: str
 ) -> None:
-    seen: set[str] = set()
-    duplicates: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    duplicates: list[ExclusionPattern | PathExclusion | MatchPattern] = []
+    duplicate_keys: set[tuple[str, str]] = set()
     for pattern in patterns:
-        if pattern.raw in seen and pattern.raw not in duplicates:
-            duplicates.append(pattern.raw)
-        seen.add(pattern.raw)
+        key = _exclusion_entry_key(pattern)
+        if key in seen and key not in duplicate_keys:
+            duplicates.append(pattern)
+            duplicate_keys.add(key)
+        seen.add(key)
     if duplicates:
         raise ConfigurationError(
             f"{where}: duplicate effective pattern(s): "
-            + ", ".join(repr(item) for item in duplicates)
+            + ", ".join(_exclusion_entry_repr(item) for item in duplicates)
         )
 
 def _parse_selection(value: object, where: str) -> SelectionDefinition:
@@ -507,13 +593,16 @@ def _materialize_selection(
     must = _expand_include_items(selection.must, shared.must, f"{where}.must")
     may = _expand_include_items(selection.may, shared.may, f"{where}.may")
     ignore = _expand_ignore_items(selection.ignore, shared.ignore, f"{where}.ignore")
-    _reject_duplicate_strings(must, f"{where}.must")
-    _reject_duplicate_strings(may, f"{where}.may")
-    overlap = sorted(set(must) & set(may))
-    if overlap:
+    _reject_duplicate_selection_entries(must, f"{where}.must")
+    _reject_duplicate_selection_entries(may, f"{where}.may")
+    must_by_key = {_selection_entry_key(item): item for item in must}
+    may_keys = {_selection_entry_key(item) for item in may}
+    overlap_keys = sorted(set(must_by_key) & may_keys)
+    if overlap_keys:
+        overlap = [must_by_key[key] for key in overlap_keys]
         raise ConfigurationError(
             f"{where}: must and may must not contain the same pattern(s): "
-            + ", ".join(repr(item) for item in overlap)
+            + ", ".join(_selection_entry_repr(item) for item in overlap)
         )
     _reject_duplicate_exclusions(ignore, f"{where}.ignore")
     if selection.allow_empty and must:
