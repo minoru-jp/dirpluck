@@ -9,7 +9,7 @@ example_002 = test_target_field("example 002")
 @summary('Configuration document の形式、基本形、metadata、path notation。')
 
 
-@canonical_source('Configuration overview', filename='overview.md', order=0, placeholders=False, heading="title")
+@canonical_source('Configuration overview', filename='overview.md', order=0, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""
     この文書は、{{TERM_2}} の基本的な文書形式、metadata、path notation を説明します。Source、Selection、Base、Output はそれぞれ collection 内の専用文書に分けています。

@@ -8,7 +8,7 @@ from shikumi_devdoc.norms.document import title
 @summary('Selection、Shared pattern、include/ignore pattern grammar。')
 
 
-@canonical_source('Selection and shared patterns', filename='selection.md', order=70, placeholders=False, heading="identity")
+@canonical_source('Selection and shared patterns', filename='selection.md', order=70, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_065:
         r"""Pluck / Always source の base または Case selection は、`must` / `may` の candidate を少なくとも1個必要とする。Candidate は direct string pattern、structured `match` entry、または Shared reference で記述できる。`description` は任意で、記述する場合だけ空でない string を必要とする。"""

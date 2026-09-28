@@ -2,6 +2,15 @@
 
 Release history for dirpluck.
 
+## 0.13.1
+
+Migrate the published-document canonical sources to the merge-policy model in shikumi-devdoc 0.3.2, and synchronize the documentation-generation dependency and version snapshot. Runtime behavior, the official Python API, CLI, Configuration language, and Archive semantics are unchanged.
+
+### Changed
+
+- Migrate published-document canonical sources from the deprecated `placeholders` policy to shikumi-devdoc 0.3.2 `merge_policy`. Self-contained documents that must not depend on external context use `merge_policy="local"`, while the CHANGELOG, as a historical snapshot, uses `merge_policy="forbidden"`. This makes the intended merge boundaries explicit without changing document content.
+- Update the documentation-generation dependency to `shikumi-devdoc>=0.3.2`, and synchronize `dirpluck.__version__`, the documentation-generation context, and the published README current-version snapshot to `0.13.1`. This release updates repository-local documentation tooling and release metadata only; it makes no functional changes to runtime behavior, the official Python API, CLI, Configuration language, or Archive semantics.
+
 ## 0.13.0
 
 Allow a Scope to expose directory and file Targets together, generalize Target selectors across all Target kinds, and add structured full-path regular-expression matching to Selection.

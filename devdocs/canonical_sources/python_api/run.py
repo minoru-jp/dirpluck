@@ -17,7 +17,7 @@ archive_mtime_example = test_target_field("archive mtime example")
 @summary('high-level `run()` entry point と runtime modifier の契約。')
 
 
-@canonical_source('dirpluck.run', filename='run.md', order=10, placeholders=False, heading="title")
+@canonical_source('dirpluck.run', filename='run.md', order=10, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""
     公式 high-level entry point は次の形です。

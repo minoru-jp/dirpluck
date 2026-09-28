@@ -7,7 +7,7 @@ from shikumi_devdoc.norms.document import title
 @summary('仕様全体の位置づけ、公開面、関連文書への導線。')
 
 
-@canonical_source('Specification overview', filename='overview.md', order=0, placeholders=False, heading="identity")
+@canonical_source('Specification overview', filename='overview.md', order=0, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     r"""{{TERM_1}} の CLI、`.dirpluck` {{TERM_2}}形式、`.dirpluck-inv` {{TERM_19}}形式について、互換性対象となる厳密な動作意味論を定義する。両 document の内容は TOML syntax を使用する。 Python package root の公式 API surface と `run()` の呼び出し契約は `../python_api/INDEX.md` に定義し、`run()` が実行する Configuration / Target / Case / Invocation / Archive semantics はこの仕様と共通とする。用途は `../../README.md`、用語の意味は `../../GLOSSARY.md`、Configuration の書き方は `../configuration/INDEX.md`、CLI の操作方法は `../cli/INDEX.md`、Configuration / Invocation Template と filesystem 操作の trust boundary は `../TRUST.md` を参照する。"""
     merge @= TERMS.TERM_1

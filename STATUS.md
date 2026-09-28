@@ -40,9 +40,9 @@ The criterion for 1.0 is not an unlimited accumulation of features. The importan
 
 ## Documentation tooling
 
-The canonical-source / canonical-document pipeline for published documentation uses `shikumi-devdoc>=0.3.0`. This is a repository-development dependency and is not a dirpluck runtime dependency.
+The canonical-source / canonical-document pipeline for published documentation uses `shikumi-devdoc>=0.3.2`. This is a repository-development dependency and is not a dirpluck runtime dependency.
 
-When this source repository is published on the web, the required Shikumi 0.2.0 and shikumi-devdoc 0.3.0 releases are assumed to have already been published. Repository-specific orchestration, including which documents are generated, where they are written, and which project context is supplied, remains in `tools/render_canonical_docs.py` rather than being pushed into shikumi-devdoc's generic API.
+When this source repository is published on the web, the required Shikumi 0.2.0 and shikumi-devdoc 0.3.2 releases are assumed to have already been published. Repository-specific orchestration, including which documents are generated, where they are written, and which project context is supplied, remains in `tools/render_canonical_docs.py` rather than being pushed into shikumi-devdoc's generic API.
 
 ## Distribution note
 

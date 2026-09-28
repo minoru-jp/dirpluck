@@ -9,7 +9,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @summary('filesystem boundary、link-like entry、non-regular entry の扱い。')
 
 
-@canonical_source('Filesystem boundary and entry types', filename='filesystem.md', order=80, placeholders=False, heading="identity")
+@canonical_source('Filesystem boundary and entry types', filename='filesystem.md', order=80, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_088:
         r"""Configuration file directory は relative Configuration path の resolution anchor であり、すべての source をその配下へ閉じ込める共通 boundary ではない。"""

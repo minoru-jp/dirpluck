@@ -3,7 +3,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge
 from shikumi_devdoc.norms.document import title
 
 
-@canonical_source('dirpluck development documents', filename='README.md', placeholders=False, heading="title")
+@canonical_source('dirpluck development documents', filename='README.md', merge_policy="local", heading="title")
 class SECTION_001:
     r"""
     `devdocs/` は、{{TERM_1}} の公開文書を作成・検証するための repository workspace です。ここにある canonical source と日本語 canonical document は repository 上で公開しますが、{{TERM_1}} の runtime API、Configuration interface、または互換性保証対象の product interface ではありません。

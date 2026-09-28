@@ -18,6 +18,17 @@
 
 dirpluck のリリースごとの変更履歴。
 
+## 0.13.1
+
+公開文書の canonical source を shikumi-devdoc 0.3.2 の merge policy へ移行し、文書生成 dependency と version snapshot を同期する patch release。Runtime behavior、公式 Python API、CLI、Configuration language、Archive semantics は変更しない。
+
+version: 0.13.1
+
+Changed:
+
+- 公開文書の canonical source で deprecated な `placeholders` policy から shikumi-devdoc 0.3.2 の `merge_policy` へ移行する。外部 context に依存させない自己完結文書は `merge_policy="local"`、履歴 snapshot である CHANGELOG は `merge_policy="forbidden"` とし、文書内容を変えずに意図した merge 境界を明示する。
+- 文書生成 dependency を `shikumi-devdoc>=0.3.2` に更新し、`dirpluck.__version__` と文書生成用 context / 公開 README の current-version snapshot を `0.13.1` に同期する。この release は repository-local documentation tooling と release metadata の更新であり、runtime behavior、公式 Python API、CLI、Configuration language、Archive semantics には機能変更を加えない。
+
 ## 0.13.0
 
 Scope の Target candidate type を `directory` / `file` / `both` から選べるようにし、Target selector を全 kind へ一般化する。あわせて Selection に full-path regular expression を使う structured `match` entry を追加する。

@@ -10,7 +10,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @summary('final archive root、entry collision、generated README の planning 規則。')
 
 
-@canonical_source('Archive planning', filename='archive.md', order=90, placeholders=False, heading="identity")
+@canonical_source('Archive planning', filename='archive.md', order=90, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_095:
         r"""Scope から解決した Target の source root は Target entry name 1 segment とする。Directory Target では directory name、file Target では file name を使用する。Logical Scope name は archive path へ暗黙には含めない。"""

@@ -14,7 +14,7 @@ example_012 = test_target_field("example 012")
 @summary('Target reference、Scope expansion、Case の CLI 操作。')
 
 
-@canonical_source('Targets and Cases', filename='targets.md', order=20, placeholders=False, heading="title")
+@canonical_source('Targets and Cases', filename='targets.md', order=20, merge_policy="local", heading="title")
 class CLI_PART:
     r"""この文書は positional Target reference、Scope expansion、Case selection を CLI から指定する方法を説明します。
 

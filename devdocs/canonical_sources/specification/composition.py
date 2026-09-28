@@ -9,7 +9,7 @@ from shikumi_devdoc.norms.document import title
 @summary('Base chain、cycle detection、definition composition、Output の扱い。')
 
 
-@canonical_source('Base chain and composition', filename='composition.md', order=40, placeholders=False, heading="identity")
+@canonical_source('Base chain and composition', filename='composition.md', order=40, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_025:
         r"""{{TERM_13}}は `[about].base` として宣言する。`base` は concrete Configuration file path とし、空文字列と glob を拒否する。Relative path は Filesystem path notation の共通規則に従って現在の Configuration file directory から解決し、absolute path は host filesystem 上の file を直接参照する。Path は `.dirpluck` extension を必要とし、host OS の通常の filesystem semantics に従って参照する。解決先は実在 regular file で、内容が有効な TOML Configuration schema でなければならない。"""

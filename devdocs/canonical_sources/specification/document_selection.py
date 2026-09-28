@@ -7,7 +7,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @summary('Configuration と Invocation Template の選択・解決規則。')
 
 
-@canonical_source('CLI document selection', filename='document-selection.md', order=10, placeholders=False, heading="identity")
+@canonical_source('CLI document selection', filename='document-selection.md', order=10, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_002:
         r"""Configuration document の filename extension は `.dirpluck` で、内容は TOML syntax とする。`--config` を省略した場合、dirpluck が暗黙に選択する Configuration は process cwd 直下の `default.dirpluck` 1個だけとする。別 directory の `default.dirpluck`、別名の `*.dirpluck`、file 内容から推論した候補は探索・列挙・自動選択しない。cwd の `default.dirpluck` が存在しなければ not-found error とし、`.toml` file への compatibility fallback は提供しない。"""

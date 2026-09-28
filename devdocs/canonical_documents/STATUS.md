@@ -56,9 +56,9 @@ Beta 期間では、特に次の点を確認します。
 
 ## 文書生成基盤
 
-公開文書の canonical source / canonical document pipeline には `shikumi-devdoc>=0.3.0` を使用します。これは repository development 用 dependency であり、dirpluck の runtime dependency ではありません。
+公開文書の canonical source / canonical document pipeline には `shikumi-devdoc>=0.3.2` を使用します。これは repository development 用 dependency であり、dirpluck の runtime dependency ではありません。
 
-この source repository を Web 公開する時点では、必要な Shikumi 0.2.0 と shikumi-devdoc 0.3.0 が先に公開済みであることを前提とします。文書生成対象、出力先、project context など dirpluck 固有の orchestration は `tools/render_canonical_docs.py` に保持し、shikumi-devdoc の汎用 API へ project 固有情報を押し込みません。
+この source repository を Web 公開する時点では、必要な Shikumi 0.2.0 と shikumi-devdoc 0.3.2 が先に公開済みであることを前提とします。文書生成対象、出力先、project context など dirpluck 固有の orchestration は `tools/render_canonical_docs.py` に保持し、shikumi-devdoc の汎用 API へ project 固有情報を押し込みません。
 
 ## 配布上の留意点
 

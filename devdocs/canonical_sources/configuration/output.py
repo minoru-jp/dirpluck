@@ -9,7 +9,7 @@ example_021 = test_target_field("example 021")
 @summary('Fixed / timestamp Output と書き込み境界。')
 
 
-@canonical_source('Configuration output', filename='output.md', order=40, placeholders=False, heading="title")
+@canonical_source('Configuration output', filename='output.md', order=40, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""
     この文書は、Configuration が宣言する Output、fixed / timestamp mode、書き込み境界を説明します。

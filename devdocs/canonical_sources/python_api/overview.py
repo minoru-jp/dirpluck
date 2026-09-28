@@ -13,7 +13,7 @@ cwd_example = test_target_field("cwd example")
 @summary('公式 Python API の位置づけ、基本的な呼び出し方、互換性境界。')
 
 
-@canonical_source('Python API overview', filename='overview.md', order=0, placeholders=False, heading="title")
+@canonical_source('Python API overview', filename='overview.md', order=0, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""
     この文書は、{{TERM_1}} 0.13.x の公式 Python API を説明します。API は CLI と同じ実行 model を Python から利用するための最小 surface として定義し、Configuration parser や builder pipeline の低 level object を一般用途の互換性契約には含めません。

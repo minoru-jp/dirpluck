@@ -6,7 +6,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @summary('Configuration document の top-level schema と table 構造。')
 
 
-@canonical_source('Configuration schema', filename='configuration-schema.md', order=20, placeholders=False, heading="identity")
+@canonical_source('Configuration schema', filename='configuration-schema.md', order=20, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_011:
         r"""

@@ -12,7 +12,7 @@ result_fields = test_target_field("RunResult public fields")
 @summary('preview/build の結果として返す `RunResult` とその公開 field。')
 
 
-@canonical_source('RunResult', filename='result.md', order=20, placeholders=False, heading="title")
+@canonical_source('RunResult', filename='result.md', order=20, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""
     `preview=True` は Archive file を書き込まず、CLI `--preview` と同じ planning semantics を実行します。Output を解決・書き込みしないため、`output`、`force=True`、`sequence` とは組み合わせません。

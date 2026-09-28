@@ -11,7 +11,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @summary('CLI options、組み合わせ制約、exit behavior の契約。')
 
 
-@canonical_source('CLI contract', filename='cli-contract.md', order=120, placeholders=False, heading="identity")
+@canonical_source('CLI contract', filename='cli-contract.md', order=120, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_148:
         r"""

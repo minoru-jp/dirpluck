@@ -3,7 +3,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge
 from shikumi_devdoc.norms.document import title
 
 
-@canonical_source('dirpluck', filename='README.md', placeholders=True, heading="title")
+@canonical_source('dirpluck', filename='README.md', merge_policy="all", heading="title")
 class SECTION_001:
     r"""
     {{TERM_1}} は、「どの file を一緒に扱うか」という判断を TOML に残し、その宣言から ZIP Archive を組み立てる tool です。CLI を主な入口とし、同じ invocation model を最小の Python API からも利用できます。

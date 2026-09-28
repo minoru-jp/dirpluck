@@ -13,7 +13,7 @@ example_016 = test_target_field("example 016")
 @summary('Preview、Archive README path、runtime Output、sequence、entry mtime。')
 
 
-@canonical_source('Preview and runtime output', filename='output.md', order=30, placeholders=False, heading="title")
+@canonical_source('Preview and runtime output', filename='output.md', order=30, merge_policy="local", heading="title")
 class CLI_PART:
     r"""この文書は preview、Archive README への source path 記録、runtime Output、sequence、Archive entry mtime を説明します。
 

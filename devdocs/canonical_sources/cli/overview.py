@@ -11,7 +11,7 @@ example_017 = test_target_field("example 017")
 @summary('CLI の基本形、Configuration 選択、help、終了 status。')
 
 
-@canonical_source('CLI overview', filename='overview.md', order=0, placeholders=False, heading="title")
+@canonical_source('CLI overview', filename='overview.md', order=0, merge_policy="local", heading="title")
 class CLI_PART:
     r"""この文書は `dirpluck` CLI の基本的な呼び出し方、Configuration の選択、help / version、終了 status を説明します。
 

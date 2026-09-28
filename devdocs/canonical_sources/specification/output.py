@@ -9,7 +9,7 @@ from shikumi_devdoc.norms.document import title
 @summary('fixed/timestamp/runtime Output、write boundary、collision 規則。')
 
 
-@canonical_source('Output', filename='output.md', order=100, placeholders=False, heading="identity")
+@canonical_source('Output', filename='output.md', order=100, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_107:
         r"""Configuration は Output を省略できる。Output を持たない Configuration も Root として Archive planning / `--preview` に使用できる。Archive file を書き込む build では、{{TERM_14}}自身が宣言した fixed / timestamp Output、または runtime Output のどちらかを effective Output とする。Runtime Output がない場合だけ root 自身の Output declaration を必要とし、Base の Output は root の Output として継承しない。"""

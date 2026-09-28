@@ -3,7 +3,7 @@ from shikumi_devdoc.norms.vocabulary import preserve_spelling, vocabulary
 
 
 @vocabulary
-@canonical_source("dirpluck 用語集", filename="GLOSSARY.md", placeholders=False, heading="identity")
+@canonical_source("dirpluck 用語集", filename="GLOSSARY.md", merge_policy="local", heading="identity")
 class TERMS:
     r'''dirpluck の文書と実装で共通して使う概念を定義する。ここでは語の意味だけを定め、個数制約、解決順序、path の基準、CLI 文法、validation、error 条件などの仕様は定義しない。'''
 

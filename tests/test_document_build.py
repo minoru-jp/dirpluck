@@ -135,7 +135,7 @@ class DocumentBuildTests(unittest.TestCase):
         self.assertEqual(project["project"]["dependencies"], [])
         self.assertEqual(
             project["dependency-groups"]["docs"],
-            ["shikumi-devdoc>=0.3.0"],
+            ["shikumi-devdoc>=0.3.2"],
         )
 
     def test_distribution_uses_hatchling_and_full_public_docs(self):

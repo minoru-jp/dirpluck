@@ -9,7 +9,7 @@ from shikumi_devdoc.norms.document import title
 @summary('Scope、Target reference、expansion、Always source、Case の解決規則。')
 
 
-@canonical_source('Runtime Target, Scope, and Case', filename='runtime-targets.md', order=50, placeholders=False, heading="identity")
+@canonical_source('Runtime Target, Scope, and Case', filename='runtime-targets.md', order=50, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_037:
         r"""{{TERM_15}}に Pluck が存在する場合は、既存契約どおり CLI positional `TARGET` reference を1個以上必要とする。Pluck がない Effective Configuration でも `target_kind = "file"` / `"both"` の Scope から file Target を選ぶ positional Target reference は受理する。Pluck がなく Always source もなく file-capable Scope だけを持つ場合は、実行時に positional Target reference を1個以上必要とする。"""

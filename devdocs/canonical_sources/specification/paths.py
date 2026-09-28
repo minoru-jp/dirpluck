@@ -6,7 +6,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @summary('Configuration と runtime input で使用する filesystem path notation。')
 
 
-@canonical_source('Filesystem path notation', filename='paths.md', order=30, placeholders=False, heading="identity")
+@canonical_source('Filesystem path notation', filename='paths.md', order=30, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_017:
         r"""Configuration / Invocation Template の TOML で filesystem location を表す field と、CLI の `--config PATH` / `-i PATH` / `--output PATH`、Python API の runtime `output` は、host OS に関係なく `/` を path separator として使用する。Backslash は separator として受理せず、Windows でも `/` を記述する。"""

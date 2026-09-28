@@ -11,7 +11,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 @summary('preview mode の出力と副作用境界。')
 
 
-@canonical_source('Preview', filename='preview.md', order=110, placeholders=False, heading="identity")
+@canonical_source('Preview', filename='preview.md', order=110, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_145:
         r"""`--preview` は通常実行と同じ base chain resolution、cycle detection、definition composition、Scope lookup / expansion、Target direct-child resolution と Scope ignore filtering、Case selection、file selection、archive planning を使うが、output file / directory を作成・変更しない。Root Configuration に Output declaration がなくても使用できる。`--preview` は Output を解決・書き込みしないため `--here` / `--output` / `--force` / `--sequence` と組み合わせない。`--archive-mtime` は preview でも validation するが、Archive を書かないため preview result には影響しない。"""

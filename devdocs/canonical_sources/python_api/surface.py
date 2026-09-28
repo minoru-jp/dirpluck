@@ -11,7 +11,7 @@ package_exports = test_target_field("package-root exports")
 @summary('package root の公式 export と内部実装との互換性境界。')
 
 
-@canonical_source('Package surface', filename='surface.md', order=40, placeholders=False, heading="title")
+@canonical_source('Package surface', filename='surface.md', order=40, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""
     0.13.x の公式 package-root export は次の4名です。

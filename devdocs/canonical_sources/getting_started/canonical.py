@@ -11,7 +11,7 @@ build_command = test_target_field("build command")
 archive_readme = test_target_field("archive README")
 
 
-@canonical_source('Getting started with dirpluck', filename='GETTING_STARTED.md', placeholders=False, heading="title")
+@canonical_source('Getting started with dirpluck', filename='GETTING_STARTED.md', merge_policy="local", heading="title")
 class SECTION_001:
     r"""
     この文書では、最小構成から {{TERM_1}} を試し、preview で内容を確認してから Archive を生成するまでを通して説明します。

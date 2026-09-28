@@ -8,7 +8,7 @@ example_019 = test_target_field("example 019")
 @summary('Base Configuration による再利用と composition。')
 
 
-@canonical_source('Configuration composition', filename='composition.md', order=30, placeholders=False, heading="title")
+@canonical_source('Configuration composition', filename='composition.md', order=30, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""
     この文書は、`[about].base` を使った Base Configuration の再利用と filesystem anchor の考え方を説明します。

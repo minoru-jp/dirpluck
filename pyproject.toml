@@ -30,7 +30,7 @@ classifiers = [
 dirpluck = "dirpluck.cli:main"
 
 [dependency-groups]
-docs = ["shikumi-devdoc>=0.3.0"]
+docs = ["shikumi-devdoc>=0.3.2"]
 
 [tool.hatch.version]
 path = "src/dirpluck/__init__.py"

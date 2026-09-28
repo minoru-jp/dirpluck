@@ -11,7 +11,7 @@ error_example = test_target_field("DirpluckError example")
 @summary('Python API が公開する error boundary と `DirpluckError`。')
 
 
-@canonical_source('DirpluckError', filename='errors.md', order=30, placeholders=False, heading="title")
+@canonical_source('DirpluckError', filename='errors.md', order=30, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""
     Python API から期待される dirpluck error をまとめて扱う場合は `DirpluckError` を catch します。

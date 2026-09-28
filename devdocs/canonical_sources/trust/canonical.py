@@ -3,7 +3,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge
 from shikumi_devdoc.norms.document import title
 
 
-@canonical_source('dirpluck Trust Model', filename='TRUST.md', placeholders=False, heading="title")
+@canonical_source('dirpluck Trust Model', filename='TRUST.md', merge_policy="local", heading="title")
 class SECTION_001:
     r"""
     この文書は、{{TERM_1}} の Configuration / Invocation Template と filesystem 操作をどの trust boundary で扱うかを説明します。これは安全性を自動判定する仕様ではなく、利用者が何を確認すべきかを整理する文書です。
