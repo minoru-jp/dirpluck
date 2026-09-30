@@ -7,7 +7,12 @@ class PublicInterfaceTests(unittest.TestCase):
     def test_package_root_exports_only_the_supported_python_api(self):
         self.assertEqual(
             set(dirpluck.__all__),
-            {"DirpluckError", "RunResult", "__version__", "run"},
+            {"ConfigurationDeprecationWarning", "DirpluckError", "RunResult", "__version__", "run"},
+        )
+
+    def test_configuration_deprecation_warning_is_visible_warning_category(self):
+        self.assertTrue(
+            issubclass(dirpluck.ConfigurationDeprecationWarning, FutureWarning)
         )
 
     def test_low_level_modules_are_not_reexported_from_package_root(self):

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+import inspect
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Mapping
 import tomllib
+import warnings
 
 from ._config_models import Always, Config, Namespace, Output, Scope
 from ._config_values import (
@@ -28,6 +33,96 @@ from ._config_values import (
     _validated_target_ignores,
 )
 from .errors import ConfigurationError
+from ._warnings import ConfigurationDeprecationWarning
+
+
+_CONFIGURATION_DEPRECATIONS: ContextVar[list[str] | None] = ContextVar(
+    "dirpluck_configuration_deprecations",
+    default=None,
+)
+
+
+@contextmanager
+def collect_configuration_deprecations() -> Iterator[list[str]]:
+    """Collect deprecated Configuration syntax diagnostics for one caller."""
+
+    messages: list[str] = []
+    token = _CONFIGURATION_DEPRECATIONS.set(messages)
+    try:
+        yield messages
+    finally:
+        _CONFIGURATION_DEPRECATIONS.reset(token)
+
+
+def _report_configuration_deprecation(message: str) -> None:
+    messages = _CONFIGURATION_DEPRECATIONS.get()
+    if messages is not None:
+        if message not in messages:
+            messages.append(message)
+        return
+
+    # Attribute API warnings to the first caller outside dirpluck rather than to
+    # an internal parser/effective-resolution frame.  The root Configuration
+    # and base-chain paths have different depths, so a fixed stacklevel is not
+    # a stable API contract.
+    stacklevel = 1
+    frame = inspect.currentframe()
+    try:
+        while frame is not None:
+            module_name = frame.f_globals.get("__name__", "")
+            if module_name != "dirpluck" and not module_name.startswith("dirpluck."):
+                break
+            stacklevel += 1
+            frame = frame.f_back
+    finally:
+        del frame
+
+    warnings.warn(
+        message,
+        ConfigurationDeprecationWarning,
+        stacklevel=stacklevel,
+    )
+
+
+def _selection_uses_deprecated_reference_syntax(value: object) -> bool:
+    """Return whether one Selection table contains a valid legacy nested reference."""
+
+    if not isinstance(value, dict):
+        return False
+    for field in ("must", "may", "ignore"):
+        entries = value.get(field)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if (
+                isinstance(entry, list)
+                and len(entry) == 1
+                and isinstance(entry[0], str)
+                and bool(entry[0].strip())
+            ):
+                return True
+    cases = value.get("case")
+    if isinstance(cases, dict):
+        return any(
+            _selection_uses_deprecated_reference_syntax(case)
+            for case in cases.values()
+        )
+    return False
+
+
+def _uses_deprecated_reference_syntax(data: Mapping[str, object]) -> bool:
+    """Return whether this Configuration uses a legacy nested Selection reference."""
+
+    if _selection_uses_deprecated_reference_syntax(data.get("pluck")):
+        return True
+    always = data.get("always")
+    if isinstance(always, dict):
+        return any(
+            _selection_uses_deprecated_reference_syntax(source)
+            for source in always.values()
+        )
+    return False
+
 
 def _read_toml(path: Path) -> dict[str, object]:
     try:
@@ -244,7 +339,7 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
     namespaces = _parse_namespaces(data.get("namespace"), f"{manifest} [namespace]")
     output = _parse_output(data.get("output"), f"{manifest} [output]")
 
-    return Config(
+    config = Config(
         manifest=manifest,
         about_description=about_description,
         base=base,
@@ -255,3 +350,10 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
         namespaces=namespaces,
         output=output,
     )
+    if _uses_deprecated_reference_syntax(data):
+        _report_configuration_deprecation(
+            f"{manifest}: deprecated nested-array Selection reference syntax since 0.14.0; "
+            "it will be removed in 1.0.0; use { shared = \"...\" }, "
+            "or { path = \"...\" } for ignore paths"
+        )
+    return config

@@ -30,76 +30,13 @@
 
 # dirpluck
 
-dirpluck は、「どの file を一緒に扱うか」という判断を TOML に残し、その宣言から ZIP Archive を組み立てる tool です。CLI を主な入口とし、同じ invocation model を最小の Python API からも利用できます。
+dirpluck は、複数の場所にある file から必要なものを選び、ひとつの ZIP Archive にまとめるための CLI tool です。
 
-Backup のように周辺をすべて複製するのではなく、review、引き渡し、調査、定例作業、LLM と扱う作業 context など、ある目的に必要な file だけを繰り返し集めることを目的としています。
-
-## 何に使うか
-
-### 必要な資料をひとつにまとめる
-
-複数の directory に分かれた資料でも、同じ目的で使うものならひとつの Archive にまとめられます。
-
-たとえば review 用に、
-
-- 対象 project の source
-- review guideline
-- reference material
-
-を一緒に集める、といった用途です。
-
-固定資料だけを集めることも、実行時に選んだ 対象 へ固定資料を添えることもできます。
-
-### 同じ抽出方法を、別の Target に使う
-
-「README と `src/` と `tests/` を集める」「秘密情報や生成物は除外する」といった判断を 設定ファイル に残しておけば、対象となる project を変えながら同じルールを使えます。
-
-対象 をどこから選ぶかは スコープ として分けられるため、Configuration の置き場所と実際の project tree を同じ場所に揃える必要はありません。
-
-File / directory の両方になり得る **include / Target reference** は、記法だけで型を明示します。末尾 `/` なしは file、末尾 `/` ありは directory で、filesystem の現在状態から型を推測しません。たとえば Selection の `"pyproject.toml"` は file、`"src/"` は directory を表します。Target reference も同じ原則を使い、default Scope の directory Target は `./project/`、named Scope では `work/project/` のように書きます。`may` が期待型では一致せず反対型の entry が存在する場合も optional semantics は変えず、source label 付きの diagnostic で末尾 `/` の見直しを案内します。CLI は通常 build / `--preview` の両方で warning を表示し、Python API は `RunResult.warnings` に返します。`must` は通常 build の既存 error に同じ型 marker hint を含め、preview では missing のまま同じ hint を warning として確認できます。Literal Target の error も型 marker hint を含めます。
-
-`ignore` は除外側の規則として意図的に広く扱います。通常の ignore string / concrete path は末尾 `/` がなければ matching file と directory の両方を除外し、末尾 `/` がある場合だけ directory に限定します。File だけを精密に除外したい場合は structured `{ match = "..." }` を使えます。
-
-Directory Target の通常の `must` / `may` / `ignore` string は、directory tree を予測可能に扱うための制限された Selection pattern を使います。より表現力が必要な Selection では `{ match = "..." }` で root-relative path 全体へ Python-compatible regular expression を使えます。Scope の `<...>` Target selector も regular expression を使いますが、こちらは eligible direct-child Target の normalized name の絞り込みだけを行います。この使い分けは意図したものです。詳細は `docs/configuration/selection.md` と `docs/cli/targets.md` を参照してください。
-
-## なぜ宣言として残すのか
-
-一度だけなら、手作業で ZIP を作る方が簡単です。
-
-dirpluck が役立つのは、同じ種類の判断を後でもう一度行うときです。
-
-Configuration に残しておけば、
-
-- 何を必ず含めるか
-- 何を存在するときだけ含めるか
-- 何を除外するか
-- どの固定資料を一緒に集めるか
-
-を、shell history、会話履歴、人間の記憶へ依存せず確認できます。
-
-`--preview` を使えば、Archive を書き込む前に、現在の filesystem に対して何が選ばれるかを確認できます。
-
-Configuration を複数の用途で共有したい場合は、別の Configuration を基礎として再利用することもできます。Configuration の構成方法については `docs/configuration/INDEX.md`、厳密な合成・解決規則については `docs/specification/INDEX.md` を参照してください。
-
-## 外へ渡す前に
-
-dirpluck は、どの file が機密情報かを推論しません。
-
-外部へ渡す Archive を作る場合は、`--preview` で内容を確認し、含めるべきでないものを Configuration で明示的に除外してください。
-
-たとえば `.env`、秘密鍵、credential、project 固有の機密 file などは、名前や配置が project ごとに異なります。
-
-Configuration と filesystem 操作の trust boundary、absolute path、overwrite、外部へ渡す Archive を扱う際の考え方は `docs/TRUST.md` にまとめています。
-
-## まず試す
-
-最初の Configuration を作り、`--preview` で確認してから Archive を生成する流れは `docs/GETTING_STARTED.md` にまとめています。
-
-Configuration field の詳細は `docs/configuration/INDEX.md`、CLI option と Invocation Template は `docs/cli/INDEX.md` を参照してください。
+何を含め、何を除外し、どの固定資料を常に添えるかを TOML の設定ファイルとして残せます。たとえば LLM に repository を渡して開発作業を依頼するときに、今回の開発対象、共通 framework、作業に必要な local wheel、関連 repository を、同じ rule から再現可能な Archive にまとめられます。
 
 ## インストール
 
-現在の version は **0.13.1** です。
+現在の version は **0.14.0** です。
 
 Python 3.11 以降を使用します。
 
@@ -110,22 +47,191 @@ dirpluck --version
 
 dirpluck には runtime third-party dependency はありません。
 
+## 例: LLM に開発 context を渡す
+
+次のような workspace を考えます。
+
+```text
+workspace/
+├── default.dirpluck
+├── framework-core/
+│   └── dist/
+│       └── framework_core-2.4.0-py3-none-any.whl
+├── docs-builder/
+│   └── dist/
+│       └── docs_builder-1.6.0-py3-none-any.whl
+└── repositories/
+    ├── service-api/
+    │   ├── src/
+    │   └── .tmp/
+    │       └── proposed-changes.patch
+    ├── worker-jobs/
+    └── web-console/
+```
+
+`repositories/` には同じ基盤を利用する複数の repository があり、今回は `service-api` と `web-console` を LLM に渡す開発対象とします。`framework-core` と `docs-builder` の wheel は、どの Target を選んでも作業に必要なので常に Archive へ含めます。`service-api/.tmp/` には、別の作業で取得した評価対象の差分が置かれています。
+
+Workspace root の `default.dirpluck` を次のようにします。
+
+```toml
+[about]
+description = "LLMによる開発作業のためのリポジトリと実行依存物。"
+
+[namespace.dependencies]
+[namespace.tools]
+[namespace.repositories]
+
+[always.framework]
+description = "対象リポジトリが利用する基盤フレームワーク。"
+path = "framework-core"
+namespace = "dependencies"
+must = ["dist/*.whl"]
+
+[always.docs-builder]
+description = "開発文書を構成するためのツール。"
+path = "docs-builder"
+namespace = "tools"
+must = ["dist/*.whl"]
+
+[scope.projects]
+description = "開発対象として選択できるリポジトリ。"
+path = "repositories"
+namespace = "repositories"
+ignore = ["archive/", "scratch/"]
+
+[shared.ignore]
+repository-noise = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    ".env*",
+    "*.pem",
+    "*.key",
+    "*.pyc",
+]
+
+[pluck]
+description = "今回LLMに渡す開発対象のリポジトリ。"
+may = ["*", "*/"]
+ignore = [
+    { shared = "repository-noise" },
+    { path = "private/local-notes/" },
+    { path = ".tmp/" },
+]
+
+[pluck.case.diff]
+description = "開発対象のリポジトリ。.tmp/ に評価してほしい差分が含まれています。"
+may = ["*", "*/"]
+ignore = [
+    { shared = "repository-noise" },
+    { path = "private/local-notes/" },
+]
+
+[output]
+path = "develop-target.zip"
+overwrite = true
+```
+
+`always` は Target に関係なく固定資料を加えます。`scope.projects` は runtime に選べる repository の場所を定め、`pluck` は選ばれた directory Target へ同じ Selection を適用します。通常は `.tmp/` を除外し、`diff` Case のときだけ評価対象の差分を含めます。`description` は選択 semantics を変えませんが、生成される Archive README に役割を残すため、受け取った人や LLM が開発対象・基盤・補助 tool を区別できます。
+
+### Preview
+
+Archive を作る前に、まず内容を確認します。この例では workspace root を runtime current working directory として実行するため、`default.dirpluck` が自動的に使われます。
+
+```console
+dirpluck projects/service-api/ projects/web-console/ --preview
+```
+
+`--preview` は ZIP をまだ書き込まず、現在の filesystem から何が選択されるかを表示します。想定していない file が含まれていないか、必要な file が欠けていないかを確認します。
+
+### Case で差分を追加する
+
+通常の Selection では `.tmp/` を除外しています。`service-api/.tmp/proposed-changes.patch` も一緒に渡して差分を評価するときは、`diff` Case を選びます。
+
+```console
+dirpluck projects/service-api/ --case diff --preview
+```
+
+`--case diff` は `[pluck.case.diff]` の Selection を使用するため、この場合だけ `.tmp/` も Archive の対象になります。生成される Archive README には Case 側の `description` も反映されます。確認後は同じ command から `--preview` を外して build できます。
+
+### Build
+
+内容に問題がなければ、同じ Target で Archive を作成します。
+
+```console
+dirpluck projects/service-api/ projects/web-console/
+```
+
+概念的には、次のような Archive が得られます。
+
+```text
+develop-target.zip
+├── README.md
+├── dependencies/
+│   └── framework-core/
+│       └── dist/
+│           └── framework_core-2.4.0-py3-none-any.whl
+├── repositories/
+│   ├── service-api/
+│   │   └── ...
+│   └── web-console/
+│       └── ...
+└── tools/
+    └── docs-builder/
+        └── dist/
+            └── docs_builder-1.6.0-py3-none-any.whl
+```
+
+別の作業では Target だけを変えます。
+
+```console
+dirpluck projects/worker-jobs/ --preview
+```
+
+設定ファイルに残した収集 rule と固定資料はそのまま再利用できます。
+
+### Filesystem の注意
+
+自動的な Target discovery と Selection traversal で見つかった symbolic link や認識済み Windows directory junction は追跡せず、Archive にも含めません。詳細な filesystem boundary は [Trust Model](https://github.com/minoru-jp/dirpluck/blob/main/docs/TRUST.md) を参照してください。
+
+## Archive を共有する前に
+
+dirpluck は、file の名前や内容から「これは秘密情報なので共有してはいけない」と判断しません。
+
+上の例にある `.git/`、`.venv/`、`.env*`、`*.pem`、`*.key` などの ignore は有用ですが、**security boundary ではありません**。Project 固有の credential、秘密鍵、個人情報、顧客 data、local 設定、test fixture などは別の名前や場所に存在する可能性があります。
+
+外部の相手や non-local の LLM に Archive を渡す場合は、共有前に `--preview` で選択内容を確認してください。
+
+設定ファイル自体も filesystem 操作の指示です。Named Scope / Always source は local filesystem の location を参照でき、Output は書き込み先を指定します。第三者から受け取った Configuration や内容を確認していない Configuration はそのまま実行せず、参照 source、Base Configuration、Selection、Output を確認してください。
+
+生成される Archive README は source filesystem path を default では記録しません。`--paths` を指定すると resolved source path が追加され、absolute path など local environment の情報を含む可能性があります。
+
+詳しい trust boundary と共有時の確認事項は [Trust Model](https://github.com/minoru-jp/dirpluck/blob/main/docs/TRUST.md) を参照してください。
+
+## なぜ dirpluck を使うのか
+
+一度だけ ZIP を作るなら、手作業の方が簡単な場合もあります。
+
+dirpluck が役立つのは、「今回どの file を渡すか」という判断を次回も再利用したい場合です。設定ファイルに rule を残しておけば、shell history、過去の会話、人間の記憶に依存せず、同じ意図から Archive を再構成できます。
+
+Target だけを入れ替えたり、複数 Target をまとめたり、固定資料を `always` で添えたりできます。
+
 ## 文書
 
-文書は目的ごとに分けています。
+この README は、ひとつの利用例を通して基本的な使い方だけを紹介しています。
 
-- `docs/GETTING_STARTED.md`: 最初の Configuration から preview / build までを通して試す guide。
-- `GLOSSARY.md`: 文書全体で使う概念の意味。
-- `docs/configuration/INDEX.md`: `.dirpluck` Configuration を書くための guide。
-- `docs/cli/INDEX.md`: CLI の使い方と `.dirpluck-inv` Invocation Template の guide。
-- `docs/python_api/INDEX.md`: CLI と同じ実行 model を Python から使う最小の公式 API。
-- `docs/specification/INDEX.md`: Configuration composition、resolution、matching、filesystem traversal、Archive、Output、validation の厳密な規則。
-- `docs/TRUST.md`: Configuration と filesystem 操作の trust boundary、および利用者が確認すべき範囲。
-- `CHANGELOG.md`: release history。
-- `STATUS.md`: 現在の開発段階、互換性方針、公開形態。
+- [Getting Started](https://github.com/minoru-jp/dirpluck/blob/main/docs/GETTING_STARTED.md): 最小 Configuration から preview / build までの短い walkthrough。
+- [Glossary](https://github.com/minoru-jp/dirpluck/blob/main/GLOSSARY.md): 文書全体で使う概念の意味。
+- [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Scope、Always、Shared、Case、Base Configuration など Configuration authoring の guide。
+- [CLI Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/cli/INDEX.md): Target 指定、CLI option、Invocation Template の guide。
+- [Python API](https://github.com/minoru-jp/dirpluck/blob/main/docs/python_api/INDEX.md): CLI と同じ execution model を Python から使う最小の公式 API。
+- [Specification](https://github.com/minoru-jp/dirpluck/blob/main/docs/specification/INDEX.md): Configuration composition、resolution、matching、filesystem traversal、Archive、Output、validation の厳密な規則。
+- [Trust Model](https://github.com/minoru-jp/dirpluck/blob/main/docs/TRUST.md): Configuration、filesystem、外部共有に関する trust boundary。
+- [Changelog](https://github.com/minoru-jp/dirpluck/blob/main/CHANGELOG.md): release history。
+- [Status](https://github.com/minoru-jp/dirpluck/blob/main/STATUS.md): 現在の開発段階、互換性方針、公開形態。
 
 ## ライセンス
 
 dirpluck は MIT License のもとで公開されています。
 
-詳細は `LICENSE` を参照してください。
+詳細は [LICENSE](https://github.com/minoru-jp/dirpluck/blob/main/LICENSE) を参照してください。

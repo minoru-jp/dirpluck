@@ -7,6 +7,29 @@ from shikumi_devdoc.norms.document import title
 class CHANGELOG:
     """dirpluck のリリースごとの変更履歴。"""
 
+    class RELEASE_24:
+        r"""
+        Selection reference syntax を明示的な structured inline table へ移行し、従来の1要素 nested array を互換入力として非推奨化する。
+        """
+        title @= '0.14.0'
+
+        version @= '0.14.0'
+
+        added @= '`must` / `may` の Shared reference に `{ shared = "name" }` inline table を追加する。`ignore` でも `{ shared = "name" }` を使用し、reference namespace は従来どおり記述 field から `shared.must` / `shared.may` / `shared.ignore` に決定する。Shared reference の解決時期と base composition 後の rebinding semantics は変更しない。'
+
+        added @= '`ignore` の concrete Selection-relative path に `{ path = "relative/path" }` inline table を追加する。`path` は Selection root 基準の relative path に限定し、absolute path、`..`、glob、backslash を拒否する。先頭の `./` と path 内の `.` component は正規化し、`{ path = "foo" }` と `{ path = "./foo" }` を同じ path として扱う。末尾 `/` による directory-only semantics と subtree pruning は従来の concrete path reference と同じとする。'
+
+        added @= 'GitHub Actions の CI / release workflow を追加する。CI は `main` push / pull request で Python 3.11〜3.14 の test matrix、canonical document drift check、wheel / sdist build、distribution metadata / contents check を行う。GitHub Release の `published` event では release tag と package version を照合し、Python 3.13 で canonical check と test suite を再実行してから distribution を build・検証し、isolated environment で built wheel を smoke test した同一 artifact を PyPI Trusted Publishing で公開する。CI と local で同じ文書検証 dependency を導入できるよう `.[test]` optional dependency を追加する。'
+
+        changed @= '1要素 nested array による Shared reference (`["name"]`) と `ignore` concrete path reference (`["./path"]`) は 0.14.0 から非推奨とし、1.0.0 で削除する。0.14.0 以上 1.0.0 未満では互換入力として引き続き受理するが、CLI は旧記法を含む読み込み済み Configuration file ごとに1回だけ stderr へ warning を表示し、`{ shared = "..." }` / `{ path = "..." }` への移行と 1.0.0 での削除を案内する。Base chain の Configuration も対象とし、warning は stdout と exit status を変更しない。'
+
+        changed @= '公式 Python API の `dirpluck.run()` でも deprecated nested-array Configuration syntax を検出し、読み込んだ Configuration file ごとに公開 `ConfigurationDeprecationWarning` (`FutureWarning` subclass) を報告する。Python の既定 filter で表示され、warning location は dirpluck package 外の最初の caller frame に帰属させる。Base chain も対象とする。Configuration syntax の lifecycle warning は planning diagnostic と分離し、`RunResult.warnings` には含めない。CLI は同じ diagnostic を従来どおり stderr へ整形表示し、CLI 実行時に追加の Python warning は発行しない。'
+
+        fixed @= '`pyproject.toml` に `[tool.pytest.ini_options] pythonpath = ["tests"]` を追加し、editable install 済みの source checkout で `pytest` を直接実行した場合も `tests/_temp.py` など repository-local test helper を収集できるようにする。公式 CI runner は引き続き `unittest` とする。'
+
+        changed @= '公開 source repository を `https://github.com/minoru-jp/dirpluck` として package metadata と文書 navigation に反映する。Root README の公開文書 link は GitHub `main` branch 上の absolute URL に変更し、PyPI の project description からも解決できるようにする。`pyproject.toml` の `[project.urls]` に Homepage、Documentation、Repository、Issues、Changelog を追加し、STATUS の distribution note も公開後の状態へ更新する。'
+
+
     class RELEASE_23:
         r"""
         公開文書の canonical source を shikumi-devdoc 0.3.2 の merge policy へ移行し、文書生成 dependency と version snapshot を同期する patch release。Runtime behavior、公式 Python API、CLI、Configuration language、Archive semantics は変更しない。

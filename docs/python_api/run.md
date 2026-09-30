@@ -40,6 +40,14 @@ When `invocation` is used, positional `targets` and `config` are not supplied at
 
 When an Invocation Template is selected, the `case` argument overrides the stored Case and `archive_mtime` overrides the stored `archive_mtime`, following the same rules as the corresponding CLI options. If the Invocation omits `config`, dirpluck uses `cwd/default.dirpluck`; if it omits `targets`, the run has no Targets; if it omits `case`, normal default Case semantics apply; if it omits `archive_mtime`, the normal per-entry timestamp behavior applies.
 
+## Configuration deprecation warning
+
+From 0.14.0 through releases before 1.0.0, if a loaded Configuration uses a deprecated one-element nested-array reference, `dirpluck.run()` reports one public `ConfigurationDeprecationWarning` per affected Configuration file through Python's warnings framework. It is a `FutureWarning` subclass, so Python's default warning filters display it. Configuration files loaded through the base chain are covered as well.
+
+The warning location is attributed to the first caller frame outside the dirpluck package rather than to a fixed `stacklevel`. Callers that need explicit control can filter or promote `dirpluck.ConfigurationDeprecationWarning`. This is a Configuration-syntax lifecycle diagnostic, so it is not included in `RunResult.warnings`, which is reserved for planning diagnostics. The CLI collects the same diagnostic and renders its concise stderr warning instead of emitting an additional Python warning.
+
+The legacy syntax becomes invalid in 1.0.0. Migrate Shared references to `{ shared = "..." }` and concrete relative `ignore` paths to `{ path = "..." }`.
+
 ## Runtime Output
 
 `output` replaces the Configuration Output destination for one invocation.

@@ -38,7 +38,7 @@ class CONFIGURATION_PART:
 
         File と directory の両方になり得る include entry reference では、型を filesystem から推測しません。通常の `must` / `may` string は最終 component の末尾 `/` なしを file、末尾 `/` ありを directory とします。Intermediate component は次の階層へ進むため directory であることが構造上決まります。Structured `match` も normalized path 上で file は末尾 `/` なし、directory は末尾 `/` ありとして厳密に区別します。
 
-        `ignore` は除外側なので意図的に広く扱います。通常の ignore string と concrete path reference は末尾 `/` がなければ matching file / directory の両方を除外し、末尾 `/` がある場合は directory だけに限定します。File だけに限定した除外が必要なら structured `match` を使います。
+        `ignore` は除外側なので意図的に広く扱います。通常の ignore string と structured `{ path = "..." }` は末尾 `/` がなければ matching file / directory の両方を除外し、末尾 `/` がある場合は directory だけに限定します。File だけに限定した除外が必要なら structured `match` を使います。
         """
         title @= 'Selection'
 
@@ -132,13 +132,13 @@ class CONFIGURATION_PART:
             {{example_012}}
             ```
 
-            特定の場所だけを除外したい場合は、1要素 nested array の中を `./` で始めて Selection root からの concrete relative path を指定できます。
+            特定の場所だけを除外したい場合は `{ path = "..." }` inline table で Selection root からの concrete relative path を指定できます。
 
             ```toml
             {{example_013}}
             ```
 
-            Pluck では `./` は現在の Target root、Always source ではその Always source root を表します。Concrete path reference は末尾 `/` がなければその path にある file / directory のどちらも除外対象とし、実体が directory なら subtree も除外します。末尾 `/` がある場合は directory だけに限定します。Path reference は Selection root の内側に限定し、`..`、absolute path、glob、backslash を受理しません。
+            `path` の値は常に Selection root を基準にする相対 path です。Pluck では現在の Target root、Always source ではその Always source root が Selection root になります。先頭の `./` は任意で、`./src/generated/` と `src/generated/` は同じ path に正規化します。末尾 `/` がなければその path にある file / directory のどちらも除外対象とし、実体が directory なら subtree も除外します。末尾 `/` がある場合は directory だけに限定します。Selection root の外側は参照できず、`..`、absolute path、glob、backslash を受理しません。
 
             通常の name pattern も同じ考え方で、末尾 `/` なしは matching file / directory の両方、末尾 `/` ありは directory だけを除外します。Name pattern、Shared ignore reference、path reference、structured `match` はすべて除外条件の和として扱います。同じ entry に複数の条件が一致しても error にはなりません。Directory に一致する name ignore / path reference / structured `match` は、その directory をその時点で除外し、内部を走査しません。評価順序は意味論に含めません。
 
@@ -162,8 +162,8 @@ class CONFIGURATION_PART:
 
             example_013 @= """
             ignore = [
-                ["./tests/fixtures/big.bin"],
-                ["./src/generated/"],
+                { path = "tests/fixtures/big.bin" },
+                { path = "src/generated/" },
             ]
             """
 
@@ -192,15 +192,15 @@ class CONFIGURATION_PART:
         {{example_015}}
         ```
 
-        Selection array の通常の string は direct pattern、`{ match = "..." }` は direct structured match です。`must` / `may` の1要素 nested array は Shared reference、`ignore` の1要素 nested arrayは plain name なら Shared reference、`./` で始まる string なら Selection-relative path reference として解釈します。Shared pattern set 自身にも direct string と `{ match = "..." }` を記述できますが、Shared reference や path reference を入れ子にはできません。
+        Selection array の通常の string は direct pattern、`{ match = "..." }` は direct structured match です。Shared reference は `{ shared = "name" }` inline table で記述し、`ignore` の concrete relative path は `{ path = "..." }` で記述します。Shared pattern set 自身にも direct string と `{ match = "..." }` を記述できますが、Shared reference や path entry を入れ子にはできません。
 
         ```toml
         {{example_016}}
         ```
 
-        参照先 namespace は、その reference を書いた field から決まります。`must = [["project"]]` は `shared.must.project`、`may` は `shared.may`、`ignore = [["python-noise"]]` は `shared.ignore.python-noise` を参照します。`ignore = [["./tests/fixtures/"]]` のように `./` で始めた場合だけ Shared namespace ではなく Selection-relative path を表します。
+        参照先 namespace は、その reference を書いた field から決まります。`must = [{ shared = "project" }]` は `shared.must.project`、`may` は `shared.may`、`ignore = [{ shared = "python-noise" }]` は `shared.ignore.python-noise` を参照します。
 
-        `[]`、`["a", "b"]`、`[123]` のような nested array は reference として無効です。`must` / `may` では nested array は Shared reference 専用です。`ignore` では `./` を path reference marker に予約しますが、通常の direct string pattern と structured `match` の表現は変えません。
+        0.14.0 から 1.0.0 未満では、従来の1要素 nested array (`["name"]`、`ignore` での `["./path"]`) も互換入力として引き続き受理しますが、非推奨です。CLI は読み込んだ Configuration file でこの旧記法を検出すると file ごとに1回だけ stderr へ warning を表示し、replacement syntax と 1.0.0 での削除を案内します。公式 Python API の `dirpluck.run()` は同じ診断を Python の warnings framework に公開 `ConfigurationDeprecationWarning` (`FutureWarning` subclass) として報告し、`RunResult.warnings` には含めません。この warning は Python の既定 filter で表示され、dirpluck package 内部ではなく最初の外部 caller に帰属します。Base chain 内の Configuration も対象です。新しい Configuration では `{ shared = "..." }` と `{ path = "..." }` を使用してください。1.0.0 では旧 nested-array reference は invalid Configuration になります。`[]`、`["a", "b"]`、`[123]` のような従来から無効な nested array は互換期間中も error です。
 
         Base chain での name resolution と duplicate validation は `../specification/INDEX.md` を参照してください。
         """
@@ -222,14 +222,14 @@ class CONFIGURATION_PART:
         description = "The current project."
         must = [
             "LICENSE",
-            ["project"],
+            { shared = "project" },
         ]
         may = [
-            ["docs"],
+            { shared = "docs" },
         ]
         ignore = [
             ".git/",
-            ["python-noise"],
+            { shared = "python-noise" },
         ]
         """
 

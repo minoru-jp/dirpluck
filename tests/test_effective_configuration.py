@@ -36,7 +36,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
             self._write(base / "base.dirpluck", '''
                 [pluck]
                 description = "P."
-                must = [["provided"]]
+                must = [{ shared = "provided" }]
                 [scope.base]
                 path = "."
                 [output]
@@ -60,7 +60,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
             config = load_config(self._write(root / "default.dirpluck", '''
                 [pluck]
                 description = "P."
-                must = [["missing"]]
+                must = [{ shared = "missing" }]
                 [scope]
                 [output]
                 path = "out.zip"
@@ -77,7 +77,7 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 core = ["file.txt"]
                 [pluck]
                 description = "P."
-                must = ["file.txt", ["core"]]
+                must = ["file.txt", { shared = "core" }]
                 [scope]
                 [output]
                 path = "out.zip"

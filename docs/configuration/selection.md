@@ -12,7 +12,7 @@ Ordinary Selection strings and Scope regular-expression Target selectors intenti
 
 When an inclusion entry reference could denote either a file or a directory, dirpluck does not infer the type from the filesystem. Ordinary `must` / `may` strings use no trailing `/` for a file and a trailing `/` for a directory on the final component. Intermediate components are directories by construction because traversal continues through them. Structured `match` paths are likewise type-explicit: files have no trailing `/`, while directories do.
 
-`ignore` is intentionally broad on the exclusion side. Ordinary ignore strings and concrete path references without a trailing `/` exclude matching files and directories; a trailing `/` narrows the exclusion to directories only. Use structured `match` when an exclusion must be file-only.
+`ignore` is intentionally broad on the exclusion side. Ordinary ignore strings and structured `{ path = "..." }` entries without a trailing `/` exclude matching files and directories; a trailing `/` narrows the exclusion to directories only. Use structured `match` when an exclusion must be file-only.
 
 ### `description`
 
@@ -86,16 +86,16 @@ ignore = [
 ]
 ```
 
-When only one concrete location should be excluded, use a one-element nested array whose string begins with `./`. This is a path reference relative to the Selection root.
+When only one concrete location should be excluded, use a `{ path = "..." }` inline table with a concrete relative path from the Selection root.
 
 ```toml
 ignore = [
-    ["./tests/fixtures/big.bin"],
-    ["./src/generated/"],
+    { path = "tests/fixtures/big.bin" },
+    { path = "src/generated/" },
 ]
 ```
 
-For Pluck, `./` means the current Target root. For an Always source, it means that Always source root. Without a trailing `/`, a concrete path reference excludes either a file or a directory at that path; if it is a directory, its subtree is excluded as well. A trailing `/` narrows the exclusion to a directory only. Path references must stay inside the Selection root and do not accept `..`, absolute paths, globs, or backslashes.
+The `path` value is always relative to the Selection root. For Pluck, that root is the current Target root; for an Always source, it is that Always source root. A leading `./` is optional, so `./src/generated/` and `src/generated/` normalize to the same path. Without a trailing `/`, the path excludes either a file or a directory at that location; if it is a directory, its subtree is excluded as well. A trailing `/` narrows the exclusion to a directory only. The path must stay inside the Selection root and does not accept `..`, absolute paths, globs, or backslashes.
 
 Ordinary name patterns follow the same broad-exclusion rule: without a trailing `/` they exclude matching files and directories, while a trailing `/` narrows the exclusion to directories. Name patterns, Shared ignore references, path references, and structured `match` entries are combined as one set of exclusion conditions. It is valid for several conditions to match the same entry. Any name ignore, path reference, or structured `match` that matches a directory excludes that directory before traversal, and its contents are not inspected. Evaluation order is not part of the semantics.
 
@@ -128,27 +128,27 @@ docs = ["README.md", "docs/"]
 python-noise = ["__pycache__/", "*.pyc"]
 ```
 
-A normal string in a Selection array is a direct pattern, while `{ match = "..." }` is a direct structured match. In `must` and `may`, a one-element nested array is a Shared reference. In `ignore`, a one-element nested array is a Shared reference when it contains a plain name, or a Selection-relative path reference when the string begins with `./`. Shared pattern sets may themselves contain direct strings and `{ match = "..." }` entries, but they cannot nest Shared references or path references.
+A normal string in a Selection array is a direct pattern, while `{ match = "..." }` is a direct structured match. Write a Shared reference as a `{ shared = "name" }` inline table, and write a concrete relative path in `ignore` as `{ path = "..." }`. Shared pattern sets may themselves contain direct strings and `{ match = "..." }` entries, but they cannot nest Shared references or path entries.
 
 ```toml
 [pluck]
 description = "The current project."
 must = [
     "LICENSE",
-    ["project"],
+    { shared = "project" },
 ]
 may = [
-    ["docs"],
+    { shared = "docs" },
 ]
 ignore = [
     ".git/",
-    ["python-noise"],
+    { shared = "python-noise" },
 ]
 ```
 
-The referenced namespace is determined by the field containing the reference. `must = [["project"]]` refers to `shared.must.project`; references in `may` use `shared.may`; `ignore = [["python-noise"]]` refers to `shared.ignore.python-noise`. Only an `ignore` nested-array string beginning with `./`, such as `ignore = [["./tests/fixtures/"]]`, refers to a Selection-relative path instead of the Shared namespace.
+The referenced namespace is determined by the field containing the reference. `must = [{ shared = "project" }]` refers to `shared.must.project`; references in `may` use `shared.may`; `ignore = [{ shared = "python-noise" }]` refers to `shared.ignore.python-noise`.
 
-Nested arrays such as `[]`, `["a", "b"]`, and `[123]` are invalid references. In `must` and `may`, nested arrays are reserved for Shared references. `ignore` reserves the `./` prefix inside a nested array for path references, without changing the syntax of ordinary direct-string patterns or structured `match` entries.
+From 0.14.0 through releases before 1.0.0, the legacy one-element nested-array forms (`["name"]`, and `["./path"]` inside `ignore`) remain accepted as compatibility input but are deprecated. When the CLI loads a Configuration file that uses the legacy form, it prints one warning for that file to stderr with the replacement syntax and the 1.0.0 removal notice. The official Python API `dirpluck.run()` reports the same condition through Python's warnings framework as the public `ConfigurationDeprecationWarning` (`FutureWarning` subclass), rather than adding it to `RunResult.warnings`. The warning is visible under Python's default filters and is attributed to the first caller outside the dirpluck package. Configuration files loaded through the base chain are covered as well. New Configurations should use `{ shared = "..." }` and `{ path = "..." }`. In 1.0.0, the legacy nested-array references become invalid Configuration syntax. Nested arrays that were already invalid, such as `[]`, `["a", "b"]`, and `[123]`, remain errors throughout the compatibility period.
 
 See [Specification](../specification/INDEX.md) for name resolution and duplicate validation along a base chain.
 ## Cases

@@ -20,3 +20,6 @@ dist/
 
 # Editor / OS noise
 .DS_Store
+
+# temporary data
+.tmp-diffs/

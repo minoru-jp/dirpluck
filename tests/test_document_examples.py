@@ -10,6 +10,8 @@ from pathlib import Path
 import tomllib
 import unittest
 
+from _temp import resolved_temporary_directory
+
 import dirpluck
 
 
@@ -18,6 +20,7 @@ API_SOURCES = ROOT / "devdocs" / "canonical_sources" / "python_api"
 CLI_SOURCES = ROOT / "devdocs" / "canonical_sources" / "cli"
 CONFIGURATION_SOURCES = ROOT / "devdocs" / "canonical_sources" / "configuration"
 GETTING_STARTED_SOURCE = ROOT / "devdocs" / "canonical_sources" / "getting_started" / "canonical.py"
+README_SOURCE = ROOT / "devdocs" / "canonical_sources" / "readme" / "canonical.py"
 
 
 def _test_target_fields(path: Path) -> dict[str, tuple[str | None, list[str]]]:
@@ -73,6 +76,7 @@ class DocumentExampleTests(unittest.TestCase):
         sources = [
             *sorted(CONFIGURATION_SOURCES.glob("*.py")),
             GETTING_STARTED_SOURCE,
+            README_SOURCE,
         ]
         for source in sources:
             if source.name == "__init__.py":
@@ -85,6 +89,77 @@ class DocumentExampleTests(unittest.TestCase):
                         tomllib.loads(snippet)
                     checked += 1
         self.assertGreaterEqual(checked, 22)
+
+    def test_readme_llm_context_configuration_is_executable(self):
+        snippets = _test_target_fields(README_SOURCE)["readme_llm_context_configuration"][1]
+        self.assertEqual(len(snippets), 1)
+        configuration = snippets[0]
+
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "framework-core" / "dist").mkdir(parents=True)
+            (root / "docs-builder" / "dist").mkdir(parents=True)
+            for repository in ("service-api", "worker-jobs", "web-console"):
+                project = root / "repositories" / repository
+                (project / "src").mkdir(parents=True)
+                (project / "private" / "local-notes").mkdir(parents=True)
+                (project / ".tmp").mkdir(parents=True)
+                (project / "README.md").write_text(repository + "\n", encoding="utf-8")
+                (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
+                (project / ".env.local").write_text("SECRET=example\n", encoding="utf-8")
+                (project / "private" / "local-notes" / "notes.txt").write_text(
+                    "local notes\n", encoding="utf-8"
+                )
+                (project / ".tmp" / "proposed-changes.patch").write_text(
+                    "diff --git a/src/main.py b/src/main.py\n", encoding="utf-8"
+                )
+
+            (root / "framework-core" / "dist" / "framework_core-2.4.0-py3-none-any.whl").write_bytes(b"wheel")
+            (root / "docs-builder" / "dist" / "docs_builder-1.6.0-py3-none-any.whl").write_bytes(b"wheel")
+            (root / "default.dirpluck").write_text(configuration + "\n", encoding="utf-8")
+
+            result = dirpluck.run(
+                "projects/service-api/",
+                "projects/web-console/",
+                preview=True,
+                cwd=root,
+            )
+
+            self.assertIsNone(result.output_path)
+            self.assertFalse((root / "develop-target.zip").exists())
+            self.assertIn(
+                "dependencies/framework-core/dist/framework_core-2.4.0-py3-none-any.whl",
+                result.archive_entries,
+            )
+            self.assertIn(
+                "tools/docs-builder/dist/docs_builder-1.6.0-py3-none-any.whl",
+                result.archive_entries,
+            )
+            self.assertIn("repositories/service-api/README.md", result.archive_entries)
+            self.assertIn("repositories/web-console/README.md", result.archive_entries)
+            self.assertNotIn("repositories/worker-jobs/README.md", result.archive_entries)
+            self.assertFalse(any(".env" in entry for entry in result.archive_entries))
+            self.assertFalse(any("private/local-notes" in entry for entry in result.archive_entries))
+            self.assertFalse(any("/.tmp/" in entry for entry in result.archive_entries))
+
+            diff_result = dirpluck.run(
+                "projects/service-api/",
+                case="diff",
+                preview=True,
+                cwd=root,
+            )
+            self.assertIn(
+                "repositories/service-api/.tmp/proposed-changes.patch",
+                diff_result.archive_entries,
+            )
+            self.assertNotIn("repositories/worker-jobs/README.md", diff_result.archive_entries)
+            self.assertNotIn("repositories/web-console/README.md", diff_result.archive_entries)
+            self.assertFalse(any(".env" in entry for entry in diff_result.archive_entries))
+            self.assertFalse(any("private/local-notes" in entry for entry in diff_result.archive_entries))
+            self.assertIn(
+                ".tmp/ に評価してほしい差分が含まれています。",
+                diff_result.archive_readme,
+            )
 
     def test_cli_console_test_targets_are_commands(self):
         checked = 0
@@ -132,7 +207,7 @@ class DocumentExampleTests(unittest.TestCase):
         statement = ast.parse(snippets[0]).body[0]
         self.assertIsInstance(statement, ast.ImportFrom)
         names = [alias.name for alias in statement.names]
-        self.assertEqual(names, ["DirpluckError", "RunResult", "__version__", "run"])
+        self.assertEqual(names, ["ConfigurationDeprecationWarning", "DirpluckError", "RunResult", "__version__", "run"])
         for name in names:
             self.assertTrue(hasattr(dirpluck, name), name)
 

@@ -27,7 +27,7 @@ class API_REFERENCE_PART:
     {{result_fields}}
     ```
 
-    通常 build でも `preview_text` と `archive_readme` は実際に使用した plan から返します。Planning 中に non-fatal な診断が生じた場合は `warnings` に human-readable message の tuple として返し、CLI も同じ内容を stderr へ表示します。そのため、呼び出し側は CLI output を parse せず、生成結果、plan の主要な public information、移行上重要な warning を取得できます。
+    通常 build でも `preview_text` と `archive_readme` は実際に使用した plan から返します。Planning 中に non-fatal な診断が生じた場合は `warnings` に human-readable message の tuple として返し、CLI も同じ内容を stderr へ表示します。Configuration syntax の deprecation は planning diagnostic ではないため `RunResult.warnings` には含めず、Python API では標準の warnings framework に公開 `ConfigurationDeprecationWarning` (`FutureWarning` subclass) として報告します。そのため、呼び出し側は CLI output を parse せず生成結果と plan の主要な public information を取得でき、Configuration migration は Python の warning filter で独立して管理できます。
     """
 
     preview_example @= """

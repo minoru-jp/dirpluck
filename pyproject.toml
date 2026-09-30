@@ -12,6 +12,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = []
+
 keywords = ["llm", "developer-tools", "file-selection", "directory", "cli", "toml", "zip"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -25,6 +26,16 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
 ]
+
+[project.optional-dependencies]
+test = ["shikumi-devdoc>=0.3.2"]
+
+[project.urls]
+Homepage = "https://github.com/minoru-jp/dirpluck"
+Documentation = "https://github.com/minoru-jp/dirpluck#documentation"
+Repository = "https://github.com/minoru-jp/dirpluck"
+Issues = "https://github.com/minoru-jp/dirpluck/issues"
+Changelog = "https://github.com/minoru-jp/dirpluck/blob/main/CHANGELOG.md"
 
 [project.scripts]
 dirpluck = "dirpluck.cli:main"
@@ -52,6 +63,9 @@ packages = ["src/dirpluck"]
 exclude = [
     "/.github",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["tests"]
 
 [tool.ruff]
 target-version = "py311"

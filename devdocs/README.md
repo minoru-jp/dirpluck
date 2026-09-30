@@ -105,4 +105,8 @@ The source distribution contains the complete source needed to rebuild and valid
 
 The `devdocs/` directory layout and canonical implementation are repository-development surfaces, not part of dirpluck's product compatibility contract.
 
-Before the GitHub repository is public, dirpluck intentionally has no hosted CI or release workflow. Pre-release tests, canonical-document checks, wheel / sdist builds, metadata and distribution-content checks, and an installed-wheel CLI smoke test are run locally with `python tools/check_release.py`. CI and release workflows will be configured for the public environment when the repository is published on GitHub.
+GitHub Actions CI runs on pushes to `main` and pull requests targeting `main`. A Python 3.11 through 3.14 matrix installs `.[test]`, checks canonical-document drift, and runs the test suite. A separate build job builds the wheel and sdist and verifies distribution metadata and contents.
+
+When a GitHub Release is published, the release workflow checks out the release tag itself, verifies that the tag matches the package version, and reruns the canonical-document check and test suite on Python 3.13. Only after those checks pass does it build and verify the release distributions, smoke-test the built wheel in an isolated environment, and publish that same artifact set to PyPI through Trusted Publishing.
+
+Locally, `python tools/check_release.py` reproduces the combined release checks: tests, canonical-document validation, wheel / sdist build, metadata and distribution-content checks, and an installed-wheel CLI smoke test.

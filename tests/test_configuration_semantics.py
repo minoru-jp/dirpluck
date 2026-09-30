@@ -69,9 +69,9 @@ class ConfigurationSemanticsTests(unittest.TestCase):
 
                 [pluck]
                 description = "Project."
-                must = ["LICENSE", ["core"]]
-                may = [["docs"]]
-                ignore = [".git/", ["noise"]]
+                must = ["LICENSE", { shared = "core" }]
+                may = [{ shared = "docs" }]
+                ignore = [".git/", { shared = "noise" }]
 
                 [scope]
 
@@ -465,7 +465,7 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 chosen = ["inner.txt"]
                 [pluck]
                 description = "P."
-                must = [["chosen"]]
+                must = [{ shared = "chosen" }]
                 [scope.base]
                 path = "."
                 [output]

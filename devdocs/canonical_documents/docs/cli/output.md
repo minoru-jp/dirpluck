@@ -46,6 +46,12 @@ Configuration や workspace を変更した後、実際に Archive を書き込�
 
 Selection traversal で non-ignored symbolic link / Windows directory junction として認識した entry を除外した場合は、tree の後に除外件数を note として表示します。個々の path は列挙しません。正確な preview semantics と link-like entry の扱いは `specification/INDEX.md` / `TRUST.md` を参照してください。
 
+## Configuration migration warning
+
+0.14.0 から 1.0.0 未満では、Selection の旧1要素 nested-array reference は互換入力として受理されますが非推奨です。CLI が実行時に読み込んだ Configuration file で旧記法を検出すると、その file につき1回だけ stderr へ warning を表示します。Base chain で読み込まれた Configuration も対象です。
+
+Warning は 1.0.0 で旧記法が削除されることを示し、Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行するよう案内します。この migration warning は stdout の archive path / preview tree を変えず、exit status も変更しません。
+
 ## Archive index の source path
 
 生成されるアーカイブREADMEは、既定では各 final archive root を見出しとして、その source の選択 file 数と任意の `description` を示す簡潔な index です。Scope / Pluck / Always、Configuration、Case など dirpluck 固有の resolution 情報や、source filesystem path は記録しません。

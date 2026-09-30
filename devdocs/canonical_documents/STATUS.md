@@ -18,11 +18,11 @@
 
 dirpluck の現在の開発段階、互換性方針、および 1.0 へ向けた判断基準を示します。
 
-0.13.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 では runtime Output と公開文書体系を現在の設計へ揃えました。以後はこの公開面を実運用で検証しながら、互換性を積極的に維持します。
+0.14.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 では runtime Output と公開文書体系を現在の設計へ揃えました。以後はこの公開面を実運用で検証しながら、互換性を積極的に維持します。
 
 ## 現在のステータス
 
-現在の公開 version 系列は `0.13.x`、開発段階は **Beta** です。
+現在の公開 version 系列は `0.14.x`、開発段階は **Beta** です。
 
 Beta 期間は公開 interface を自由に作り直すための期間ではありません。Configuration、CLI、公式 Python API、Archive semantics を現在の設計で継続利用できることを実運用の中で確認し、必要な改善を可能な限り additive に行います。
 
@@ -58,14 +58,12 @@ Beta 期間では、特に次の点を確認します。
 
 公開文書の canonical source / canonical document pipeline には `shikumi-devdoc>=0.3.2` を使用します。これは repository development 用 dependency であり、dirpluck の runtime dependency ではありません。
 
-この source repository を Web 公開する時点では、必要な Shikumi 0.2.0 と shikumi-devdoc 0.3.2 が先に公開済みであることを前提とします。文書生成対象、出力先、project context など dirpluck 固有の orchestration は `tools/render_canonical_docs.py` に保持し、shikumi-devdoc の汎用 API へ project 固有情報を押し込みません。
+公開 source repository で canonical document を再生成する際は、必要な Shikumi 0.2.0 と shikumi-devdoc 0.3.2 が公開済みであることを前提とします。文書生成対象、出力先、project context など dirpluck 固有の orchestration は `tools/render_canonical_docs.py` に保持し、shikumi-devdoc の汎用 API へ project 固有情報を押し込みません。
 
 ## 配布上の留意点
 
-現時点で dirpluck は **PyPI のみで公開**し、ソースリポジトリを閲覧できる公開 Web page はまだ設けない方針です。
+dirpluck は PyPI で package を公開し、source repository は [https://github.com/minoru-jp/dirpluck](https://github.com/minoru-jp/dirpluck) で公開します。
 
-このため、README やその他の公開文書に含まれる repository-relative な参照 link の一部は、PyPI 上では解決できません。これは現在の配布形態に起因する既知の制約です。
+PyPI の project description からも文書へ移動できるよう、root README の公開文書 link は GitHub の `main` branch 上にある対応 file の URL を使用します。Package metadata の project URLs も同じ公開 repository を基準にし、Homepage、Documentation、Repository、Issues、Changelog への入口を提供します。
 
-GitHub などでソースリポジトリを Web 公開した時点で、公開 repository の URL を基準に文書 link を見直し、公開環境から参照できる形へ修正します。
-
-現時点では公開 repository がないため hosted CI も設けません。公開前の test、文書再生成 check、distribution 検証、PyPI への upload は local で行います。GitHub へ repository を公開した時点で、その公開環境に合わせて CI と release workflow を新たに構成します。
+Wheel には引き続き同じ release の README、Glossary、CLI / Configuration / Python API guide、Trust model、Specification、CHANGELOG、STATUS を `dirpluck/_docs/` 以下へ同梱します。Installed wheel 内の文書は network access を前提としません。

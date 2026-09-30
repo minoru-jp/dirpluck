@@ -1,10 +1,12 @@
 # Package surface
 
-The official package-root exports for 0.13.x are exactly:
+The official package-root exports for 0.14.x are exactly:
 
 ```python
-from dirpluck import DirpluckError, RunResult, __version__, run
+from dirpluck import ConfigurationDeprecationWarning, DirpluckError, RunResult, __version__, run
 ```
+
+`ConfigurationDeprecationWarning` is the public `FutureWarning` subclass for filtering or promoting deprecated Configuration-syntax migration notices.
 
 `dirpluck.builder`, `dirpluck.config`, `dirpluck.invocation`, underscore-prefixed modules, and models or helpers importable from those modules are not official API. Code that depends on them may need changes as internal refactoring continues during Beta.
 

@@ -8,6 +8,7 @@ import sys
 from . import __version__
 from ._application import run
 from ._archive import render_link_skip_note
+from ._config_parser import collect_configuration_deprecations
 from .config import CONFIG_NAME
 from .errors import DirpluckError
 
@@ -218,19 +219,24 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("TARGET arguments cannot be combined with --invocation-template")
 
     try:
-        result = run(
-            *args.directories,
-            config=args.config,
-            case=selected_case,
-            sequence=selected_sequence,
-            invocation=selected_invocation,
-            entry=selected_entry,
-            preview=args.preview,
-            paths=args.paths,
-            archive_mtime=selected_archive_mtime,
-            output=selected_output,
-            force=args.force,
-        )
+        with collect_configuration_deprecations() as configuration_deprecations:
+            try:
+                result = run(
+                    *args.directories,
+                    config=args.config,
+                    case=selected_case,
+                    sequence=selected_sequence,
+                    invocation=selected_invocation,
+                    entry=selected_entry,
+                    preview=args.preview,
+                    paths=args.paths,
+                    archive_mtime=selected_archive_mtime,
+                    output=selected_output,
+                    force=args.force,
+                )
+            finally:
+                for warning in configuration_deprecations:
+                    print(f"dirpluck: warning: {warning}", file=sys.stderr)
         for warning in result.warnings:
             print(f"dirpluck: warning: {warning}", file=sys.stderr)
         if args.preview:

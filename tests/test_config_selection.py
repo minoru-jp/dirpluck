@@ -1,8 +1,11 @@
+import warnings
+
 from pathlib import Path
 
 from _config_support import ConfigTestCase
 from _temp import resolved_temporary_directory
 
+from dirpluck import ConfigurationDeprecationWarning
 from dirpluck._config_models import MatchPattern, PathExclusion
 from dirpluck._builder_models import BuildRequest
 from dirpluck._effective import resolve_sources
@@ -26,6 +29,48 @@ class ConfigSelectionTests(ConfigTestCase):
             self.assertEqual(selection.may, (MatchPattern(r"docs/.*\.md"),))
             self.assertEqual(selection.ignore, (MatchPattern(r"src/generated/"),))
 
+    def test_selection_accepts_structured_shared_references(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, r"""
+                [shared.must]
+                required = ["src/"]
+
+                [shared.may]
+                optional = ["README.md"]
+
+                [shared.ignore]
+                noise = ["*.pyc"]
+
+                [pluck]
+                must = [{ shared = "required" }]
+                may = [{ shared = "optional" }]
+                ignore = [{ shared = "noise" }]
+            """))
+            assert config.pluck is not None and config.pluck.default is not None
+            selection = config.pluck.default
+            self.assertEqual(selection.must, (SharedReference("required"),))
+            self.assertEqual(selection.may, (SharedReference("optional"),))
+            self.assertEqual(selection.ignore, (SharedReference("noise"),))
+
+    def test_structured_shared_reference_requires_exact_schema(self):
+        invalid_entries = (
+            "{ shared = '' }",
+            "{ shared = 1 }",
+            "{ shared = 'required', extra = 'x' }",
+            "{ shared = 'required', match = 'src/' }",
+            "{ path = 'src/' }",
+        )
+        for entry in invalid_entries:
+            with self.subTest(entry=entry), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f"""
+                    [pluck]
+                    must = [{entry}]
+                """)
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
     def test_shared_sets_accept_structured_match_entries(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
@@ -37,8 +82,8 @@ class ConfigSelectionTests(ConfigTestCase):
                 generated = [{ match = 'src/generated/' }]
 
                 [pluck]
-                must = [["python"]]
-                ignore = [["generated"]]
+                must = [{ shared = "python" }]
+                ignore = [{ shared = "generated" }]
             """))
             self.assertEqual(config.shared.must["python"], (MatchPattern(r"src/.*\.py"),))
             self.assertEqual(config.shared.ignore["generated"], (MatchPattern(r"src/generated/"),))
@@ -143,7 +188,7 @@ class ConfigSelectionTests(ConfigTestCase):
 
                 [pluck]
                 description = "Default."
-                must = [["required"]]
+                must = [{ shared = "required" }]
                 allow_empty = true
             ''')
             with self.assertRaises(ConfigurationError):
@@ -600,6 +645,87 @@ class ConfigSelectionTests(ConfigTestCase):
                 with self.assertRaisesRegex(ConfigurationError, "expected a non-empty string"):
                     load_config(self._write(root, body))
 
+class IgnoreStructuredPathConfigTests(ConfigTestCase):
+    def test_ignore_accepts_structured_relative_paths(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(self._write(root, '''
+                [pluck]
+                must = ["src/"]
+                ignore = [
+                    { path = "tests/fixtures/big.bin" },
+                    { path = "./src/generated/" },
+                    { path = "src/./cache/" },
+                ]
+            '''))
+            assert config.pluck is not None and config.pluck.default is not None
+            ignore = config.pluck.default.ignore
+            self.assertEqual(
+                [(item.raw, item.path, item.directory) for item in ignore],
+                [
+                    ("./tests/fixtures/big.bin", "tests/fixtures/big.bin", False),
+                    ("./src/generated/", "src/generated", True),
+                    ("./src/cache/", "src/cache", True),
+                ],
+            )
+
+    def test_ignore_structured_path_must_be_relative_concrete_and_inside_root(self):
+        invalid = (
+            "",
+            ".",
+            "./",
+            "../outside.txt",
+            "./../outside.txt",
+            "/absolute.txt",
+            "C:/absolute.txt",
+            "tests/*.bin",
+            "tests\\big.bin",
+        )
+        for reference in invalid:
+            with self.subTest(reference=reference), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f'''
+                    [pluck]
+                    must = ["src/"]
+                    ignore = [{{ path = {reference!r} }}]
+                ''')
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+    def test_ignore_path_normalization_makes_dot_slash_duplicate(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            manifest = self._write(root, '''
+                [pluck]
+                must = ["src/"]
+                ignore = [
+                    { path = "src/generated/" },
+                    { path = "./src/generated/" },
+                ]
+            ''')
+            config = load_config(manifest)
+            (root / "application").mkdir()
+            with self.assertRaisesRegex(ConfigurationError, "duplicate effective pattern"):
+                resolve_sources(config, BuildRequest.create("./application/"))
+
+    def test_ignore_path_structured_entry_requires_exact_schema(self):
+        invalid_entries = (
+            "{ path = 1 }",
+            "{ path = 'src/', extra = 'x' }",
+            "{ path = 'src/', shared = 'noise' }",
+        )
+        for entry in invalid_entries:
+            with self.subTest(entry=entry), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                manifest = self._write(root, f'''
+                    [pluck]
+                    must = ["src/"]
+                    ignore = [{entry}]
+                ''')
+                with self.assertRaises(ConfigurationError):
+                    load_config(manifest)
+
+
 class IgnorePathReferenceConfigTests(ConfigTestCase):
     def test_ignore_accepts_selection_relative_file_and_directory_references(self):
         with resolved_temporary_directory() as temp:
@@ -608,8 +734,8 @@ class IgnorePathReferenceConfigTests(ConfigTestCase):
                 [pluck]
                 must = ["src/"]
                 ignore = [
-                    ["./tests/fixtures/big.bin"],
-                    ["./src/generated/"],
+                    { path = "tests/fixtures/big.bin" },
+                    { path = "src/generated/" },
                 ]
             '''))
             ignore = config.pluck.default.ignore
@@ -624,14 +750,20 @@ class IgnorePathReferenceConfigTests(ConfigTestCase):
     def test_ignore_plain_nested_array_still_means_shared_reference(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root, '''
-                [shared.ignore]
-                common = ["*.pyc"]
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", ConfigurationDeprecationWarning)
+                config = load_config(self._write(root, '''
+                    [shared.ignore]
+                    common = ["*.pyc"]
 
-                [pluck]
-                must = ["src/"]
-                ignore = [["common"], ["./src/generated/"]]
-            '''))
+                    [pluck]
+                    must = ["src/"]
+                    ignore = [["common"], ["./src/generated/"]]
+                '''))
+            self.assertEqual(
+                sum(issubclass(warning.category, ConfigurationDeprecationWarning) for warning in caught),
+                1,
+            )
             ignore = config.pluck.default.ignore
             self.assertIsInstance(ignore[0], SharedReference)
             self.assertEqual(ignore[0].name, "common")

@@ -132,7 +132,11 @@ class SECTION_001:
 
         `devdocs/` の directory layout や canonical implementation は repository development surface であり、{{TERM_1}} の product compatibility contract ではありません。
 
-        GitHub 公開前は hosted CI / release workflow を置かず、release 前の test、canonical document check、wheel / sdist build、metadata / distribution contents、installed wheel の CLI smoke test は `python tools/check_release.py` で local に確認します。GitHub 公開後は公開環境に合わせて CI / release workflow を新たに構成します。
+        GitHub Actions の CI は `main` への push と `main` を対象とする pull request で実行します。Python 3.11 から 3.14 の matrix で `.[test]` を install し、canonical document の drift check と test suite を実行します。別の build job では wheel / sdist を構築し、distribution metadata と contents を検証します。
+
+        GitHub Release の `published` event では release tag 自体を checkout し、tag と package version の一致を確認したうえで、Python 3.13 の単一環境で canonical document check と test suite を再実行します。これらが成功した場合だけ release distribution を build・検証し、built wheel の install smoke test を通した同一 artifact を PyPI Trusted Publishing で公開します。
+
+        Local では `python tools/check_release.py` により、test、canonical document check、wheel / sdist build、metadata / distribution contents、installed wheel の CLI smoke test をまとめて再現できます。
         """
         title @= 'Version control と distribution'
 

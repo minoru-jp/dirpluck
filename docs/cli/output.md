@@ -12,6 +12,12 @@ dirpluck ./acme/ --preview
 
 Use it after changing a Configuration or workspace to inspect the result before writing an Archive. The difference from a normal run is the write itself; the main resolution path for the base chain, Scope and Target handling, Cases, selection, and archive planning is shared. `--preview` can be used even when the selected Root Configuration has no Output declaration. Because preview does not resolve or write an Output, it cannot be combined with `--here`, `--output`, `--force`, or `--sequence`. If Selection traversal excludes non-ignored entries recognized as symbolic links or Windows directory junctions, the number skipped is reported as a note after the tree; individual paths are not listed. Entries matched by `ignore` are not included in that count. See [Specification](../specification/INDEX.md) and [Trust model](../TRUST.md) for exact preview and link-like-entry semantics.
 
+## Configuration migration warning
+
+From 0.14.0 through releases before 1.0.0, the legacy one-element nested-array Selection references remain accepted as compatibility input but are deprecated. When the CLI loads a Configuration file that uses the legacy syntax, it prints one warning for that file to stderr. Configuration files loaded through the base chain are covered as well.
+
+The warning states that the legacy form will be removed in 1.0.0 and points Shared references to `{ shared = "..." }` and concrete relative `ignore` paths to `{ path = "..." }`. This migration warning does not change the Archive path or preview tree written to stdout and does not change the exit status.
+
 ## Source paths in the Archive index
 
 By default, the generated Archive README is a compact index in which each final Archive root is a heading followed by the selected file count and optional `description`. It does not record `dirpluck`-specific resolution information such as Scope, Pluck, Always source, Configuration, or Case, nor does it record source filesystem paths.

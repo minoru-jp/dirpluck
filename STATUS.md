@@ -2,11 +2,11 @@
 
 This document describes dirpluck's current development stage, compatibility policy, and the criteria for moving toward 1.0.
 
-The `0.13.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and 0.10.0 aligns runtime Output and the published documentation structure with the current design. From this point, the project will validate that public surface in real use while actively preserving compatibility.
+The `0.14.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and 0.10.0 aligns runtime Output and the published documentation structure with the current design. From this point, the project will validate that public surface in real use while actively preserving compatibility.
 
 ## Current status
 
-The current public version line is `0.13.x`, and the development stage is **Beta**.
+The current public version line is `0.14.x`, and the development stage is **Beta**.
 
 Beta is not a period for freely redesigning public interfaces. The goal is to verify in real use that the current Configuration, CLI, official Python API, and Archive semantics can be used continuously, while making necessary improvements additively wherever possible.
 
@@ -42,14 +42,12 @@ The criterion for 1.0 is not an unlimited accumulation of features. The importan
 
 The canonical-source / canonical-document pipeline for published documentation uses `shikumi-devdoc>=0.3.2`. This is a repository-development dependency and is not a dirpluck runtime dependency.
 
-When this source repository is published on the web, the required Shikumi 0.2.0 and shikumi-devdoc 0.3.2 releases are assumed to have already been published. Repository-specific orchestration, including which documents are generated, where they are written, and which project context is supplied, remains in `tools/render_canonical_docs.py` rather than being pushed into shikumi-devdoc's generic API.
+Regenerating canonical documents in the public source repository assumes that the required Shikumi 0.2.0 and shikumi-devdoc 0.3.2 releases are already available. Repository-specific orchestration, including which documents are generated, where they are written, and which project context is supplied, remains in `tools/render_canonical_docs.py` rather than being pushed into shikumi-devdoc's generic API.
 
 ## Distribution note
 
-At this stage, dirpluck is published **only through PyPI**, with no public web page for browsing the source repository yet.
+dirpluck is published as a package on PyPI, and its source repository is public at [https://github.com/minoru-jp/dirpluck](https://github.com/minoru-jp/dirpluck).
 
-As a result, some repository-relative links in the README and other published documents do not resolve on PyPI. This is a known limitation of the current distribution arrangement.
+To keep documentation navigation working from the PyPI project description as well as from GitHub, the root README uses absolute URLs for published documents on the repository's `main` branch. Package metadata uses the same public repository as the basis for Homepage, Documentation, Repository, Issues, and Changelog project URLs.
 
-When the source repository is later published on a service such as GitHub, documentation links will be reviewed against the public repository URL and adjusted so they resolve from the public environment.
-
-Because there is not yet a public repository, there is also no hosted CI. Pre-release tests, canonical-document regeneration checks, distribution verification, and PyPI uploads are performed locally. CI and release workflows will be configured for the public environment when the repository is published on GitHub.
+The wheel continues to bundle the README, Glossary, CLI / Configuration / Python API guides, Trust model, Specification, CHANGELOG, and STATUS for the same release under `dirpluck/_docs/`. Reading the documentation bundled in an installed wheel does not require network access.

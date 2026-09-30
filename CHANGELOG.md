@@ -2,6 +2,26 @@
 
 Release history for dirpluck.
 
+## 0.14.0
+
+Move Selection reference syntax to explicit structured inline tables, while keeping the legacy one-element nested-array forms as deprecated compatibility input.
+
+### Added
+
+- Add `{ shared = "name" }` inline tables for Shared references in `must` and `may`, and use the same form in `ignore`. The containing field continues to determine the reference namespace as `shared.must`, `shared.may`, or `shared.ignore`. Shared-reference resolution timing and rebinding after base composition are unchanged.
+- Add `{ path = "relative/path" }` inline tables for concrete Selection-relative paths in `ignore`. `path` is restricted to a relative path from the Selection root; absolute paths, `..`, globs, and backslashes are rejected. A leading `./` and `.` path components are normalized, so `{ path = "foo" }` and `{ path = "./foo" }` identify the same path. Trailing-`/` directory-only semantics and subtree pruning remain the same as for the legacy concrete path reference.
+- Add GitHub Actions CI and release workflows. CI runs a Python 3.11 through 3.14 test matrix, canonical-document drift checks, wheel / sdist builds, and distribution metadata / content validation for pushes and pull requests targeting `main`. Publishing a GitHub Release verifies the release tag against the package version, reruns canonical checks and the test suite on Python 3.13, builds and verifies the distributions, smoke-tests the built wheel in an isolated environment, and publishes that same artifact set through PyPI Trusted Publishing. Add a `.[test]` optional dependency so CI and local development can install the same documentation-validation dependency.
+
+### Changed
+
+- Deprecate one-element nested-array Shared references (`["name"]`) and concrete `ignore` path references (`["./path"]`) starting in 0.14.0, and remove them in 1.0.0. From 0.14.0 through releases before 1.0.0, they remain accepted as compatibility input, but the CLI prints one warning to stderr per loaded Configuration file that uses the legacy syntax, including files loaded through the base chain. The warning points to `{ shared = "..." }` / `{ path = "..." }`, states the 1.0.0 removal, and does not change stdout or the exit status.
+- The official Python API `dirpluck.run()` now reports deprecated nested-array Configuration syntax through Python's standard warnings framework, emitting one public `ConfigurationDeprecationWarning` (`FutureWarning` subclass) per affected loaded Configuration file, including files from the base chain. The warning is visible under Python's default filters and is attributed to the first caller frame outside the dirpluck package rather than to a fixed `stacklevel`. Configuration-syntax lifecycle warnings remain separate from planning diagnostics and are therefore not included in `RunResult.warnings`. The CLI continues to render the same diagnostic directly to stderr and does not emit an additional Python warning.
+- Publish the source repository at `https://github.com/minoru-jp/dirpluck` in package metadata and documentation navigation. Root README documentation links now use absolute URLs to files on the GitHub `main` branch so they also resolve from the PyPI project description. Add Homepage, Documentation, Repository, Issues, and Changelog entries under `[project.urls]`, and update the STATUS distribution note for the public-repository state.
+
+### Fixed
+
+- Add `[tool.pytest.ini_options] pythonpath = ["tests"]` to `pyproject.toml` so running `pytest` directly from an editable-installed source checkout can collect repository-local helpers such as `tests/_temp.py`. The official CI runner remains `unittest`.
+
 ## 0.13.1
 
 Migrate the published-document canonical sources to the merge-policy model in shikumi-devdoc 0.3.2, and synchronize the documentation-generation dependency and version snapshot. Runtime behavior, the official Python API, CLI, Configuration language, and Archive semantics are unchanged.

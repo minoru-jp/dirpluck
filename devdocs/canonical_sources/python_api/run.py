@@ -85,6 +85,16 @@ class API_REFERENCE_PART:
     input @= "cwd: runtime anchor for relative control-document paths"
     output @= "RunResult"
 
+    class SECTION_035:
+        r"""
+        0.14.0 から 1.0.0 未満で、読み込んだ Configuration が deprecated な1要素 nested-array reference を使用している場合、`dirpluck.run()` は Configuration file ごとに1回、Python の warnings framework に公開 `ConfigurationDeprecationWarning` を報告します。これは `FutureWarning` subclass のため Python の既定 filter でも表示されます。Base chain から読み込まれた Configuration も対象です。
+
+        Warning location は固定 `stacklevel` に依存せず、dirpluck package 外の最初の caller frame に帰属します。呼び出し側が明示的に制御したい場合は `dirpluck.ConfigurationDeprecationWarning` を category として warning filter に指定できます。この lifecycle diagnostic は planning diagnostic を返す `RunResult.warnings` には含まれません。CLI は同じ診断を収集して簡潔な stderr warning として表示するため、CLI 実行時に追加の Python warning は発行しません。
+
+        旧記法は 1.0.0 で invalid Configuration になります。Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行してください。
+        """
+        title @= 'Configuration deprecation warning'
+
     class SECTION_045:
         r"""
         `output` は Configuration の Output destination を invocation 単位で置き換える runtime argument です。

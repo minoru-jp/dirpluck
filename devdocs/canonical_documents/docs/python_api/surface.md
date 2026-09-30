@@ -16,11 +16,13 @@
 
 # Package surface
 
-0.13.x の公式 package-root export は次の4名です。
+0.14.x の公式 package-root export は次の5名です。
 
 ```python
-from dirpluck import DirpluckError, RunResult, __version__, run
+from dirpluck import ConfigurationDeprecationWarning, DirpluckError, RunResult, __version__, run
 ```
+
+`ConfigurationDeprecationWarning` は deprecated Configuration syntax の移行通知を filter / error 化するための公開 `FutureWarning` subclass です。
 
 `dirpluck.builder`、`dirpluck.config`、`dirpluck.invocation`、underscore module、そこから import できる model / helper は実装上利用されていても公式 API ではありません。これらへ直接依存する code は Beta 中の内部 refactor で変更される可能性があります。
 
@@ -30,7 +32,7 @@ name: dirpluck
 
 kind: Value
 
-output: run, RunResult, DirpluckError, __version__
+output: run, ConfigurationDeprecationWarning, RunResult, DirpluckError, __version__
 
 ## 次に読む文書
 

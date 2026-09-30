@@ -4,8 +4,11 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 import os
+import subprocess
+import sys
 import textwrap
 import unittest
+import warnings
 from unittest.mock import patch
 import zipfile
 
@@ -40,7 +43,7 @@ class PythonApiTests(unittest.TestCase):
     def test_package_root_exposes_only_the_supported_python_surface(self):
         self.assertEqual(
             set(dirpluck.__all__),
-            {"DirpluckError", "RunResult", "__version__", "run"},
+            {"ConfigurationDeprecationWarning", "DirpluckError", "RunResult", "__version__", "run"},
         )
         for name in dirpluck.__all__:
             with self.subTest(name=name):
@@ -99,6 +102,129 @@ class PythonApiTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(output.getvalue().rstrip("\n"), result.preview_text)
 
+
+    def test_run_emits_deprecation_warning_for_legacy_configuration_syntax(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    r'''
+                    [shared.must]
+                    required = ["src/"]
+
+                    [pluck]
+                    must = [["required"]]
+                    '''
+                ),
+                encoding="utf-8",
+            )
+
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", dirpluck.ConfigurationDeprecationWarning)
+                result = dirpluck.run("./app/", preview=True, cwd=root)
+
+            deprecations = [
+                warning for warning in caught
+                if issubclass(warning.category, dirpluck.ConfigurationDeprecationWarning)
+            ]
+            self.assertEqual(len(deprecations), 1)
+            self.assertEqual(Path(deprecations[0].filename).resolve(), Path(__file__).resolve())
+            message = str(deprecations[0].message)
+            self.assertIn("deprecated nested-array Selection reference syntax", message)
+            self.assertIn("0.14.0", message)
+            self.assertIn("1.0.0", message)
+            self.assertIn('{ shared = "..." }', message)
+            self.assertEqual(result.warnings, ())
+
+    def test_run_emits_deprecation_warning_for_legacy_syntax_in_base_config(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
+            (root / "base.dirpluck").write_text(
+                textwrap.dedent(
+                    r'''
+                    [shared.must]
+                    required = ["src/"]
+
+                    [pluck]
+                    must = [["required"]]
+                    '''
+                ),
+                encoding="utf-8",
+            )
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    '''
+                    [about]
+                    base = "base.dirpluck"
+                    '''
+                ),
+                encoding="utf-8",
+            )
+
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", dirpluck.ConfigurationDeprecationWarning)
+                result = dirpluck.run("./app/", preview=True, cwd=root)
+
+            deprecations = [
+                warning for warning in caught
+                if issubclass(warning.category, dirpluck.ConfigurationDeprecationWarning)
+            ]
+            self.assertEqual(len(deprecations), 1)
+            self.assertEqual(Path(deprecations[0].filename).resolve(), Path(__file__).resolve())
+            self.assertIn("base.dirpluck", str(deprecations[0].message))
+            self.assertEqual(result.warnings, ())
+
+    def test_run_configuration_deprecation_warning_is_visible_by_default(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [shared.must]
+                    required = ["src/"]
+
+                    [pluck]
+                    must = [["required"]]
+                    """
+                ),
+                encoding="utf-8",
+            )
+            script = root / "caller.py"
+            script.write_text(
+                "from pathlib import Path\n"
+                "import dirpluck\n"
+                "root = Path(__file__).parent\n"
+                "dirpluck.run('./app/', preview=True, cwd=root)\n",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            source_root = str(Path(__file__).resolve().parents[1] / "src")
+            existing = env.get("PYTHONPATH")
+            env["PYTHONPATH"] = (
+                source_root
+                if not existing
+                else os.pathsep.join((source_root, existing))
+            )
+
+            completed = subprocess.run(
+                [sys.executable, str(script)],
+                cwd=root,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("ConfigurationDeprecationWarning", completed.stderr)
+            self.assertIn(str(script), completed.stderr)
+            self.assertNotIn("_config_parser.py", completed.stderr)
 
     def test_run_returns_wrong_type_warnings_without_changing_may_semantics(self):
         with resolved_temporary_directory() as temp:

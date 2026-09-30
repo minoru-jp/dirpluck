@@ -8,33 +8,33 @@ level: MUST
 
 ## SPEC_066
 
-Each item in `must` or `may` is a direct pattern string, a `{ match = "..." }` inline table, or a one-element Shared-reference array.
+Each item in `must` or `may` is a direct pattern string, a `{ match = "..." }` inline table, or a `{ shared = "..." }` inline table.
 
 ```text
 "foo"                         direct pattern
 { match = 'src/.*\.py' }    structured match
-["foo"]                       Shared reference
+{ shared = "foo" }            Shared reference
 ```
 
 level: MUST
 
 ## SPEC_067
 
-A direct string in `ignore` is a name pattern. A `{ match = "..." }` inline table is a structured path match. A one-element nested array is a reference marker: if its string begins with `./`, it is a Selection-relative path reference; otherwise it is a `shared.ignore` Shared reference.
+A direct string in `ignore` is a name pattern. Structured entries use `{ match = "..." }` for a regular-expression match over a root-relative path, `{ shared = "..." }` for a `shared.ignore` reference, and `{ path = "..." }` for a concrete Selection-relative path.
 
 ```text
-"*.pyc"                         direct name pattern
-{ match = 'build/' }            structured match
-["python-noise"]               Shared ignore reference
-["./tests/fixtures/big.bin"]   file path reference
-["./tests/fixtures/"]          directory path reference
+"*.pyc"                              direct name pattern
+{ match = 'build/' }                 structured match
+{ shared = "python-noise" }          Shared ignore reference
+{ path = "tests/fixtures/big.bin" }  file/directory path
+{ path = "tests/fixtures/" }         directory path
 ```
 
 level: MUST
 
 ## SPEC_068
 
-A nested array must contain exactly one non-empty string. `[]`, `["foo", "bar"]`, and `[123]` are errors. In `must` and `may`, nested arrays are reserved for Shared references.
+From 0.14.0 through releases before 1.0.0, the legacy one-element nested-array Shared reference (`["name"]`) and the one-element `ignore` path reference whose string begins with `./` (`["./path"]`) remain accepted as compatibility input, but both forms are deprecated. New Configurations must use `{ shared = "..." }` / `{ path = "..." }`. For each Configuration file loaded during a CLI run, if that file contains one or more valid deprecated nested-array references, the CLI must print exactly one warning for that file to stderr stating that the syntax will be removed in 1.0.0 and naming the replacement forms. The official Python API `dirpluck.run()` must report the same diagnostic once per loaded Configuration file through Python's warnings framework as the public `ConfigurationDeprecationWarning` (`FutureWarning` subclass), and must not place it in `RunResult.warnings`. The warning must be visible under Python's default filters and attributed to the first caller frame outside the dirpluck package instead of using a fixed `stacklevel`. Configuration files loaded through the base chain are treated the same way. The CLI collects the same diagnostic for stderr presentation and therefore does not emit an additional `ConfigurationDeprecationWarning`. These warnings must not change CLI stdout or the exit status. In 1.0.0, deprecated nested-array references are removed from the Configuration syntax and are invalid. During the compatibility period, a nested array is recognized only when it contains exactly one non-empty string; `[]`, `["foo", "bar"]`, and `[123]` are errors.
 
 level: MUST
 
@@ -137,7 +137,7 @@ title: Ignore grammar
 
 ### SPEC_080
 
-Selection `ignore` has three forms: name patterns, concrete Selection-relative path references, and structured `match` entries.
+Selection `ignore` supports direct name patterns, structured `{ path = "..." }` concrete paths, structured `{ match = "..." }` entries, and Shared-ignore expansion through `{ shared = "..." }`.
 
 level: MUST
 
@@ -168,36 +168,37 @@ level: MUST
 
 ### SPEC_083
 
-A Selection-relative path reference is a one-element nested array whose string begins with `./`. For Pluck, the Selection root is the Target directory. For an Always source, it is the resolved Always-source directory. Without a trailing `/`, the concrete path excludes either a file or a directory at that path. Appending `/` narrows the exclusion to a directory only.
+A Selection-relative concrete path is written as a `{ path = STRING }` inline table in `ignore`. For Pluck, the Selection root is the Target directory. For an Always source, it is the resolved Always-source directory. `path` is relative to the Selection root, and an initial `./` is optional and normalized. Without a trailing `/`, the concrete path excludes either a file or a directory at that path. Appending `/` narrows the exclusion to a directory only.
 
 ```text
-["./tests/fixtures/big.bin"]   exact entry path (file or directory)
-["./tests/fixtures/"]          exact directory path and its subtree
+{ path = "tests/fixtures/big.bin" }   exact entry path (file or directory)
+{ path = "tests/fixtures/" }          exact directory path and its subtree
+{ path = "./tests/fixtures/" }        same path after normalization
 ```
 
 level: MUST
 
 ### SPEC_084
 
-A path reference must stay inside the Selection root. Bare `./`, `..` components, absolute paths, globs, and backslashes are rejected; `/` is the separator. If the matched entry is a directory, its subtree is pruned before traversal whether or not the spelling had a trailing `/`. A spelling without a trailing `/` may also match a regular file at the same path, while a spelling with a trailing `/` does not match a regular file.
+A `path` must stay inside the Selection root. An empty path, bare `.` or `./`, `..` components, absolute paths, globs, and backslashes are rejected; `/` is the separator. `.` components are normalized, so for example `./src/./generated/` and `src/generated/` identify the same concrete path. If the matched entry is a directory, its subtree is pruned before traversal whether or not the spelling had a trailing `/`. A spelling without a trailing `/` may also match a regular file at the same path, while a spelling with a trailing `/` does not match a regular file.
 
 level: MUST
 
 ### SPEC_085
 
-Name patterns, expanded Shared ignores, path references, and structured `match` entries are applied as a union of exclusion conditions. Several different conditions may match the same entry without error, and evaluation order is not observable semantics. Implementations may prune a subtree as soon as a directory exclusion matches.
+Name patterns, expanded Shared ignores, structured `path` entries, and structured `match` entries are applied as a union of exclusion conditions. Several different conditions may match the same entry without error, and evaluation order is not observable semantics. Implementations may prune a subtree as soon as a directory exclusion matches.
 
 level: MUST
 
 ### SPEC_086
 
-`ignore` takes precedence over link-like and special-entry diagnostics. Ignored entries are not Selection candidates, do not cause link-only or special-entry-only errors, and are not included in the skipped-link count. Entries inside an ignored subtree are not enumerated or subjected to traversal-time validation. A name pattern without a trailing `/` applies to matching file and directory names and also to a special filesystem entry with the same name. If a path reference matches a link-like entry itself, that entry is likewise treated as ignored.
+`ignore` takes precedence over link-like and special-entry diagnostics. Ignored entries are not Selection candidates, do not cause link-only or special-entry-only errors, and are not included in the skipped-link count. Entries inside an ignored subtree are not enumerated or subjected to traversal-time validation. A name pattern without a trailing `/` applies to matching file and directory names and also to a special filesystem entry with the same name. If a structured `path` matches a link-like entry itself, that entry is likewise treated as ignored.
 
 level: MUST
 
 ### SPEC_087
 
-For name patterns, a bare `*`, `*/`, an internal wildcard such as `foo*bar`, `**`, `?`, character classes, `!`, backslash, and a path separator inside the body are rejected. Path references have no wildcard syntax.
+For name patterns, a bare `*`, `*/`, an internal wildcard such as `foo*bar`, `**`, `?`, character classes, `!`, backslash, and a path separator inside the body are rejected. Structured `path` entries have no wildcard syntax.
 
 level: MUST NOT
 

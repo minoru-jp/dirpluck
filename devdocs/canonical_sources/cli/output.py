@@ -40,6 +40,16 @@ class CLI_PART:
 
         merge @= TERMS.TERM_1
 
+    class SECTION_076:
+        r"""
+        0.14.0 から 1.0.0 未満では、Selection の旧1要素 nested-array reference は互換入力として受理されますが非推奨です。CLI が実行時に読み込んだ Configuration file で旧記法を検出すると、その file につき1回だけ stderr へ warning を表示します。Base chain で読み込まれた Configuration も対象です。
+
+        Warning は 1.0.0 で旧記法が削除されることを示し、Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行するよう案内します。この migration warning は stdout の archive path / preview tree を変えず、exit status も変更しません。
+        """
+        title @= 'Configuration migration warning'
+
+        merge @= TERMS.TERM_1
+
     class SECTION_065:
         r"""
         生成される{{TERM_10}}は、既定では各 final archive root を見出しとして、その source の選択 file 数と任意の `description` を示す簡潔な index です。Scope / Pluck / Always、Configuration、Case など dirpluck 固有の resolution 情報や、source filesystem path は記録しません。

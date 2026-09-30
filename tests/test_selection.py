@@ -177,7 +177,7 @@ class SelectionTests(BuilderTestCase):
                 python = [{ match = 'src/.*\.py' }]
 
                 [pluck]
-                must = [["python"]]
+                must = [{ shared = "python" }]
             """)
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
@@ -821,7 +821,7 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 must = ["tests/", "other/"]
-                ignore = [["./tests/fixtures/big.bin"]]
+                ignore = [{ path = "tests/fixtures/big.bin" }]
             ''')
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
@@ -842,9 +842,9 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
                 [pluck]
                 must = ["tests/"]
                 ignore = [
-                    ["./tests/fixtures/big.bin"],
+                    { path = "tests/fixtures/big.bin" },
                     "big.bin",
-                    ["./tests/fixtures/"],
+                    { path = "tests/fixtures/" },
                 ]
             ''')
             original_iterdir = Path.iterdir
@@ -873,7 +873,7 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 must = ["tests/"]
-                ignore = [["./tests/fixtures"]]
+                ignore = [{ path = "tests/fixtures" }]
             ''')
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
@@ -934,7 +934,7 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 must = ["tests/"]
-                ignore = [["./tests/noise/"]]
+                ignore = [{ path = "tests/noise/" }]
             ''')
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
@@ -958,7 +958,7 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
             config = self._config(root, '''
                 [pluck]
                 must = ["src/"]
-                ignore = [["./src/external.py"]]
+                ignore = [{ path = "src/external.py" }]
             ''')
             plan = plan_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(plan.skipped_link_count, 0)
@@ -982,7 +982,7 @@ class IgnorePathReferenceSelectionTests(BuilderTestCase):
                 [always.assets]
                 path = "assets"
                 must = ["nested/"]
-                ignore = [["./nested/secret.txt"]]
+                ignore = [{ path = "nested/secret.txt" }]
             ''')
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:

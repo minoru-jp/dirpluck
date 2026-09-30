@@ -16,32 +16,32 @@ class SPECIFICATION_PART:
 
     class SPEC_066:
         r"""
-        `must` / `may` の array item は direct pattern string、`{ match = "..." }` inline table、または1要素 Shared reference array とする。
+        `must` / `may` の array item は direct pattern string、`{ match = "..." }` inline table、または `{ shared = "..." }` inline table とする。
 
         ```text
         "foo"                         direct pattern
         { match = 'src/.*\.py' }    structured match
-        ["foo"]                       Shared reference
+        { shared = "foo" }            Shared reference
         ```
         """
         level @= MUST
 
     class SPEC_067:
         r"""
-        `ignore` の direct string は name pattern とする。`{ match = "..." }` inline table は structured path match とする。1要素 nested array は reference marker とし、中の string が `./` で始まれば Selection-relative path reference、それ以外なら `shared.ignore` の Shared reference とする。
+        `ignore` の direct string は name pattern とする。Structured entry は `{ match = "..." }` を root-relative path の regular-expression match、`{ shared = "..." }` を `shared.ignore` reference、`{ path = "..." }` を Selection-relative concrete path とする。
 
         ```text
-        "*.pyc"                         direct name pattern
-        { match = 'build/' }            structured match
-        ["python-noise"]               Shared ignore reference
-        ["./tests/fixtures/big.bin"]   file path reference
-        ["./tests/fixtures/"]          directory path reference
+        "*.pyc"                              direct name pattern
+        { match = 'build/' }                 structured match
+        { shared = "python-noise" }          Shared ignore reference
+        { path = "tests/fixtures/big.bin" }  file/directory path
+        { path = "tests/fixtures/" }         directory path
         ```
         """
         level @= MUST
 
     class SPEC_068:
-        r"""Nested array の要素数はちょうど1、要素は non-empty string でなければならない。`[]`、`["foo", "bar"]`、`[123]` は error とする。`must` / `may` では nested array は Shared reference 専用とする。"""
+        r"""0.14.0 から 1.0.0 未満では、従来の1要素 nested array Shared reference (`["name"]`) と、`ignore` で `./` から始まる1要素 nested array path reference (`["./path"]`) を互換入力として受理するが、これらは非推奨とする。新規 Configuration は `{ shared = "..." }` / `{ path = "..." }` を使用する。CLI は実行時に読み込んだ各 Configuration file について、有効な deprecated nested-array reference が1個以上あればその file につき1回だけ stderr へ warning を表示し、1.0.0 で削除されることと replacement syntax を案内する。公式 Python API の `dirpluck.run()` は、読み込んだ各 Configuration file について同じ診断を Python の warnings framework に公開 `ConfigurationDeprecationWarning` (`FutureWarning` subclass) として1回報告し、`RunResult.warnings` には含めない。この warning は Python の既定 filter で表示対象とし、warning location は固定 `stacklevel` ではなく dirpluck package 外の最初の caller frame に帰属させる。Base chain の Configuration も読み込まれた layer として同じ扱いにする。CLI は同じ診断を stderr 表示用に収集するため、追加の `ConfigurationDeprecationWarning` は発行しない。これらの warning は CLI の stdout と exit status を変更しない。1.0.0 では deprecated nested-array reference を Configuration syntax から削除し、invalid Configuration とする。Nested array は互換期間中も要素数ちょうど1の non-empty string だけを互換入力として認め、`[]`、`["foo", "bar"]`、`[123]` は error とする。"""
         level @= MUST
 
     class SPEC_069:
@@ -117,7 +117,7 @@ class SPECIFICATION_PART:
         title @= 'Ignore grammar'
 
         class SPEC_080:
-            r"""Selection の `ignore` は name pattern、Selection-relative concrete path reference、structured `match` の3種類を持つ。"""
+            r"""Selection の `ignore` は direct name pattern、structured `{ path = "..." }` concrete path、structured `{ match = "..." }`、および `{ shared = "..." }` による Shared ignore expansion を持つ。"""
             level @= MUST
 
         class SPEC_081:
@@ -147,29 +147,30 @@ class SPECIFICATION_PART:
 
         class SPEC_083:
             r"""
-            Selection-relative path reference は1要素 nested arrayの stringを `./` で始める。Pluck では Target directory、Always source では解決済み Always source directory を Selection root とする。末尾 `/` のない concrete path は、その path にある file / directory の両方を除外対象とする。末尾 `/` を付けた場合だけ directory に限定する。
+            Selection-relative concrete path は `ignore` の `{ path = STRING }` inline table で記述する。Pluck では Target directory、Always source では解決済み Always source directory を Selection root とする。`path` は Selection root 基準の relative path であり、先頭の `./` は任意として正規化する。末尾 `/` のない concrete path は、その path にある file / directory の両方を除外対象とする。末尾 `/` を付けた場合だけ directory に限定する。
 
             ```text
-            ["./tests/fixtures/big.bin"]   exact entry path (file or directory)
-            ["./tests/fixtures/"]          exact directory path and its subtree
+            { path = "tests/fixtures/big.bin" }   exact entry path (file or directory)
+            { path = "tests/fixtures/" }          exact directory path and its subtree
+            { path = "./tests/fixtures/" }        same path after normalization
             ```
             """
             level @= MUST
 
         class SPEC_084:
-            r"""Path reference は Selection root の内側だけを指し、`./` 自体、`..` component、absolute path、glob、backslash を拒否する。Path separator は `/` とする。末尾 `/` の有無にかかわらず、実体が directory として一致した場合は subtree を traversal する前に prune する。末尾 `/` なしは同じ path の regular file にも一致するが、末尾 `/` ありは regular file に一致しない。"""
+            r"""`path` は Selection root の内側だけを指し、空 path、`.` / `./` 自体、`..` component、absolute path、glob、backslash を拒否する。Path separator は `/` とする。`.` component は正規化し、たとえば `./src/./generated/` と `src/generated/` は同じ concrete path として扱う。末尾 `/` の有無にかかわらず、実体が directory として一致した場合は subtree を traversal する前に prune する。末尾 `/` なしは同じ path の regular file にも一致するが、末尾 `/` ありは regular file に一致しない。"""
             level @= MUST
 
         class SPEC_085:
-            r"""Name pattern、Shared ignore expansion、path reference、structured `match` は集合的な除外条件として適用する。同じ entry に複数条件が一致しても error ではなく、評価順序は observable semantics に含めない。実装は directory 条件に一致した subtree を早期に prune してよい。"""
+            r"""Name pattern、Shared ignore expansion、structured `path`、structured `match` は集合的な除外条件として適用する。同じ entry に複数条件が一致しても error ではなく、評価順序は observable semantics に含めない。実装は directory 条件に一致した subtree を早期に prune してよい。"""
             level @= MUST
 
         class SPEC_086:
-            r"""`ignore` は link-like / special entry の種類による診断より優先する。Ignored entry は Selection candidate、link-only / special-entry-only error の根拠、skipped-link count の対象にせず、ignored subtree の entry も列挙や traversal-time validation の対象にしない。末尾 `/` のない name pattern は matching file / directory name の両方に加え、同じ name を持つ特殊 entry にも適用する。Path reference が link-like entry 自身に一致する場合も ignored entry として扱う。"""
+            r"""`ignore` は link-like / special entry の種類による診断より優先する。Ignored entry は Selection candidate、link-only / special-entry-only error の根拠、skipped-link count の対象にせず、ignored subtree の entry も列挙や traversal-time validation の対象にしない。末尾 `/` のない name pattern は matching file / directory name の両方に加え、同じ name を持つ特殊 entry にも適用する。Structured `path` が link-like entry 自身に一致する場合も ignored entry として扱う。"""
             level @= MUST
 
         class SPEC_087:
-            r"""Name pattern では `*` 単体、`*/`、`foo*bar` のような internal wildcard、`**`、`?`、character class、`!`、backslash、body 内の path separator を拒否する。Path reference は wildcard syntax を持たない。"""
+            r"""Name pattern では `*` 単体、`*/`、`foo*bar` のような internal wildcard、`**`、`?`、character class、`!`、backslash、body 内の path separator を拒否する。Structured `path` は wildcard syntax を持たない。"""
             level @= MUST_NOT
 
     class SECTION_603:

@@ -12,6 +12,7 @@ from dirpluck import __version__
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_SOURCES = ROOT / "devdocs" / "canonical_sources"
 CANONICAL_DOCUMENTS = ROOT / "devdocs" / "canonical_documents"
+REPOSITORY_URL = "https://github.com/minoru-jp/dirpluck"
 
 SPECIFICATION_DOCUMENTS = {
     "INDEX.md",
@@ -129,13 +130,61 @@ class DocumentBuildTests(unittest.TestCase):
         context = json.loads(context_path.read_text(encoding="utf-8"))
         self.assertEqual(context, {"version": __version__})
 
-    def test_documentation_tooling_dependency_is_explicit(self):
+    def test_documentation_and_test_tooling_dependencies_are_explicit(self):
         with (ROOT / "pyproject.toml").open("rb") as stream:
             project = tomllib.load(stream)
         self.assertEqual(project["project"]["dependencies"], [])
         self.assertEqual(
+            project["project"]["optional-dependencies"]["test"],
+            ["shikumi-devdoc>=0.3.2"],
+        )
+        self.assertEqual(
             project["dependency-groups"]["docs"],
             ["shikumi-devdoc>=0.3.2"],
+        )
+        self.assertEqual(
+            project["tool"]["pytest"]["ini_options"]["pythonpath"],
+            ["tests"],
+        )
+
+    def test_project_urls_point_to_public_repository(self):
+        with (ROOT / "pyproject.toml").open("rb") as stream:
+            project = tomllib.load(stream)
+
+        self.assertEqual(
+            project["project"]["urls"],
+            {
+                "Homepage": REPOSITORY_URL,
+                "Documentation": f"{REPOSITORY_URL}#documentation",
+                "Repository": REPOSITORY_URL,
+                "Issues": f"{REPOSITORY_URL}/issues",
+                "Changelog": f"{REPOSITORY_URL}/blob/main/CHANGELOG.md",
+            },
+        )
+
+    def test_root_readme_navigation_uses_public_absolute_urls(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        published_paths = (
+            "docs/GETTING_STARTED.md",
+            "GLOSSARY.md",
+            "docs/configuration/INDEX.md",
+            "docs/cli/INDEX.md",
+            "docs/python_api/INDEX.md",
+            "docs/specification/INDEX.md",
+            "docs/TRUST.md",
+            "CHANGELOG.md",
+            "STATUS.md",
+            "LICENSE",
+        )
+
+        for relative in published_paths:
+            with self.subTest(path=relative):
+                url = f"{REPOSITORY_URL}/blob/main/{relative}"
+                self.assertIn(url, readme)
+
+        self.assertNotRegex(
+            readme,
+            r"\]\((?:docs/|GLOSSARY\.md|CHANGELOG\.md|STATUS\.md|LICENSE\))",
         )
 
     def test_distribution_uses_hatchling_and_full_public_docs(self):

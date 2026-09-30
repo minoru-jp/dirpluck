@@ -138,34 +138,39 @@ def _parse_exclusion_pattern(raw: str, where: str) -> ExclusionPattern:
 
 
 def _parse_path_exclusion(raw: str, where: str) -> PathExclusion:
-    """Parse one concrete Selection-root-relative ignore path reference."""
+    """Parse one concrete Selection-root-relative ignore path value."""
 
-    if not raw.startswith("./"):
-        raise ConfigurationError(f"{where}: ignore path reference must start with './'")
+    if not raw:
+        raise ConfigurationError(
+            f"{where}: ignore path must name an entry below the Selection root"
+        )
     if "\\" in raw:
         raise ConfigurationError(
-            f"{where}: backslashes are not allowed in ignore path references: {raw!r}"
+            f"{where}: backslashes are not allowed in ignore paths: {raw!r}"
         )
     if glob.has_magic(raw):
         raise ConfigurationError(
-            f"{where}: ignore path reference must name one concrete relative path: {raw!r}"
+            f"{where}: ignore path must name one concrete relative path: {raw!r}"
         )
 
     directory = raw.endswith("/")
-    body = raw[2:-1] if directory else raw[2:]
-    if not body:
-        raise ConfigurationError(
-            f"{where}: ignore path reference must name an entry below the Selection root"
-        )
+    body = raw[:-1] if directory else raw
     pure = PurePosixPath(body)
-    if pure.is_absolute() or pure == PurePosixPath(".") or ".." in pure.parts:
+    windows = PureWindowsPath(body)
+    if (
+        pure.is_absolute()
+        or windows.is_absolute()
+        or bool(windows.drive)
+        or pure == PurePosixPath(".")
+        or ".." in pure.parts
+    ):
         raise ConfigurationError(
-            f"{where}: ignore path reference must stay inside the Selection root: {raw!r}"
+            f"{where}: ignore path must stay inside the Selection root: {raw!r}"
         )
     normalized = pure.as_posix()
     if normalized in {"", "."}:
         raise ConfigurationError(
-            f"{where}: ignore path reference must name an entry below the Selection root"
+            f"{where}: ignore path must name an entry below the Selection root"
         )
     canonical = f"./{normalized}{'/' if directory else ''}"
     return PathExclusion(raw=canonical, path=normalized, directory=directory)
@@ -259,6 +264,51 @@ def _validate_base_path(value: object, where: str) -> str:
             f"{where}: base Configuration path must end with {CONFIG_SUFFIX!r}"
         )
     return path
+
+
+def _parse_shared_reference(value: object, where: str) -> SharedReference:
+    if not isinstance(value, dict):
+        raise AssertionError("Shared reference parser requires an inline table")
+    _require_only_keys(value, {"shared"}, where)
+    raw = value.get("shared")
+    if not isinstance(raw, str) or not raw.strip():
+        raise ConfigurationError(f"{where}.shared: expected a non-empty string")
+    return SharedReference(raw)
+
+
+def _parse_structured_include_entry(
+    value: dict[str, object],
+    where: str,
+) -> MatchPattern | SharedReference:
+    keys = set(value)
+    if keys == {"match"}:
+        return _parse_match_pattern(value, where)
+    if keys == {"shared"}:
+        return _parse_shared_reference(value, where)
+    raise ConfigurationError(
+        f"{where}: structured must/may entry must be exactly "
+        "{ match = ... } or { shared = ... }"
+    )
+
+
+def _parse_structured_ignore_entry(
+    value: dict[str, object],
+    where: str,
+) -> PathExclusion | MatchPattern | SharedReference:
+    keys = set(value)
+    if keys == {"match"}:
+        return _parse_match_pattern(value, where)
+    if keys == {"shared"}:
+        return _parse_shared_reference(value, where)
+    if keys == {"path"}:
+        raw = value["path"]
+        if not isinstance(raw, str):
+            raise ConfigurationError(f"{where}.path: expected a string")
+        return _parse_path_exclusion(raw, f"{where}.path")
+    raise ConfigurationError(
+        f"{where}: structured ignore entry must be exactly "
+        "{ match = ... }, { shared = ... }, or { path = ... }"
+    )
 
 
 def _parse_match_pattern(value: object, where: str) -> MatchPattern:
@@ -404,7 +454,7 @@ def _parse_include_items(
             result.append(_normalize_include_pattern(item, item_where))
             continue
         if isinstance(item, dict):
-            result.append(_parse_match_pattern(item, item_where))
+            result.append(_parse_structured_include_entry(item, item_where))
             continue
         if isinstance(item, list):
             if len(item) != 1 or not isinstance(item[0], str) or not item[0].strip():
@@ -416,7 +466,7 @@ def _parse_include_items(
             continue
         raise ConfigurationError(
             f"{item_where}: expected a direct string pattern, {{ match = ... }} inline table, "
-            "or one-element Shared reference array"
+            "{ shared = ... } inline table, or deprecated one-element Shared reference array"
         )
     return tuple(result)
 
@@ -435,7 +485,7 @@ def _parse_ignore_items(
             result.append(_parse_exclusion_pattern(item, item_where))
             continue
         if isinstance(item, dict):
-            result.append(_parse_match_pattern(item, item_where))
+            result.append(_parse_structured_ignore_entry(item, item_where))
             continue
         if isinstance(item, list):
             if len(item) != 1 or not isinstance(item[0], str) or not item[0].strip():
@@ -449,8 +499,8 @@ def _parse_ignore_items(
                 result.append(SharedReference(reference))
             continue
         raise ConfigurationError(
-            f"{item_where}: expected a direct string pattern, {{ match = ... }} inline table, "
-            "or one-element reference array"
+            f"{item_where}: expected a direct string pattern, {{ match = ... }}, "
+            "{ shared = ... }, or { path = ... } inline table, or deprecated one-element reference array"
         )
     return tuple(result)
 
@@ -526,13 +576,16 @@ def _exclusion_entry_key(
     if isinstance(pattern, MatchPattern):
         return ("match", pattern.raw)
     if isinstance(pattern, PathExclusion):
-        return ("path", pattern.raw)
+        return ("path", pattern.path + ("/" if pattern.directory else ""))
     return ("pattern", pattern.raw)
 
 
 def _exclusion_entry_repr(pattern: ExclusionPattern | PathExclusion | MatchPattern) -> str:
     if isinstance(pattern, MatchPattern):
         return f"{{ match = {pattern.raw!r} }}"
+    if isinstance(pattern, PathExclusion):
+        value = pattern.path + ("/" if pattern.directory else "")
+        return f"{{ path = {value!r} }}"
     return repr(pattern.raw)
 
 

@@ -50,13 +50,13 @@ class CONFIGURATION_PART:
         [pluck]
         description = "The project currently under review."
         may = ["README.md", "src/", "tests/"]
-        ignore = [["python-dev"]]
+        ignore = [{ shared = "python-dev" }]
         allow_empty = true
 
         [pluck.case.full]
         description = "The project with all review material."
         may = ["README.md", "src/", "tests/", "docs/"]
-        ignore = [["python-dev"]]
+        ignore = [{ shared = "python-dev" }]
         allow_empty = true
 
         [scope]
