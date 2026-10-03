@@ -2,14 +2,12 @@ from pathlib import Path
 import textwrap
 import unittest
 
-from dirpluck.config import load_config
 
-
-OUTPUT = '''
+OUTPUT = """
 [output]
 path = "out.zip"
 overwrite = false
-'''
+"""
 
 
 class ConfigTestCase(unittest.TestCase):

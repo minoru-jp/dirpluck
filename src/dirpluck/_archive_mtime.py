@@ -20,14 +20,14 @@ def validate_archive_mtime_spec(value: object) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(
             "archive mtime must be 'now', 'zip-epoch', or a timestamp in "
-            "YYYY-MM-DDTHH:MM:SS form"
+            + "YYYY-MM-DDTHH:MM:SS form"
         )
     if value in {ARCHIVE_MTIME_NOW, ARCHIVE_MTIME_ZIP_EPOCH}:
         return value
     if not _TIMESTAMP_PATTERN.fullmatch(value):
         raise ValueError(
             "archive mtime must be 'now', 'zip-epoch', or a timestamp in "
-            "YYYY-MM-DDTHH:MM:SS form"
+            + "YYYY-MM-DDTHH:MM:SS form"
         )
     try:
         timestamp = datetime.strptime(value, _TIMESTAMP_FORMAT)
@@ -41,7 +41,7 @@ def _validate_zip_timestamp_range(timestamp: datetime) -> None:
     if not ZIP_EPOCH <= timestamp <= ZIP_TIMESTAMP_MAX:
         raise ValueError(
             "archive mtime timestamp must be within "
-            "1980-01-01T00:00:00 through 2107-12-31T23:59:59"
+            + "1980-01-01T00:00:00 through 2107-12-31T23:59:59"
         )
 
 

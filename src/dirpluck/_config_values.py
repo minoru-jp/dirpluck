@@ -6,7 +6,8 @@ import glob
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
-from typing import Mapping
+from typing import cast
+from collections.abc import Mapping
 
 from ._config_models import (
     ExclusionPattern,
@@ -25,6 +26,7 @@ from ._regex import compile_regular_expression
 CONFIG_NAME = "default.dirpluck"
 CONFIG_SUFFIX = ".dirpluck"
 
+
 def _config_reference(reference: str | None) -> str:
     """Normalize one CLI Configuration reference to a concrete document path."""
 
@@ -40,6 +42,7 @@ def _config_reference(reference: str | None) -> str:
         path += CONFIG_SUFFIX
     return path
 
+
 def _lexical_absolute_path(path: str | Path, *, cwd: Path | None = None) -> Path:
     """Return an absolute path without resolving symbolic links or other aliases."""
 
@@ -47,6 +50,7 @@ def _lexical_absolute_path(path: str | Path, *, cwd: Path | None = None) -> Path
     if not candidate.is_absolute():
         candidate = (cwd or Path.cwd()) / candidate
     return Path(os.path.abspath(candidate))
+
 
 def resolve_config_path(reference: str | None = None, *, cwd: Path | None = None) -> Path:
     """Resolve one explicit Configuration path, or cwd/default.dirpluck by default."""
@@ -57,20 +61,24 @@ def resolve_config_path(reference: str | None = None, *, cwd: Path | None = None
         raise ConfigurationError(f"configuration file was not found: {candidate}")
     return candidate
 
+
 def _require_only_keys(table: Mapping[str, object], allowed: set[str], where: str) -> None:
     unknown = sorted(str(key) for key in set(table) - allowed)
     if unknown:
         raise ConfigurationError(f"{where}: unknown key(s): {', '.join(unknown)}")
+
 
 def _require_name(name: object, where: str) -> str:
     if not isinstance(name, str) or not name.strip():
         raise ConfigurationError(f"{where}: name must be a non-empty string")
     return name
 
+
 def _validated_description(value: object, where: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigurationError(f"{where}: expected a non-empty string")
     return value.strip()
+
 
 def _normalize_include_pattern(value: str, where: str) -> str:
     if not value:
@@ -100,6 +108,7 @@ def _normalize_include_pattern(value: str, where: str) -> str:
     normalized = pure.as_posix()
     return normalized + ("/" if directory else "")
 
+
 def _parse_exclusion_pattern(raw: str, where: str) -> ExclusionPattern:
     if not raw:
         raise ConfigurationError(f"{where}: ignore pattern must not be empty")
@@ -112,9 +121,7 @@ def _parse_exclusion_pattern(raw: str, where: str) -> ExclusionPattern:
     if not body:
         raise ConfigurationError(f"{where}: ignore pattern must name an entity: {raw!r}")
     if "/" in body:
-        raise ConfigurationError(
-            f"{where}: ignore patterns match entity names, not paths: {raw!r}"
-        )
+        raise ConfigurationError(f"{where}: ignore patterns match entity names, not paths: {raw!r}")
     if any(char in body for char in "?[]!"):
         raise ConfigurationError(
             f"{where}: only a leading and/or trailing '*' is supported: {raw!r}"
@@ -145,9 +152,7 @@ def _parse_path_exclusion(raw: str, where: str) -> PathExclusion:
             f"{where}: ignore path must name an entry below the Selection root"
         )
     if "\\" in raw:
-        raise ConfigurationError(
-            f"{where}: backslashes are not allowed in ignore paths: {raw!r}"
-        )
+        raise ConfigurationError(f"{where}: backslashes are not allowed in ignore paths: {raw!r}")
     if glob.has_magic(raw):
         raise ConfigurationError(
             f"{where}: ignore path must name one concrete relative path: {raw!r}"
@@ -175,6 +180,7 @@ def _parse_path_exclusion(raw: str, where: str) -> PathExclusion:
     canonical = f"./{normalized}{'/' if directory else ''}"
     return PathExclusion(raw=canonical, path=normalized, directory=directory)
 
+
 def _parse_target_ignore_pattern(raw: str, where: str) -> TargetIgnorePattern:
     if not raw:
         raise ConfigurationError(f"{where}: ignore pattern must not be empty")
@@ -185,7 +191,9 @@ def _parse_target_ignore_pattern(raw: str, where: str) -> TargetIgnorePattern:
     directory = raw.endswith("/")
     body = raw[:-1] if directory else raw
     if not body:
-        raise ConfigurationError(f"{where}: ignore pattern must name one direct child entry: {raw!r}")
+        raise ConfigurationError(
+            f"{where}: ignore pattern must name one direct child entry: {raw!r}"
+        )
     if "/" in body:
         raise ConfigurationError(
             f"{where}: ignore patterns match direct child Target names, not paths: {raw!r}"
@@ -211,6 +219,7 @@ def _parse_target_ignore_pattern(raw: str, where: str) -> TargetIgnorePattern:
         raise ConfigurationError(f"{where}: '*' and '*/' are not valid ignore patterns")
     return TargetIgnorePattern(raw=raw, value=value, match=match, directory=directory)
 
+
 def _validate_filesystem_location(path: str, where: str, *, label: str) -> str:
     """Validate one concrete host filesystem location written with '/' separators."""
 
@@ -227,16 +236,16 @@ def _validate_filesystem_location(path: str, where: str, *, label: str) -> str:
     windows = PureWindowsPath(path)
     host = Path(path)
     has_non_host_root = (
-        (pure.is_absolute() or bool(windows.drive) or bool(windows.root))
-        and not host.is_absolute()
-    )
+        pure.is_absolute() or bool(windows.drive) or bool(windows.root)
+    ) and not host.is_absolute()
     if has_non_host_root:
         raise ConfigurationError(
             f"{where}: absolute-root form is not supported by the host operating system"
         )
     return pure.as_posix()
 
-def _validate_output_fragment(value: object, where: str) -> str | None:
+
+def _validate_output_fragment(value: object, where: str) -> str | None:  # pyright: ignore[reportUnusedFunction]
     if value is None:
         return None
     if not isinstance(value, str):
@@ -253,7 +262,8 @@ def _validate_output_fragment(value: object, where: str) -> str | None:
         )
     return value
 
-def _validate_base_path(value: object, where: str) -> str:
+
+def _validate_base_path(value: object, where: str) -> str:  # pyright: ignore[reportUnusedFunction]
     if not isinstance(value, str):
         raise ConfigurationError(f"{where}: expected a string")
     if value.endswith("/"):
@@ -269,8 +279,9 @@ def _validate_base_path(value: object, where: str) -> str:
 def _parse_shared_reference(value: object, where: str) -> SharedReference:
     if not isinstance(value, dict):
         raise AssertionError("Shared reference parser requires an inline table")
-    _require_only_keys(value, {"shared"}, where)
-    raw = value.get("shared")
+    table = cast(dict[str, object], value)
+    _require_only_keys(table, {"shared"}, where)
+    raw = table.get("shared")
     if not isinstance(raw, str) or not raw.strip():
         raise ConfigurationError(f"{where}.shared: expected a non-empty string")
     return SharedReference(raw)
@@ -287,7 +298,7 @@ def _parse_structured_include_entry(
         return _parse_shared_reference(value, where)
     raise ConfigurationError(
         f"{where}: structured must/may entry must be exactly "
-        "{ match = ... } or { shared = ... }"
+        + "{ match = ... } or { shared = ... }"
     )
 
 
@@ -307,26 +318,28 @@ def _parse_structured_ignore_entry(
         return _parse_path_exclusion(raw, f"{where}.path")
     raise ConfigurationError(
         f"{where}: structured ignore entry must be exactly "
-        "{ match = ... }, { shared = ... }, or { path = ... }"
+        + "{ match = ... }, { shared = ... }, or { path = ... }"
     )
 
 
 def _parse_match_pattern(value: object, where: str) -> MatchPattern:
     if not isinstance(value, dict):
         raise AssertionError("match pattern parser requires an inline table")
-    _require_only_keys(value, {"match"}, where)
-    if "match" not in value:
+    table = cast(dict[str, object], value)
+    _require_only_keys(table, {"match"}, where)
+    if "match" not in table:
         raise ConfigurationError(f"{where}: structured Selection entry requires 'match'")
-    raw = value["match"]
+    raw = table["match"]
     if not isinstance(raw, str):
         raise ConfigurationError(f"{where}.match: expected a string")
-    compile_regular_expression(
+    _ = compile_regular_expression(
         raw,
         where=f"{where}.match",
         error_type=ConfigurationError,
         label="regular expression",
     )
     return MatchPattern(raw=raw)
+
 
 def _parse_direct_include_array(
     value: object,
@@ -336,21 +349,23 @@ def _parse_direct_include_array(
 ) -> tuple[str | MatchPattern, ...]:
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
-    if not value and not allow_empty:
+    items = cast(list[object], value)
+    if not items and not allow_empty:
         raise ConfigurationError(f"{where}: at least one entry is required")
     patterns: list[str | MatchPattern] = []
-    for index, item in enumerate(value):
+    for index, item in enumerate(items):
         item_where = f"{where}[{index}]"
         if isinstance(item, str):
             patterns.append(_normalize_include_pattern(item, item_where))
         elif isinstance(item, dict):
-            patterns.append(_parse_match_pattern(item, item_where))
+            patterns.append(_parse_match_pattern(cast(dict[str, object], item), item_where))
         else:
             raise ConfigurationError(
                 f"{item_where}: expected a direct string pattern or {{ match = ... }} inline table"
             )
     _reject_duplicate_selection_entries(tuple(patterns), where)
     return tuple(patterns)
+
 
 def _parse_direct_ignore_array(
     value: object,
@@ -360,21 +375,23 @@ def _parse_direct_ignore_array(
 ) -> tuple[ExclusionPattern | MatchPattern, ...]:
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
-    if not value and not allow_empty:
+    items = cast(list[object], value)
+    if not items and not allow_empty:
         raise ConfigurationError(f"{where}: at least one entry is required")
     patterns: list[ExclusionPattern | MatchPattern] = []
-    for index, item in enumerate(value):
+    for index, item in enumerate(items):
         item_where = f"{where}[{index}]"
         if isinstance(item, str):
             patterns.append(_parse_exclusion_pattern(item, item_where))
         elif isinstance(item, dict):
-            patterns.append(_parse_match_pattern(item, item_where))
+            patterns.append(_parse_match_pattern(cast(dict[str, object], item), item_where))
         else:
             raise ConfigurationError(
                 f"{item_where}: expected a direct string pattern or {{ match = ... }} inline table"
             )
     _reject_duplicate_exclusions(tuple(patterns), where)
     return tuple(patterns)
+
 
 def _parse_shared_include_namespace(
     value: object,
@@ -384,10 +401,11 @@ def _parse_shared_include_namespace(
         return MappingProxyType({})
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    if not value:
+    table = cast(dict[str, object], value)
+    if not table:
         raise ConfigurationError(f"{where}: define at least one named pattern set")
     result: dict[str, tuple[str | MatchPattern, ...]] = {}
-    for raw_name, raw_patterns in value.items():
+    for raw_name, raw_patterns in table.items():
         name = _require_name(raw_name, where)
         result[name] = _parse_direct_include_array(
             raw_patterns,
@@ -395,6 +413,7 @@ def _parse_shared_include_namespace(
             allow_empty=False,
         )
     return MappingProxyType(result)
+
 
 def _parse_shared_ignore_namespace(
     value: object,
@@ -404,10 +423,11 @@ def _parse_shared_ignore_namespace(
         return MappingProxyType({})
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    if not value:
+    table = cast(dict[str, object], value)
+    if not table:
         raise ConfigurationError(f"{where}: define at least one named pattern set")
     result: dict[str, tuple[ExclusionPattern | MatchPattern, ...]] = {}
-    for raw_name, raw_patterns in value.items():
+    for raw_name, raw_patterns in table.items():
         name = _require_name(raw_name, where)
         result[name] = _parse_direct_ignore_array(
             raw_patterns,
@@ -416,7 +436,8 @@ def _parse_shared_ignore_namespace(
         )
     return MappingProxyType(result)
 
-def _parse_shared(value: object, where: str) -> SharedPatterns:
+
+def _parse_shared(value: object, where: str) -> SharedPatterns:  # pyright: ignore[reportUnusedFunction]
     if value is None:
         return SharedPatterns(
             must=MappingProxyType({}),
@@ -425,19 +446,21 @@ def _parse_shared(value: object, where: str) -> SharedPatterns:
         )
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    _require_only_keys(value, {"must", "may", "ignore"}, where)
-    if not value:
+    table = cast(dict[str, object], value)
+    _require_only_keys(table, {"must", "may", "ignore"}, where)
+    if not table:
         raise ConfigurationError(
             f"{where}: define [shared.must], [shared.may], and/or [shared.ignore]"
         )
-    must = _parse_shared_include_namespace(value.get("must"), f"{where}.must")
-    may = _parse_shared_include_namespace(value.get("may"), f"{where}.may")
-    ignore = _parse_shared_ignore_namespace(value.get("ignore"), f"{where}.ignore")
+    must = _parse_shared_include_namespace(table.get("must"), f"{where}.must")
+    may = _parse_shared_include_namespace(table.get("may"), f"{where}.may")
+    ignore = _parse_shared_ignore_namespace(table.get("ignore"), f"{where}.ignore")
     if not must and not may and not ignore:
         raise ConfigurationError(
             f"{where}: define [shared.must], [shared.may], and/or [shared.ignore]"
         )
     return SharedPatterns(must=must, may=may, ignore=ignore)
+
 
 def _parse_include_items(
     value: object,
@@ -447,28 +470,33 @@ def _parse_include_items(
         return ()
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
+    items = cast(list[object], value)
     result: list[str | MatchPattern | SharedReference] = []
-    for index, item in enumerate(value):
+    for index, item in enumerate(items):
         item_where = f"{where}[{index}]"
         if isinstance(item, str):
             result.append(_normalize_include_pattern(item, item_where))
             continue
         if isinstance(item, dict):
-            result.append(_parse_structured_include_entry(item, item_where))
+            result.append(
+                _parse_structured_include_entry(cast(dict[str, object], item), item_where)
+            )
             continue
         if isinstance(item, list):
-            if len(item) != 1 or not isinstance(item[0], str) or not item[0].strip():
+            legacy = cast(list[object], item)
+            if len(legacy) != 1 or not isinstance(legacy[0], str) or not legacy[0].strip():
                 raise ConfigurationError(
                     f"{item_where}: Shared reference must be a one-element array "
-                    "containing a non-empty string"
+                    + "containing a non-empty string"
                 )
-            result.append(SharedReference(item[0]))
+            result.append(SharedReference(legacy[0]))
             continue
         raise ConfigurationError(
             f"{item_where}: expected a direct string pattern, {{ match = ... }} inline table, "
-            "{ shared = ... } inline table, or deprecated one-element Shared reference array"
+            + "{ shared = ... } inline table, or deprecated one-element Shared reference array"
         )
     return tuple(result)
+
 
 def _parse_ignore_items(
     value: object,
@@ -478,21 +506,23 @@ def _parse_ignore_items(
         return ()
     if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array")
+    items = cast(list[object], value)
     result: list[ExclusionPattern | PathExclusion | MatchPattern | SharedReference] = []
-    for index, item in enumerate(value):
+    for index, item in enumerate(items):
         item_where = f"{where}[{index}]"
         if isinstance(item, str):
             result.append(_parse_exclusion_pattern(item, item_where))
             continue
         if isinstance(item, dict):
-            result.append(_parse_structured_ignore_entry(item, item_where))
+            result.append(_parse_structured_ignore_entry(cast(dict[str, object], item), item_where))
             continue
         if isinstance(item, list):
-            if len(item) != 1 or not isinstance(item[0], str) or not item[0].strip():
+            legacy = cast(list[object], item)
+            if len(legacy) != 1 or not isinstance(legacy[0], str) or not legacy[0].strip():
                 raise ConfigurationError(
                     f"{item_where}: reference must be a one-element array containing a non-empty string"
                 )
-            reference = item[0]
+            reference = legacy[0]
             if reference.startswith("./"):
                 result.append(_parse_path_exclusion(reference, item_where))
             else:
@@ -500,9 +530,10 @@ def _parse_ignore_items(
             continue
         raise ConfigurationError(
             f"{item_where}: expected a direct string pattern, {{ match = ... }}, "
-            "{ shared = ... }, or { path = ... } inline table, or deprecated one-element reference array"
+            + "{ shared = ... }, or { path = ... } inline table, or deprecated one-element reference array"
         )
     return tuple(result)
+
 
 def _expand_include_items(
     items: tuple[str | MatchPattern | SharedReference, ...],
@@ -522,6 +553,7 @@ def _expand_include_items(
             expanded.append(item)
     return tuple(expanded)
 
+
 def _expand_ignore_items(
     items: tuple[ExclusionPattern | PathExclusion | MatchPattern | SharedReference, ...],
     namespace: Mapping[str, tuple[ExclusionPattern | MatchPattern, ...]],
@@ -539,6 +571,7 @@ def _expand_ignore_items(
         else:
             expanded.append(item)
     return tuple(expanded)
+
 
 def _selection_entry_key(pattern: str | MatchPattern) -> tuple[str, str]:
     if isinstance(pattern, MatchPattern):
@@ -569,6 +602,7 @@ def _reject_duplicate_selection_entries(
             f"{where}: duplicate effective pattern(s): "
             + ", ".join(_selection_entry_repr(item) for item in duplicates)
         )
+
 
 def _exclusion_entry_key(
     pattern: ExclusionPattern | PathExclusion | MatchPattern,
@@ -607,22 +641,24 @@ def _reject_duplicate_exclusions(
             + ", ".join(_exclusion_entry_repr(item) for item in duplicates)
         )
 
+
 def _parse_selection(value: object, where: str) -> SelectionDefinition:
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    _require_only_keys(value, {"description", "must", "may", "ignore", "allow_empty"}, where)
+    table = cast(dict[str, object], value)
+    _require_only_keys(table, {"description", "must", "may", "ignore", "allow_empty"}, where)
     description = None
-    if "description" in value:
-        description = _validated_description(value["description"], f"{where}.description")
-    must = _parse_include_items(value.get("must"), f"{where}.must")
-    may = _parse_include_items(value.get("may"), f"{where}.may")
-    ignore = _parse_ignore_items(value.get("ignore"), f"{where}.ignore")
+    if "description" in table:
+        description = _validated_description(table["description"], f"{where}.description")
+    must = _parse_include_items(table.get("must"), f"{where}.must")
+    may = _parse_include_items(table.get("may"), f"{where}.may")
+    ignore = _parse_ignore_items(table.get("ignore"), f"{where}.ignore")
     if not must and not may:
         raise ConfigurationError(
             f"{where}: at least one must/may pattern or Shared reference is required"
         )
 
-    raw_allow_empty = value.get("allow_empty", False)
+    raw_allow_empty = table.get("allow_empty", False)
     if not isinstance(raw_allow_empty, bool):
         raise ConfigurationError(f"{where}.allow_empty: expected a boolean")
     if raw_allow_empty and must:
@@ -638,7 +674,8 @@ def _parse_selection(value: object, where: str) -> SelectionDefinition:
         allow_empty=raw_allow_empty,
     )
 
-def _materialize_selection(
+
+def _materialize_selection(  # pyright: ignore[reportUnusedFunction]
     selection: SelectionDefinition,
     shared: SharedPatterns,
     where: str,
@@ -670,56 +707,75 @@ def _materialize_selection(
         allow_empty=selection.allow_empty,
     )
 
+
 def _parse_cases(value: object, where: str) -> Mapping[str, SelectionDefinition]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    if not value:
+    table = cast(dict[str, object], value)
+    if not table:
         raise ConfigurationError(f"{where}: define at least one named case")
     cases: dict[str, SelectionDefinition] = {}
-    for raw_name, raw_case in value.items():
+    for raw_name, raw_case in table.items():
         name = _require_name(raw_name, where)
         if "." in name:
-            raise ConfigurationError(f"{where}: case names must be flat and must not contain '.': {name!r}")
+            raise ConfigurationError(
+                f"{where}: case names must be flat and must not contain '.': {name!r}"
+            )
         cases[name] = _parse_selection(raw_case, f"{where}.{name}")
     return MappingProxyType(cases)
 
-def _parse_pluck(value: object, where: str) -> Pluck | None:
+
+def _parse_pluck(value: object, where: str) -> Pluck | None:  # pyright: ignore[reportUnusedFunction]
     if value is None:
         return None
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    _require_only_keys(value, {"description", "must", "may", "ignore", "allow_empty", "case"}, where)
+    table = cast(dict[str, object], value)
+    _require_only_keys(
+        table, {"description", "must", "may", "ignore", "allow_empty", "case"}, where
+    )
     selection_keys = {"description", "must", "may", "ignore", "allow_empty"}
-    has_default = any(key in value for key in selection_keys)
+    has_default = any(key in table for key in selection_keys)
     default = None
     if has_default:
         default = _parse_selection(
-            {key: value[key] for key in selection_keys if key in value},
+            {key: table[key] for key in selection_keys if key in table},
             where,
         )
-    cases = _parse_cases(value.get("case"), f"{where}.case")
+    cases = _parse_cases(table.get("case"), f"{where}.case")
     if default is None and not cases:
-        raise ConfigurationError(f"{where}: define the default pluck or at least one [pluck.case.<name>]")
+        raise ConfigurationError(
+            f"{where}: define the default pluck or at least one [pluck.case.<name>]"
+        )
     return Pluck(default=default, cases=cases)
 
-def _validated_target_ignores(value: object, where: str) -> tuple[TargetIgnorePattern, ...]:
+
+def _validated_target_ignores(value: object, where: str) -> tuple[TargetIgnorePattern, ...]:  # pyright: ignore[reportUnusedFunction]
     if value is None:
         return ()
-    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+    if not isinstance(value, list):
         raise ConfigurationError(f"{where}: expected an array of strings")
-    patterns = tuple(_parse_target_ignore_pattern(item, where) for item in value)
+    items = cast(list[object], value)
+    if any(not isinstance(item, str) for item in items):
+        raise ConfigurationError(f"{where}: expected an array of strings")
+    strings = cast(list[str], items)
+    patterns = tuple(_parse_target_ignore_pattern(item, where) for item in strings)
     raws = tuple(item.raw for item in patterns)
     if len(set(raws)) != len(raws):
         raise ConfigurationError(f"{where}: duplicate ignore patterns are not allowed")
     return patterns
 
-def _validate_scope_name(name: object, where: str) -> str:
+
+def _validate_scope_name(name: object, where: str) -> str:  # pyright: ignore[reportUnusedFunction]
     value = _require_name(name, where)
     if value in {".", ".."} or "." in value or "/" in value or "\\" in value:
-        raise ConfigurationError(f"{where}: Scope names must be one non-dot path segment: {value!r}")
+        raise ConfigurationError(
+            f"{where}: Scope names must be one non-dot path segment: {value!r}"
+        )
     return value
+
 
 def _validate_namespace_name(name: object, where: str) -> str:
     value = _require_name(name, where)
@@ -733,7 +789,8 @@ def _validate_namespace_name(name: object, where: str) -> str:
         )
     return value
 
-def _parse_namespace_reference(value: object, where: str) -> str | None:
+
+def _parse_namespace_reference(value: object, where: str) -> str | None:  # pyright: ignore[reportUnusedFunction]
     if value is None:
         return None
     if not isinstance(value, str):

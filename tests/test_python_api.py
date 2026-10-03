@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from typing import cast
 import os
 import subprocess
 import sys
@@ -12,13 +13,13 @@ import warnings
 from unittest.mock import patch
 import zipfile
 
-from _temp import resolved_temporary_directory
+from tests._temp import resolved_temporary_directory
 
 import dirpluck
 from dirpluck.cli import main
 
 
-CONFIG = '''
+CONFIG = """
 [pluck]
 must = ["src/"]
 
@@ -29,7 +30,7 @@ must = ["*.md"]
 [output]
 path = "result.zip"
 overwrite = true
-'''
+"""
 
 
 class PythonApiTests(unittest.TestCase):
@@ -80,7 +81,9 @@ class PythonApiTests(unittest.TestCase):
             self.assertFalse(result.invocation_empty)
 
             with zipfile.ZipFile(root / "result.zip") as archive:
-                self.assertEqual(tuple(sorted(archive.namelist())), tuple(sorted(result.archive_entries)))
+                self.assertEqual(
+                    tuple(sorted(archive.namelist())), tuple(sorted(result.archive_entries))
+                )
 
     def test_preview_returns_cli_equivalent_tree_without_writing_archive(self):
         with resolved_temporary_directory() as temp:
@@ -102,7 +105,6 @@ class PythonApiTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(output.getvalue().rstrip("\n"), result.preview_text)
 
-
     def test_run_emits_deprecation_warning_for_legacy_configuration_syntax(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
@@ -110,13 +112,13 @@ class PythonApiTests(unittest.TestCase):
             (root / "app" / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
                 textwrap.dedent(
-                    r'''
+                    r"""
                     [shared.must]
                     required = ["src/"]
 
                     [pluck]
                     must = [["required"]]
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -126,7 +128,8 @@ class PythonApiTests(unittest.TestCase):
                 result = dirpluck.run("./app/", preview=True, cwd=root)
 
             deprecations = [
-                warning for warning in caught
+                warning
+                for warning in caught
                 if issubclass(warning.category, dirpluck.ConfigurationDeprecationWarning)
             ]
             self.assertEqual(len(deprecations), 1)
@@ -145,22 +148,22 @@ class PythonApiTests(unittest.TestCase):
             (root / "app" / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
             (root / "base.dirpluck").write_text(
                 textwrap.dedent(
-                    r'''
+                    r"""
                     [shared.must]
                     required = ["src/"]
 
                     [pluck]
                     must = [["required"]]
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
             (root / "default.dirpluck").write_text(
                 textwrap.dedent(
-                    '''
+                    """
                     [about]
                     base = "base.dirpluck"
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -170,7 +173,8 @@ class PythonApiTests(unittest.TestCase):
                 result = dirpluck.run("./app/", preview=True, cwd=root)
 
             deprecations = [
-                warning for warning in caught
+                warning
+                for warning in caught
                 if issubclass(warning.category, dirpluck.ConfigurationDeprecationWarning)
             ]
             self.assertEqual(len(deprecations), 1)
@@ -198,18 +202,16 @@ class PythonApiTests(unittest.TestCase):
             script = root / "caller.py"
             script.write_text(
                 "from pathlib import Path\n"
-                "import dirpluck\n"
-                "root = Path(__file__).parent\n"
-                "dirpluck.run('./app/', preview=True, cwd=root)\n",
+                + "import dirpluck\n"
+                + "root = Path(__file__).parent\n"
+                + "dirpluck.run('./app/', preview=True, cwd=root)\n",
                 encoding="utf-8",
             )
             env = os.environ.copy()
             source_root = str(Path(__file__).resolve().parents[1] / "src")
             existing = env.get("PYTHONPATH")
             env["PYTHONPATH"] = (
-                source_root
-                if not existing
-                else os.pathsep.join((source_root, existing))
+                source_root if not existing else os.pathsep.join((source_root, existing))
             )
 
             completed = subprocess.run(
@@ -234,7 +236,7 @@ class PythonApiTests(unittest.TestCase):
             (root / "app" / "src" / "main.py").write_text("x", encoding="utf-8")
             (root / "default.dirpluck").write_text(
                 textwrap.dedent(
-                    '''
+                    """
                     [pluck]
                     must = ["README.md"]
                     may = ["src"]
@@ -242,7 +244,7 @@ class PythonApiTests(unittest.TestCase):
                     [output]
                     path = "result.zip"
                     overwrite = true
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -263,11 +265,11 @@ class PythonApiTests(unittest.TestCase):
                 (root / name / "src" / "main.py").write_text(name, encoding="utf-8")
             (root / "default.dirpluck").write_text(
                 textwrap.dedent(
-                    '''
+                    """
                     [pluck]
                     must = ["README.md"]
                     may = ["src"]
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -312,12 +314,12 @@ class PythonApiTests(unittest.TestCase):
             config.write_text(
                 config.read_text(encoding="utf-8").split("[output]", 1)[0]
                 + textwrap.dedent(
-                    '''
+                    """
                     [output.timestamp]
                     path = "configured/"
                     prefix = "api"
                     suffix = "snapshot"
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -346,7 +348,7 @@ class PythonApiTests(unittest.TestCase):
             (root / "app" / "tests" / "test_app.py").write_text("TEST = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
                 textwrap.dedent(
-                    '''
+                    """
                     [pluck]
                     must = ["src/"]
 
@@ -356,17 +358,17 @@ class PythonApiTests(unittest.TestCase):
                     [output]
                     path = "result.zip"
                     overwrite = true
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
             (root / "calls.dirpluck-inv").write_text(
                 textwrap.dedent(
-                    '''
+                    """
                     [invocation.review]
                     targets = ["./app/"]
                     case = "missing-on-purpose"
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -392,7 +394,7 @@ class PythonApiTests(unittest.TestCase):
             (returned / "notes.txt").write_text("notes\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
                 textwrap.dedent(
-                    '''
+                    """
                     [scope.returned]
                     path = "returned"
                     target_kind = "file"
@@ -400,16 +402,16 @@ class PythonApiTests(unittest.TestCase):
                     [output]
                     path = "result.zip"
                     overwrite = true
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
             (root / "calls.dirpluck-inv").write_text(
                 textwrap.dedent(
-                    r'''
+                    r"""
                     [invocation]
                     targets = ["returned:<.*\\.zip>"]
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -423,15 +425,24 @@ class PythonApiTests(unittest.TestCase):
 
     def test_run_rejects_invalid_cli_style_argument_combinations(self):
         cases = (
-            ({"config": "review", "invocation": "calls"}, "config cannot be combined"),
-            ({"entry": "review"}, "entry requires invocation"),
-            ({"preview": True, "sequence": 1}, "sequence cannot be combined"),
-            ({"output": r"bad\path.zip"}, "backslashes are not allowed"),
-            ({"force": "yes"}, "force must be a boolean"),
+            (
+                lambda: dirpluck.run(config="review", invocation="calls"),
+                "config cannot be combined",
+            ),
+            (lambda: dirpluck.run(entry="review"), "entry requires invocation"),
+            (lambda: dirpluck.run(preview=True, sequence=1), "sequence cannot be combined"),
+            (lambda: dirpluck.run(output=r"bad\path.zip"), "backslashes are not allowed"),
+            (
+                lambda: dirpluck.run(force=cast(bool, cast(object, "yes"))),
+                "force must be a boolean",
+            ),
         )
-        for kwargs, message in cases:
-            with self.subTest(kwargs=kwargs), self.assertRaisesRegex(dirpluck.DirpluckError, message):
-                dirpluck.run(**kwargs)
+        for call, message in cases:
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(dirpluck.DirpluckError, message),
+            ):
+                call()
 
         with self.assertRaisesRegex(dirpluck.DirpluckError, "targets cannot be combined"):
             dirpluck.run("./app/", invocation="calls")

@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import _archive, _builder_models, _output
-from . import config as _config
+from ._archive import plan_archive
+from ._builder_models import ArchivePlan, BuildRequest
+from ._output import _prepare_output, _write_archive
+from .config import Config
 
 
 def _build_archive_with_plan(
-    config: _config.Config,
-    request: _builder_models.BuildRequest,
-) -> tuple[Path, _builder_models.ArchivePlan]:
+    config: Config,
+    request: BuildRequest,
+) -> tuple[Path, ArchivePlan]:
     """Build one ZIP archive and return the path together with the exact plan used."""
 
-    output_path, overwrite = _output._prepare_output(config, request)
-    plan = _archive.plan_archive(config, request)
+    output_path, overwrite = _prepare_output(config, request)
+    plan = plan_archive(config, request)
     return (
-        _output._write_archive(
+        _write_archive(
             plan,
             output_path,
             overwrite,
@@ -28,8 +30,8 @@ def _build_archive_with_plan(
 
 
 def build_archive(
-    config: _config.Config,
-    request: _builder_models.BuildRequest,
+    config: Config,
+    request: BuildRequest,
 ) -> Path:
     """Build one ZIP archive using the Output policy declared by the root Configuration."""
 

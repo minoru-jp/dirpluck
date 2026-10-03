@@ -19,4 +19,3 @@ class SelectionError(DirpluckError):
 
 class InvocationError(DirpluckError):
     """Raised when an Invocation Template cannot be selected or parsed."""
-

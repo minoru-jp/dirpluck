@@ -5,8 +5,6 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 
 
 @summary('Configuration と Invocation Template の選択・解決規則。')
-
-
 @canonical_source('CLI document selection', filename='document-selection.md', order=10, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_002:

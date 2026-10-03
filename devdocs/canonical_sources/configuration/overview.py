@@ -7,8 +7,6 @@ example_002 = test_target_field("example 002")
 
 
 @summary('Configuration document の形式、基本形、metadata、path notation。')
-
-
 @canonical_source('Configuration overview', filename='overview.md', order=0, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""
@@ -35,7 +33,6 @@ class CONFIGURATION_PART:
         `.dirpluck-inv` は Configuration ではなく、CLI invocation を保存する別 document type です。Configuration の schema や base chain には参加しません。Invocation Template の書き方と選択方法は `../cli/INDEX.md` を参照してください。
         """
         title @= 'Configuration document'
-
 
     class SECTION_002:
         r"""

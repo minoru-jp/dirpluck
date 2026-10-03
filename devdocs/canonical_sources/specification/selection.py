@@ -1,13 +1,10 @@
-from devdocs.canonical_sources.vocabulary.canonical import TERMS
 from devdocs.canonical_sources.specification.composition import SPECIFICATION_PART as COMPOSITION_SPEC
 from shikumi_devdoc.fields.specification import MUST, MUST_NOT, condition, level, related
-from shikumi_devdoc.norms.common import canonical_source, merge, summary
+from shikumi_devdoc.norms.common import canonical_source, summary
 from shikumi_devdoc.norms.document import title
 
 
 @summary('Selection、Shared pattern、include/ignore pattern grammar。')
-
-
 @canonical_source('Selection and shared patterns', filename='selection.md', order=70, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_065:

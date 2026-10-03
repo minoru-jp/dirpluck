@@ -3,7 +3,7 @@ import textwrap
 import unittest
 from unittest.mock import patch
 
-from _temp import resolved_temporary_directory
+from tests._temp import resolved_temporary_directory
 
 from dirpluck._archive import plan_archive
 from dirpluck._builder_models import BuildRequest
@@ -33,7 +33,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
             project = base / "project"
             project.mkdir(parents=True)
             (project / "outer.txt").write_text("outer", encoding="utf-8")
-            self._write(base / "base.dirpluck", '''
+            self._write(
+                base / "base.dirpluck",
+                """
                 [pluck]
                 description = "P."
                 must = [{ shared = "provided" }]
@@ -41,15 +43,21 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 path = "."
                 [output]
                 path = "base.zip"
-            ''')
-            config = load_config(self._write(derived / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    derived / "default.dirpluck",
+                    """
                 [about]
                 base = "../base/base.dirpluck"
                 [shared.must]
                 provided = ["outer.txt"]
                 [output]
                 path = "derived.zip"
-            '''))
+            """,
+                )
+            )
             plan = plan_archive(config, BuildRequest.create("base/project/"))
             self.assertEqual(tuple(plan.entries), ("project/outer.txt",))
 
@@ -57,14 +65,19 @@ class EffectiveConfigurationTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = [{ shared = "missing" }]
                 [scope]
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "unknown Shared pattern set"):
                 resolve_sources(config, BuildRequest.create("./project/"))
 
@@ -72,7 +85,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [shared.must]
                 core = ["file.txt"]
                 [pluck]
@@ -81,7 +97,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [scope]
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "duplicate effective pattern"):
                 resolve_sources(config, BuildRequest.create("./project/"))
 
@@ -92,7 +110,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
             self._project(root, "project")
             work = root / "work"
             self._project(work, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -101,7 +122,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             for reference in invalid:
                 with self.subTest(reference=reference), self.assertRaises(SelectionError):
                     resolve_sources(config, BuildRequest.create(reference))
@@ -111,7 +134,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
             root = Path(temp)
             self._project(root, "tmp-one")
             self._project(root, "tmp-two")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -119,7 +145,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 ignore = ["tmp-*/"]
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(SelectionError, "no eligible direct child directories"):
                 resolve_sources(config, BuildRequest.create("/"))
 
@@ -127,20 +155,28 @@ class EffectiveConfigurationTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [namespace.base]
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
-            ''')
-            config = load_config(self._write(root / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [scope]
                 namespace = "base"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.namespace, "base")
             self.assertEqual(source.source_root, "project")
@@ -150,7 +186,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -158,7 +197,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 namespace = "missing"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "unknown Namespace 'missing'"):
                 resolve_sources(config, BuildRequest.create("./project/"))
 
@@ -167,7 +208,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
             root = Path(temp)
             (root / "docs").mkdir()
             (root / "docs" / "guide.md").write_text("guide", encoding="utf-8")
-            config = load_config(self._write(root / "default.dirpluck", """
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [always.docs]
                 path = "docs"
                 namespace = "missing"
@@ -175,7 +219,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 must = ["guide.md"]
                 [output]
                 path = "out.zip"
-            """))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "unknown Namespace 'missing'"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -185,7 +231,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
             self._project(root, "docs")
             work = root / "work"
             self._project(work, "docs")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [namespace.local]
                 [namespace.work]
 
@@ -202,7 +251,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
 
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             sources = resolve_sources(config, BuildRequest.create("./docs/", "work/docs/"))
             self.assertEqual(
                 {source.archive_root for source in sources},
@@ -215,7 +266,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
             self._project(root, "docs")
             work = root / "work"
             self._project(work, "docs")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -223,7 +277,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(SelectionError, "both resolve to 'docs'"):
                 resolve_sources(config, BuildRequest.create("./docs/", "work/docs/"))
 
@@ -232,20 +288,28 @@ class EffectiveConfigurationTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x", encoding="utf-8")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output.timestamp]
                 path = "artifacts/release/"
-            ''')
-            config = load_config(self._write(root / "derived.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "derived.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [output.timestamp]
                 path = "artifacts/"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "write boundaries overlap"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -254,20 +318,28 @@ class EffectiveConfigurationTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x", encoding="utf-8")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output.timestamp]
                 path = "artifacts/"
-            ''')
-            config = load_config(self._write(root / "derived.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "derived.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [output]
                 path = "release/result.zip"
-            '''))
+            """,
+                )
+            )
             self.assertEqual(len(resolve_sources(config, BuildRequest.create())), 1)
 
     def test_fixed_output_in_ancestor_directory_of_timestamp_boundary_is_allowed(self):
@@ -275,20 +347,28 @@ class EffectiveConfigurationTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x", encoding="utf-8")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output.timestamp]
                 path = "artifacts/release/"
-            ''')
-            config = load_config(self._write(root / "derived.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "derived.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [output]
                 path = "artifacts/result.zip"
-            '''))
+            """,
+                )
+            )
             self.assertEqual(len(resolve_sources(config, BuildRequest.create())), 1)
 
     def test_fixed_output_rejects_dot_or_dotdot_as_final_component(self):
@@ -297,29 +377,41 @@ class EffectiveConfigurationTests(unittest.TestCase):
             with self.subTest(path=path), resolved_temporary_directory() as temp:
                 root = Path(temp)
                 with self.assertRaisesRegex(ConfigurationError, "must name a file"):
-                    load_config(self._write(root / "default.dirpluck", f'''
+                    load_config(
+                        self._write(
+                            root / "default.dirpluck",
+                            f'''
                         [always.data]
                         path = "data"
                         description = "D."
                         may = ["x"]
                         [output]
                         path = "{path}"
-                    '''))
+                    ''',
+                        )
+                    )
 
     def test_timestamp_output_without_sequence_uses_plain_generated_name(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x", encoding="utf-8")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output.timestamp]
                 path = "snapshots/"
-            '''))
-            with patch("dirpluck._output._current_output_timestamp", return_value="20260920-120000"):
+            """,
+                )
+            )
+            with patch(
+                "dirpluck._output._current_output_timestamp", return_value="20260920-120000"
+            ):
                 output = build_archive(config, BuildRequest.create())
             self.assertEqual(output, (root / "snapshots/20260920-120000.zip").resolve())
 
@@ -332,15 +424,22 @@ class EffectiveConfigurationTests(unittest.TestCase):
             snapshots.mkdir()
             existing = snapshots / "20260920-120000.zip"
             existing.write_bytes(b"existing")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output.timestamp]
                 path = "snapshots/"
-            '''))
-            with patch("dirpluck._output._current_output_timestamp", return_value="20260920-120000"):
+            """,
+                )
+            )
+            with patch(
+                "dirpluck._output._current_output_timestamp", return_value="20260920-120000"
+            ):
                 with self.assertRaisesRegex(SelectionError, "already exists"):
                     build_archive(config, BuildRequest.create())
 
@@ -350,7 +449,10 @@ class EffectiveConfigurationTests(unittest.TestCase):
             data = root / "data"
             data.mkdir()
             (data / "result.zip").write_text("input", encoding="utf-8")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [always.data]
                 path = "data"
                 description = "D."
@@ -358,7 +460,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [output]
                 path = "data/result.zip"
                 overwrite = true
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(SelectionError, "selected as an input file"):
                 build_archive(config, BuildRequest.create())
 
@@ -371,25 +475,33 @@ class EffectiveConfigurationTests(unittest.TestCase):
             (root / "data" / "x.txt").write_text("root", encoding="utf-8")
             (shared / "data").mkdir()
             (shared / "data" / "x.txt").write_text("shared", encoding="utf-8")
-            real = self._write(shared / "base-real.dirpluck", '''
+            real = self._write(
+                shared / "base-real.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x.txt"]
                 [output]
                 path = "shared.zip"
-            ''')
+            """,
+            )
             link = root / "base.dirpluck"
             try:
                 link.symlink_to(real)
             except (OSError, NotImplementedError):
                 self.skipTest("symbolic links are not available")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [output]
                 path = "derived.zip"
-            '''))
+            """,
+                )
+            )
             sources = resolve_sources(config, BuildRequest.create())
             self.assertEqual(len(sources), 1)
             self.assertEqual(sources[0].directory, (root / "data").resolve())
@@ -397,7 +509,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
     def test_invalid_base_schema_is_rejected_when_chain_is_resolved(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
@@ -405,13 +519,19 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [output]
                 path = "legacy.zip"
                 prefix = "not-valid-for-fixed"
-            ''')
-            config = load_config(self._write(root / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [output]
                 path = "derived.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "base Configuration is invalid"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -423,15 +543,21 @@ class EffectiveConfigurationTests(unittest.TestCase):
             project = derived / "project"
             project.mkdir(parents=True)
             (project / "outer.txt").write_text("outer", encoding="utf-8")
-            self._write(base / "base.dirpluck", '''
+            self._write(
+                base / "base.dirpluck",
+                """
                 [pluck.case.audit]
                 description = "Base audit."
                 must = ["base.txt"]
                 [scope]
                 [output]
                 path = "base.zip"
-            ''')
-            config = load_config(self._write(derived / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    derived / "default.dirpluck",
+                    """
                 [about]
                 base = "../base/base.dirpluck"
                 [pluck.case.audit]
@@ -440,7 +566,9 @@ class EffectiveConfigurationTests(unittest.TestCase):
                 [scope]
                 [output]
                 path = "derived.zip"
-            '''))
+            """,
+                )
+            )
             plan = plan_archive(config, BuildRequest.create("./project/", case="audit"))
             self.assertIn("project/outer.txt", plan.entries)
             self.assertIn("Outer audit.", plan.readme)

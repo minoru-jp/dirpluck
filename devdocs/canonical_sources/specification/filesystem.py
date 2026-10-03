@@ -1,14 +1,11 @@
-from devdocs.canonical_sources.vocabulary.canonical import TERMS
 from devdocs.canonical_sources.specification.paths import SPECIFICATION_PART as PATHS_SPEC
 from devdocs.canonical_sources.specification.runtime_targets import SPECIFICATION_PART as RUNTIME_TARGETS_SPEC
 from devdocs.canonical_sources.specification.selection import SPECIFICATION_PART as SELECTION_SPEC
 from shikumi_devdoc.fields.specification import MUST, condition, level, related
-from shikumi_devdoc.norms.common import canonical_source, merge, summary
+from shikumi_devdoc.norms.common import canonical_source, summary
 
 
 @summary('filesystem boundary、link-like entry、non-regular entry の扱い。')
-
-
 @canonical_source('Filesystem boundary and entry types', filename='filesystem.md', order=80, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_088:

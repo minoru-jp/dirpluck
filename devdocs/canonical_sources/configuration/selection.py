@@ -17,8 +17,6 @@ example_020 = test_target_field("example 020")
 
 
 @summary('Selection、Shared patterns、Case の記述方法。')
-
-
 @canonical_source('Configuration selection', filename='selection.md', order=20, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""

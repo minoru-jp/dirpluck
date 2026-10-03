@@ -1,20 +1,16 @@
 from pathlib import Path
 import os
 import subprocess
-import textwrap
 import unittest
-from unittest.mock import patch
 import zipfile
 
-from _temp import resolved_temporary_directory
-from _builder_support import BuilderTestCase
+from tests._temp import resolved_temporary_directory
+from tests._builder_support import BuilderTestCase
 
-import dirpluck._filesystem as filesystem_module
 from dirpluck._archive import plan_archive
 from dirpluck._builder_models import BuildRequest
 from dirpluck._effective import resolve_sources
 from dirpluck.builder import build_archive
-from dirpluck.config import load_config
 from dirpluck.errors import SelectionError
 
 
@@ -24,7 +20,9 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             self._project(root, "common", "a")
             self._project(root, "b/common", "b")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
@@ -32,7 +30,8 @@ class SourceResolutionTests(BuilderTestCase):
                 path = "b/common"
                 description = "Always source."
                 must = ["src/"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./common/"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
@@ -47,12 +46,15 @@ class SourceResolutionTests(BuilderTestCase):
             root.mkdir()
             external.mkdir()
             (external / "note.txt").write_text("reference", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [always.references]
                 path = "../references"
                 description = "External references."
                 must = ["note.txt"]
-            ''')
+            """,
+            )
             sources = resolve_sources(config, BuildRequest.create())
             self.assertEqual(len(sources), 1)
             self.assertEqual(sources[0].directory, external.resolve())
@@ -66,12 +68,15 @@ class SourceResolutionTests(BuilderTestCase):
             companion = root / "nested" / "references"
             companion.mkdir(parents=True)
             (companion / "note.txt").write_text("reference", encoding="utf-8")
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [always.references]
                 path = {companion.as_posix()!r}
                 description = "References."
                 must = ["note.txt"]
-            ''')
+            """,
+            )
             source = resolve_sources(config, BuildRequest.create())[0]
             self.assertEqual(source.archive_root, "nested/references")
 
@@ -81,12 +86,15 @@ class SourceResolutionTests(BuilderTestCase):
             external = Path(other) / "references"
             external.mkdir()
             (external / "note.txt").write_text("reference", encoding="utf-8")
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [always.references]
                 path = {external.as_posix()!r}
                 description = "References."
                 must = ["note.txt"]
-            ''')
+            """,
+            )
             source = resolve_sources(config, BuildRequest.create())[0]
             self.assertEqual(source.directory, external.resolve())
             self.assertEqual(source.archive_root, "references")
@@ -106,14 +114,17 @@ class SourceResolutionTests(BuilderTestCase):
             except OSError as exc:
                 self.skipTest(f"symbolic links are unavailable: {exc}")
 
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Project."
                 must = ["src/"]
 
                 [scope.work]
                 path = "work"
-            """)
+            """,
+            )
             sources = resolve_sources(config, BuildRequest.create("work/project/"))
             self.assertEqual(len(sources), 1)
             self.assertEqual(sources[0].directory, project.resolve())
@@ -131,12 +142,15 @@ class SourceResolutionTests(BuilderTestCase):
             except OSError as exc:
                 self.skipTest(f"symbolic links are unavailable: {exc}")
 
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [always.guidelines]
                 path = "guidelines"
                 description = "Guidelines."
                 must = ["rules.md"]
-            """)
+            """,
+            )
             source = resolve_sources(config, BuildRequest.create())[0]
             self.assertEqual(source.directory, external.resolve())
             self.assertEqual(source.archive_root, "guidelines")
@@ -160,13 +174,16 @@ class SourceResolutionTests(BuilderTestCase):
             except OSError as exc:
                 self.skipTest(f"symbolic links are unavailable: {exc}")
 
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [always.guidelines]
                 path = "guidelines"
                 description = "Guidelines."
                 must = ["rules.md"]
                 may = ["external/"]
-            """)
+            """,
+            )
             plan = plan_archive(config, BuildRequest.create())
             self.assertIn("guidelines/rules.md", plan.entries)
             self.assertNotIn("guidelines/external/secret.md", plan.entries)
@@ -177,11 +194,14 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             self._project(root, "project-a", "a")
             self._project(root, "project-b", "b")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Projects selected for review."
                 must = ["src/"]
-            ''')
+            """,
+            )
             output = build_archive(
                 config,
                 BuildRequest.create("./project-a/", "./project-b/"),
@@ -204,7 +224,9 @@ class SourceResolutionTests(BuilderTestCase):
                 (project / "tests").mkdir()
                 (project / "src" / "main.py").write_text("src", encoding="utf-8")
                 (project / "tests" / "test_main.py").write_text("test", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Default projects."
                 must = ["src/"]
@@ -212,7 +234,8 @@ class SourceResolutionTests(BuilderTestCase):
                 [pluck.case.review]
                 description = "Projects prepared for review."
                 must = ["tests/"]
-            ''')
+            """,
+            )
             output = build_archive(
                 config,
                 BuildRequest.create("./project-a/", "./project-b/", case="review"),
@@ -228,11 +251,14 @@ class SourceResolutionTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project", "a")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaises(SelectionError):
                 resolve_sources(
                     config,
@@ -243,11 +269,14 @@ class SourceResolutionTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "src").mkdir()
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target cwd."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "direct child"):
                 resolve_sources(config, BuildRequest.create("."))
 
@@ -259,14 +288,17 @@ class SourceResolutionTests(BuilderTestCase):
             (project / "tests").mkdir()
             (project / "src" / "main.py").write_text("x", encoding="utf-8")
             (project / "tests" / "test_main.py").write_text("x", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Default source."
                 must = ["src/"]
                 [pluck.case.review]
                 description = "Review tests only."
                 must = ["tests/"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./application/", case="review"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
@@ -283,14 +315,17 @@ class SourceResolutionTests(BuilderTestCase):
             project = root / "application" / "src"
             project.mkdir(parents=True)
             (project / "main.py").write_text("x", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Default source."
                 must = ["src/"]
                 [pluck.case.review]
                 description = "Review."
                 must = ["tests/"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
@@ -302,11 +337,14 @@ class SourceResolutionTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "application" / "src").mkdir(parents=True)
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck.case.review]
                 description = "Review."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaises(SelectionError):
                 build_archive(config, BuildRequest.create("./application/"))
 
@@ -314,14 +352,17 @@ class SourceResolutionTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "application" / "src").mkdir(parents=True)
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
                 [pluck.case.review]
                 description = "Review."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaises(SelectionError):
                 build_archive(config, BuildRequest.create("./application/", case="release"))
 
@@ -337,7 +378,9 @@ class SourceResolutionTests(BuilderTestCase):
             (root / "framework" / "tests" / "test_core.py").write_text("x", encoding="utf-8")
             (root / "guidelines").mkdir()
             (root / "guidelines" / "README.md").write_text("guide", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Default target."
                 must = ["src/"]
@@ -359,10 +402,9 @@ class SourceResolutionTests(BuilderTestCase):
                 path = "guidelines"
                 description = "Guidelines always included."
                 must = ["README.md"]
-            ''')
-            output = build_archive(
-                config, BuildRequest.create("./application/", case="review")
+            """,
             )
+            output = build_archive(config, BuildRequest.create("./application/", case="review"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
                 readme = archive.read("README.md").decode("utf-8")
@@ -381,7 +423,9 @@ class SourceResolutionTests(BuilderTestCase):
             (root / "notes").mkdir()
             (root / "contracts" / "a.pdf").write_bytes(b"pdf")
             (root / "notes" / "meeting.md").write_text("notes", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [always.contracts]
                 path = "contracts"
                 description = "Contracts."
@@ -391,7 +435,8 @@ class SourceResolutionTests(BuilderTestCase):
                 path = "notes"
                 description = "Notes."
                 must = ["*.md"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create())
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
@@ -409,7 +454,9 @@ class SourceResolutionTests(BuilderTestCase):
             (root / "documents" / "history" / "old.md").write_text("old", encoding="utf-8")
             (root / "assets").mkdir()
             (root / "assets" / "figure.png").write_bytes(b"png")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [always.documents]
                 path = "documents"
                 description = "Current documents."
@@ -423,7 +470,8 @@ class SourceResolutionTests(BuilderTestCase):
                 path = "assets"
                 description = "Assets."
                 must = ["*.png"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create(case="archive"))
             with zipfile.ZipFile(output) as archive:
                 names = set(archive.namelist())
@@ -440,11 +488,14 @@ class SourceResolutionTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "application" / "src").mkdir(parents=True)
-            target_config = self._config(root, '''
+            target_config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "TARGET is required"):
                 resolve_sources(target_config, BuildRequest.create())
 
@@ -452,12 +503,15 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             (root / "documents").mkdir()
             (root / "documents" / "a.txt").write_text("a", encoding="utf-8")
-            companion_config = self._config(root, '''
+            companion_config = self._config(
+                root,
+                """
                 [always.documents]
                 path = "documents"
                 description = "Documents."
                 must = ["*.txt"]
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "must not be specified"):
                 resolve_sources(companion_config, BuildRequest.create("./documents/"))
 
@@ -465,7 +519,9 @@ class SourceResolutionTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "documents").mkdir()
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [always.documents]
                 path = "documents"
                 description = "Documents."
@@ -476,12 +532,17 @@ class SourceResolutionTests(BuilderTestCase):
                 description = "Archive documents."
                 may = ["*.md"]
                 allow_empty = true
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "case 'review' is not defined"):
                 resolve_sources(config, BuildRequest.create(case="review"))
 
     def test_external_always_sources_with_same_archive_root_require_namespace(self):
-        with resolved_temporary_directory() as temp, resolved_temporary_directory() as a_temp, resolved_temporary_directory() as b_temp:
+        with (
+            resolved_temporary_directory() as temp,
+            resolved_temporary_directory() as a_temp,
+            resolved_temporary_directory() as b_temp,
+        ):
             root = Path(temp)
             a_docs = Path(a_temp) / "docs"
             b_docs = Path(b_temp) / "docs"
@@ -489,7 +550,9 @@ class SourceResolutionTests(BuilderTestCase):
             b_docs.mkdir()
             (a_docs / "a.txt").write_text("a", encoding="utf-8")
             (b_docs / "b.txt").write_text("b", encoding="utf-8")
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [always.a]
                 path = {a_docs.as_posix()!r}
                 description = "A docs."
@@ -499,7 +562,8 @@ class SourceResolutionTests(BuilderTestCase):
                 path = {b_docs.as_posix()!r}
                 description = "B docs."
                 must = ["b.txt"]
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "both resolve to 'docs'"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -509,12 +573,15 @@ class SourceResolutionTests(BuilderTestCase):
             source = root / "README.md"
             source.mkdir()
             (source / "x.txt").write_text("x", encoding="utf-8")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [always.index]
                 path = "README.md"
                 description = "Reserved root."
                 must = ["x.txt"]
-            """)
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "reserved archive root 'README.md'"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -524,7 +591,9 @@ class SourceResolutionTests(BuilderTestCase):
             source = root / "docs"
             source.mkdir()
             (source / "x.txt").write_text("x", encoding="utf-8")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [namespace."readme.MD"]
 
                 [always.docs]
@@ -532,7 +601,8 @@ class SourceResolutionTests(BuilderTestCase):
                 namespace = "readme.MD"
                 description = "Docs."
                 must = ["x.txt"]
-            """)
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "reserved archive root 'readme.MD'"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -541,11 +611,14 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             outside = Path(other) / "outside"
             (outside / "src").mkdir(parents=True)
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaises(SelectionError):
                 build_archive(config, BuildRequest.create(outside))
 
@@ -556,14 +629,17 @@ class SourceResolutionTests(BuilderTestCase):
             target = projects / "app"
             (target / "src").mkdir(parents=True)
             (target / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [pluck]
                 description = "Application."
                 must = ["src/"]
 
                 [scope.work]
                 path = {projects.as_posix()!r}
-            ''')
+            """,
+            )
             sources = resolve_sources(config, BuildRequest.create("work/app/"))
             target_source = next(source for source in sources if source.kind == "target")
             self.assertEqual(target_source.directory, target.resolve())
@@ -577,18 +653,25 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             (root / "project" / "src").mkdir(parents=True)
             (root / "artifact.bin").write_bytes(b"x")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Application."
                 must = ["src/"]
 
                 [scope]
                 target_kind = "both"
-            ''')
+            """,
+            )
             directory = resolve_sources(config, BuildRequest.create("./project/"))[0]
             file_source = resolve_sources(config, BuildRequest.create("./artifact.bin"))[0]
-            self.assertEqual((directory.source_root, directory.source_kind), ("project", "directory"))
-            self.assertEqual((file_source.source_root, file_source.source_kind), ("artifact.bin", "file"))
+            self.assertEqual(
+                (directory.source_root, directory.source_kind), ("project", "directory")
+            )
+            self.assertEqual(
+                (file_source.source_root, file_source.source_kind), ("artifact.bin", "file")
+            )
 
     def test_scope_expansion_selects_only_direct_child_directories(self):
         with resolved_temporary_directory() as temp, resolved_temporary_directory() as other:
@@ -599,14 +682,17 @@ class SourceResolutionTests(BuilderTestCase):
                 (projects / name / "src" / f"{name}.py").write_text(name, encoding="utf-8")
             (projects / "alpha" / "nested" / "src").mkdir(parents=True)
             (projects / "note.txt").write_text("not a target", encoding="utf-8")
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [pluck]
                 description = "Project."
                 must = ["src/"]
 
                 [scope.work]
                 path = {projects.as_posix()!r}
-            ''')
+            """,
+            )
             sources = resolve_sources(config, BuildRequest.create("work/"))
             targets = [source for source in sources if source.kind == "target"]
             self.assertEqual([source.archive_root for source in targets], ["alpha", "beta"])
@@ -620,7 +706,9 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             projects = Path(other) / "projects"
             projects.mkdir()
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [pluck]
                 description = "Project."
                 may = ["src"]
@@ -628,7 +716,8 @@ class SourceResolutionTests(BuilderTestCase):
 
                 [scope.work]
                 path = {projects.as_posix()!r}
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "not defined"):
                 resolve_sources(config, BuildRequest.create("other/"))
             with self.assertRaisesRegex(SelectionError, "no eligible direct child directories"):
@@ -648,7 +737,9 @@ class SourceResolutionTests(BuilderTestCase):
                 link.symlink_to(outside, target_is_directory=True)
             except OSError as exc:
                 self.skipTest(f"symbolic links are unavailable: {exc}")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Project."
                 may = ["src"]
@@ -656,7 +747,8 @@ class SourceResolutionTests(BuilderTestCase):
 
                 [scope.work]
                 path = "projects"
-            """)
+            """,
+            )
             sources = resolve_sources(config, BuildRequest.create("work/"))
             self.assertEqual(tuple(source.archive_root for source in sources), ("real",))
 
@@ -675,20 +767,24 @@ class SourceResolutionTests(BuilderTestCase):
                 check=False,
             )
             if created.returncode != 0:
-                self.fail(f"could not create Windows directory junction: {created.stderr or created.stdout}")
+                self.fail(
+                    f"could not create Windows directory junction: {created.stderr or created.stdout}"
+                )
 
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [always.guidelines]
                 path = "guidelines"
                 description = "Guidelines."
                 must = ["rules.md"]
-            """)
+            """,
+            )
             source = resolve_sources(config, BuildRequest.create())[0]
             self.assertEqual(source.directory, external.resolve())
             self.assertEqual(source.archive_root, "guidelines")
             plan = plan_archive(config, BuildRequest.create())
             self.assertIn("guidelines/rules.md", plan.entries)
-
 
     def test_file_target_scope_selects_atomic_files_without_pluck(self):
         with resolved_temporary_directory() as temp:
@@ -700,16 +796,21 @@ class SourceResolutionTests(BuilderTestCase):
             first.write_bytes(b"a")
             second.write_bytes(b"b")
             (returned / "nested").mkdir()
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
                 description = "Repositories returned from the previous editing cycle."
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create("returned/"))
             self.assertEqual([source.source_kind for source in sources], ["file", "file"])
-            self.assertEqual([source.directory for source in sources], [first.resolve(), second.resolve()])
+            self.assertEqual(
+                [source.directory for source in sources], [first.resolve(), second.resolve()]
+            )
             self.assertTrue(all(source.selection is None for source in sources))
 
             plan = plan_archive(config, BuildRequest.create("returned/"))
@@ -728,7 +829,9 @@ class SourceResolutionTests(BuilderTestCase):
             returned.mkdir()
             archive_file = returned / "repo.zip"
             archive_file.write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [namespace.returned]
 
                 [scope.returned]
@@ -736,7 +839,8 @@ class SourceResolutionTests(BuilderTestCase):
                 target_kind = "file"
                 namespace = "returned"
                 description = "Returned repositories."
-            ''')
+            """,
+            )
 
             plan = plan_archive(config, BuildRequest.create("returned/repo.zip"))
             self.assertEqual(set(plan.entries), {"returned/repo.zip"})
@@ -752,12 +856,15 @@ class SourceResolutionTests(BuilderTestCase):
             (returned / "keep.zip").write_bytes(b"keep")
             (returned / "skip.zip").write_bytes(b"skip")
             (returned / "directory.zip").mkdir()
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
                 ignore = ["skip.zip"]
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create("returned/"))
             self.assertEqual([source.source_root for source in sources], ["keep.zip"])
@@ -772,11 +879,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned = root / "returned"
             returned.mkdir()
             (returned / "only-directory").mkdir()
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "no eligible direct child files"):
                 resolve_sources(config, BuildRequest.create("returned/"))
 
@@ -786,19 +896,22 @@ class SourceResolutionTests(BuilderTestCase):
             project = root / "project"
             project.mkdir()
             (project / "file.txt").write_text("x", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Files selected from the project directory."
                 must = ["file.txt"]
 
                 [scope]
                 description = "Project supplied for review."
-            ''')
+            """,
+            )
             plan = plan_archive(config, BuildRequest.create("./project/"))
             self.assertIn(
                 "## `project/`\n\nFiles: 1\n\n"
-                "Project supplied for review.\n\n"
-                "Files selected from the project directory.",
+                + "Project supplied for review.\n\n"
+                + "Files selected from the project directory.",
                 plan.readme,
             )
 
@@ -808,7 +921,9 @@ class SourceResolutionTests(BuilderTestCase):
             returned = root / "returned"
             returned.mkdir()
             (returned / "repo.zip").write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Directory-only selection description."
                 must = ["src/"]
@@ -817,11 +932,11 @@ class SourceResolutionTests(BuilderTestCase):
                 path = "returned"
                 target_kind = "file"
                 description = "Returned repository archive."
-            ''')
+            """,
+            )
             plan = plan_archive(config, BuildRequest.create("returned/repo.zip"))
             self.assertIn("Returned repository archive.", plan.readme)
             self.assertNotIn("Directory-only selection description.", plan.readme)
-
 
     def test_file_target_archive_path_cannot_be_parent_of_directory_source_entries(self):
         with resolved_temporary_directory() as temp:
@@ -832,7 +947,9 @@ class SourceResolutionTests(BuilderTestCase):
             returned = root / "returned"
             returned.mkdir()
             (returned / "bundle").write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [namespace.bundle]
 
                 [pluck]
@@ -844,11 +961,14 @@ class SourceResolutionTests(BuilderTestCase):
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             for targets in (("./project/", "returned/bundle"), ("returned/bundle", "./project/")):
                 with self.subTest(targets=targets):
-                    with self.assertRaisesRegex(SelectionError, "archive file/directory path conflict"):
+                    with self.assertRaisesRegex(
+                        SelectionError, "archive file/directory path conflict"
+                    ):
                         plan_archive(config, BuildRequest.create(*targets))
 
     def test_mixed_directory_and_file_scopes_use_pluck_only_for_directory_target(self):
@@ -861,7 +981,9 @@ class SourceResolutionTests(BuilderTestCase):
             returned = root / "returned"
             returned.mkdir()
             (returned / "repo.zip").write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Directory contents."
                 must = ["src/"]
@@ -869,10 +991,10 @@ class SourceResolutionTests(BuilderTestCase):
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
             plan = plan_archive(config, BuildRequest.create("./project/", "returned/repo.zip"))
             self.assertEqual(set(plan.entries), {"project/src/main.py", "repo.zip"})
-
 
     def test_file_target_list_selector_selects_named_scope_files_in_declared_order(self):
         with resolved_temporary_directory() as temp:
@@ -881,11 +1003,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned.mkdir()
             for name in ("repo-a.zip", "repo-b.zip", "repo-c.zip"):
                 (returned / name).write_bytes(name.encode())
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(
                 config,
@@ -903,11 +1028,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned.mkdir()
             (returned / "[foo").write_bytes(b"a")
             (returned / "b]ar").write_bytes(b"b")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create("returned:[[foo/b]ar]"))
             self.assertEqual([source.source_root for source in sources], ["[foo", "b]ar"])
@@ -917,10 +1045,13 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             (root / "a.zip").write_bytes(b"a")
             (root / "b.zip").write_bytes(b"b")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope]
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create(":[b.zip/a.zip]"))
             self.assertEqual([source.source_root for source in sources], ["b.zip", "a.zip"])
@@ -932,11 +1063,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned.mkdir()
             for name in ("repo-10.zip", "repo-2.zip", "repo-a.zip", "notes.txt"):
                 (returned / name).write_bytes(name.encode())
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(
                 config,
@@ -954,10 +1088,13 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             (root / "repo-1.zip").write_bytes(b"1")
             (root / "repo-a.zip").write_bytes(b"a")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope]
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create(r":<repo-[0-9]+\.zip>"))
             self.assertEqual([source.source_root for source in sources], ["repo-1.zip"])
@@ -969,12 +1106,15 @@ class SourceResolutionTests(BuilderTestCase):
             returned.mkdir()
             (returned / "keep.zip").write_bytes(b"keep")
             (returned / "skip.zip").write_bytes(b"skip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
                 ignore = ["skip.zip"]
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create(r"returned:<.*\.zip>"))
             self.assertEqual([source.source_root for source in sources], ["keep.zip"])
@@ -988,13 +1128,16 @@ class SourceResolutionTests(BuilderTestCase):
                 (project / "src").mkdir(parents=True)
                 (project / "src" / "main.py").write_text(name, encoding="utf-8")
             (work / "project-a.zip").write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["src/"]
 
                 [scope.work]
                 path = "work"
-            ''')
+            """,
+            )
 
             listed = resolve_sources(config, BuildRequest.create("work:[project-b//project-a/]"))
             self.assertEqual([source.source_root for source in listed], ["project-b", "project-a"])
@@ -1004,7 +1147,9 @@ class SourceResolutionTests(BuilderTestCase):
             self.assertEqual([source.source_root for source in matched], ["project-a", "project-b"])
             self.assertTrue(all(source.selection is not None for source in matched))
 
-    def test_both_target_scope_expands_files_and_directories_and_applies_pluck_only_to_directories(self):
+    def test_both_target_scope_expands_files_and_directories_and_applies_pluck_only_to_directories(
+        self,
+    ):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             mixed = root / "mixed"
@@ -1013,7 +1158,9 @@ class SourceResolutionTests(BuilderTestCase):
             (project / "src" / "main.py").write_text("a", encoding="utf-8")
             archive = mixed / "repo-b.zip"
             archive.write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Directory contents."
                 must = ["src/"]
@@ -1021,7 +1168,8 @@ class SourceResolutionTests(BuilderTestCase):
                 [scope.mixed]
                 path = "mixed"
                 target_kind = "both"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create("mixed/"))
             self.assertEqual(
@@ -1044,14 +1192,17 @@ class SourceResolutionTests(BuilderTestCase):
                 (project / "src" / "main.py").write_text(name, encoding="utf-8")
             (mixed / "repo-b.zip").write_bytes(b"zip")
             (mixed / "notes.txt").write_text("notes", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["src/"]
 
                 [scope.mixed]
                 path = "mixed"
                 target_kind = "both"
-            ''')
+            """,
+            )
 
             listed = resolve_sources(config, BuildRequest.create("mixed:[repo-b.zip/repo-a/]"))
             self.assertEqual(
@@ -1074,14 +1225,20 @@ class SourceResolutionTests(BuilderTestCase):
             project = mixed / "project"
             project.mkdir()
             (project / "file.txt").write_text("x", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.mixed]
                 path = "mixed"
                 target_kind = "both"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create("mixed/repo.zip"))
-            self.assertEqual([(source.source_root, source.source_kind) for source in sources], [("repo.zip", "file")])
+            self.assertEqual(
+                [(source.source_root, source.source_kind) for source in sources],
+                [("repo.zip", "file")],
+            )
             with self.assertRaisesRegex(SelectionError, "does not define Pluck"):
                 resolve_sources(config, BuildRequest.create("mixed/project/"))
             with self.assertRaisesRegex(SelectionError, "does not define Pluck"):
@@ -1096,7 +1253,9 @@ class SourceResolutionTests(BuilderTestCase):
             (project / "default.txt").write_text("default", encoding="utf-8")
             (project / "review.txt").write_text("review", encoding="utf-8")
             (mixed / "repo.zip").write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["default.txt"]
 
@@ -1106,7 +1265,8 @@ class SourceResolutionTests(BuilderTestCase):
                 [scope.mixed]
                 path = "mixed"
                 target_kind = "both"
-            ''')
+            """,
+            )
 
             plan = plan_archive(config, BuildRequest.create("mixed/", case="review"))
             self.assertEqual(set(plan.entries), {"project/review.txt", "repo.zip"})
@@ -1121,7 +1281,9 @@ class SourceResolutionTests(BuilderTestCase):
                 (project / "src" / "main.py").write_text(name, encoding="utf-8")
             (mixed / "keep.zip").write_bytes(b"keep")
             (mixed / "skip.zip").write_bytes(b"skip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["src/"]
 
@@ -1129,7 +1291,8 @@ class SourceResolutionTests(BuilderTestCase):
                 path = "mixed"
                 target_kind = "both"
                 ignore = ["skip*"]
-            ''')
+            """,
+            )
 
             expanded = resolve_sources(config, BuildRequest.create("mixed/"))
             self.assertEqual(
@@ -1151,13 +1314,16 @@ class SourceResolutionTests(BuilderTestCase):
             (project / "src").mkdir(parents=True)
             (project / "src" / "main.py").write_text("x", encoding="utf-8")
             (root / "repo-file.zip").write_bytes(b"zip")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["src/"]
 
                 [scope]
                 target_kind = "both"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create(r":<repo-.*/?>"))
             self.assertEqual(
@@ -1171,11 +1337,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned = root / "returned"
             returned.mkdir()
             (returned / "a.zip").write_bytes(b"a")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             cases = (
                 ("returned:[a.zip", "must end with"),
@@ -1184,7 +1353,10 @@ class SourceResolutionTests(BuilderTestCase):
                 ("returned:[missing.zip]", "does not exist"),
             )
             for reference, message in cases:
-                with self.subTest(reference=reference), self.assertRaisesRegex(SelectionError, message):
+                with (
+                    self.subTest(reference=reference),
+                    self.assertRaisesRegex(SelectionError, message),
+                ):
                     resolve_sources(config, BuildRequest.create(reference))
 
     def test_file_target_regex_selector_validates_pattern_boundary_and_syntax(self):
@@ -1193,11 +1365,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned = root / "returned"
             returned.mkdir()
             (returned / "a.zip").write_bytes(b"a")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             cases = (
                 (r"returned:<.*\.zip", "must end with"),
@@ -1207,7 +1382,10 @@ class SourceResolutionTests(BuilderTestCase):
                 ("returned:<" + "a" * 513 + ">", "512-character limit"),
             )
             for reference, message in cases:
-                with self.subTest(reference=reference), self.assertRaisesRegex(SelectionError, message):
+                with (
+                    self.subTest(reference=reference),
+                    self.assertRaisesRegex(SelectionError, message),
+                ):
                     resolve_sources(config, BuildRequest.create(reference))
 
     def test_file_target_selectors_deduplicate_overlapping_selector_results(self):
@@ -1217,11 +1395,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned.mkdir()
             (returned / "a.zip").write_bytes(b"a")
             (returned / "b.zip").write_bytes(b"b")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(
                 config,
@@ -1233,15 +1414,20 @@ class SourceResolutionTests(BuilderTestCase):
             )
             self.assertEqual([source.source_root for source in sources], ["a.zip", "b.zip"])
 
-    def test_file_target_selector_with_unknown_named_scope_is_not_treated_as_a_literal_default_target(self):
+    def test_file_target_selector_with_unknown_named_scope_is_not_treated_as_a_literal_default_target(
+        self,
+    ):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             literal = root / "missing:[a.zip]"
             literal.write_bytes(b"x")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope]
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             with self.assertRaisesRegex(SelectionError, "Scope 'missing' is not defined"):
                 resolve_sources(config, BuildRequest.create("missing:[a.zip]"))
@@ -1253,11 +1439,14 @@ class SourceResolutionTests(BuilderTestCase):
             returned.mkdir()
             literal = returned / "repo:[x].zip"
             literal.write_bytes(b"x")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create("returned/repo:[x].zip"))
             self.assertEqual([source.directory for source in sources], [literal.resolve()])
@@ -1267,10 +1456,13 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             literal = root / "returned:[x]"
             literal.write_bytes(b"x")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope]
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create(":[returned:[x]]"))
             self.assertEqual([source.directory for source in sources], [literal.resolve()])
@@ -1280,10 +1472,13 @@ class SourceResolutionTests(BuilderTestCase):
             root = Path(temp)
             literal = root / "foo:bar"
             literal.write_bytes(b"x")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [scope]
                 target_kind = "file"
-            ''')
+            """,
+            )
 
             sources = resolve_sources(config, BuildRequest.create("foo:bar"))
             self.assertEqual([source.directory for source in sources], [literal.resolve()])

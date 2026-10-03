@@ -6,7 +6,7 @@ from ._filesystem import LinkInspectionError, is_link_like
 from .errors import SelectionError
 
 
-def _is_link_like(path: Path) -> bool:
+def _is_link_like(path: Path) -> bool:  # pyright: ignore[reportUnusedFunction]
     """Return whether one filesystem entry must not be followed by dirpluck."""
 
     try:

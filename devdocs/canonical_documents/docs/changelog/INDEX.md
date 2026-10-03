@@ -1,0 +1,22 @@
+<!--
+この文書は自動生成された翻訳元の canonical document です。
+正本は `devdocs/canonical_sources/changelog/archive/__init__.py` です。
+直接編集しないでください。
+
+公開文書作成方針
+
+- `devdocs/canonical_documents/` にある日本語 canonical document はリポジトリへ commit し、正本からの実現結果をレビュー可能にする。
+- 公開文書はこの canonical document を翻訳元とする。
+- 翻訳では意味、構造、情報量を維持し、内容を勝手に追加・削除・要約しない。
+- `preserve_spelling @= True` が指定された用語は表記を変更しない。
+- コード、Python 識別子、コマンド、ファイルパス、URL は、翻訳上の必要がない限り変更しない。
+- このコメントブロックと翻訳メタデータは公開文書には含めない。
+- 内容の変更は公開文書や canonical document を直接編集するのではなく、正本へ戻って行う。
+-->
+
+# dirpluck Changelog Archive
+
+| Document | Summary |
+| --- | --- |
+| [dirpluck CHANGELOG 0.9.x](0.9.x.md) | 現在の model へ移行した 0.9.x 系列のリリース履歴。 |
+| [dirpluck CHANGELOG 0.1-0.8](0.1-0.8.md) | 0.1.0 から 0.8.0 までの初期設計期のリリース履歴。 |

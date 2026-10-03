@@ -4,7 +4,7 @@ from ._application import RunResult, run
 from .errors import DirpluckError
 from ._warnings import ConfigurationDeprecationWarning
 
-__version__ = "0.14.0"
+__version__ = "0.14.1"
 
 __all__ = [
     "ConfigurationDeprecationWarning",

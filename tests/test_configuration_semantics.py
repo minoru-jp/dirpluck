@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from _temp import resolved_temporary_directory
+from tests._temp import resolved_temporary_directory
 
 from dirpluck._archive import plan_archive
 from dirpluck._builder_models import BuildRequest
@@ -24,13 +24,18 @@ class ConfigurationSemanticsTests(unittest.TestCase):
     def test_about_may_define_base_without_description(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [about]
                 base = "../common/base.dirpluck"
 
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             self.assertIsNone(config.about_description)
             self.assertEqual(config.base, "../common/base.dirpluck")
 
@@ -38,12 +43,17 @@ class ConfigurationSemanticsTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             with self.assertRaises(ConfigurationError):
-                load_config(self._write(root / "default.dirpluck", '''
+                load_config(
+                    self._write(
+                        root / "default.dirpluck",
+                        """
                     [about]
 
                     [output]
                     path = "out.zip"
-                '''))
+                """,
+                    )
+                )
 
     def test_legacy_configuration_vocabulary_is_rejected(self):
         bodies = (
@@ -59,7 +69,10 @@ class ConfigurationSemanticsTests(unittest.TestCase):
     def test_selection_uses_inline_shared_references_by_namespace(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [shared.must]
                 core = ["src", "pyproject.toml"]
                 [shared.may]
@@ -77,9 +90,12 @@ class ConfigurationSemanticsTests(unittest.TestCase):
 
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             (root / "project").mkdir()
             selection = resolve_sources(config, BuildRequest.create("./project/"))[0].selection
+            assert selection is not None
             self.assertEqual(selection.must, ("LICENSE", "src", "pyproject.toml"))
             self.assertEqual(selection.may, ("README.md", "docs"))
             self.assertEqual(
@@ -93,30 +109,43 @@ class ConfigurationSemanticsTests(unittest.TestCase):
             with self.subTest(value=value), resolved_temporary_directory() as temp:
                 root = Path(temp)
                 with self.assertRaises(ConfigurationError):
-                    load_config(self._write(root / "default.dirpluck", f'''
+                    load_config(
+                        self._write(
+                            root / "default.dirpluck",
+                            f"""
                         [pluck]
                         description = "Project."
                         must = {value}
                         [scope]
                         [output]
                         path = "out.zip"
-                    '''))
+                    """,
+                        )
+                    )
 
     def test_allow_empty_defaults_false_and_rejects_must(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [always.x]
                 path = "x"
                 description = "X."
                 may = ["optional.txt"]
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             self.assertFalse(config.always["x"].selection.allow_empty)
 
             with self.assertRaises(ConfigurationError):
-                load_config(self._write(root / "bad.dirpluck", '''
+                load_config(
+                    self._write(
+                        root / "bad.dirpluck",
+                        """
                     [always.x]
                     path = "x"
                     description = "X."
@@ -124,18 +153,26 @@ class ConfigurationSemanticsTests(unittest.TestCase):
                     allow_empty = true
                     [output]
                     path = "out.zip"
-                '''))
+                """,
+                    )
+                )
 
     def test_fixed_output_overwrite_defaults_false(self):
         with resolved_temporary_directory() as temp:
-            config = load_config(self._write(Path(temp) / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    Path(temp) / "default.dirpluck",
+                    """
                 [always.x]
                 path = "x"
                 description = "X."
                 may = ["a"]
                 [output]
                 path = "result.zip"
-            '''))
+            """,
+                )
+            )
+            assert config.output is not None
             self.assertFalse(config.output.overwrite)
             self.assertFalse(config.output.timestamp)
 
@@ -143,15 +180,23 @@ class ConfigurationSemanticsTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             with self.assertRaises(ConfigurationError):
-                load_config(self._write(root / "default.dirpluck", '''
+                load_config(
+                    self._write(
+                        root / "default.dirpluck",
+                        """
                     [always.x]
                     path = "x"
                     description = "X."
                     may = ["a"]
                     [output.timestamp]
                     path = "artifacts"
-                '''))
-            config = load_config(self._write(root / "ok.dirpluck", '''
+                """,
+                    )
+                )
+            config = load_config(
+                self._write(
+                    root / "ok.dirpluck",
+                    """
                 [always.x]
                 path = "x"
                 description = "X."
@@ -160,14 +205,20 @@ class ConfigurationSemanticsTests(unittest.TestCase):
                 path = "artifacts/"
                 prefix = "project"
                 suffix = "review"
-            '''))
+            """,
+                )
+            )
+            assert config.output is not None
             self.assertTrue(config.output.timestamp)
             self.assertEqual(config.output.path, "artifacts")
 
     def test_default_scope_always_exists_and_empty_scope_is_noop(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            explicit_empty = load_config(self._write(root / "with.dirpluck", '''
+            explicit_empty = load_config(
+                self._write(
+                    root / "with.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 may = ["x"]
@@ -176,8 +227,13 @@ class ConfigurationSemanticsTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out.zip"
-            '''))
-            named_only = load_config(self._write(root / "named.dirpluck", '''
+            """,
+                )
+            )
+            named_only = load_config(
+                self._write(
+                    root / "named.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 may = ["x"]
@@ -185,14 +241,21 @@ class ConfigurationSemanticsTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out2.zip"
-            '''))
-            no_scope_table = load_config(self._write(root / "none.dirpluck", '''
+            """,
+                )
+            )
+            no_scope_table = load_config(
+                self._write(
+                    root / "none.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 may = ["x"]
                 [output]
                 path = "out3.zip"
-            '''))
+            """,
+                )
+            )
             for config in (explicit_empty, named_only, no_scope_table):
                 self.assertIn(None, config.scopes)
                 self.assertEqual(config.scopes[None].ignore, ())
@@ -201,7 +264,10 @@ class ConfigurationSemanticsTests(unittest.TestCase):
     def test_scope_text_inside_multiline_string_has_no_special_meaning(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    '''
                 [about]
                 description = """
                 [scope]
@@ -213,7 +279,9 @@ class ConfigurationSemanticsTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out.zip"
-            '''))
+            ''',
+                )
+            )
             self.assertIn(None, config.scopes)
             self.assertEqual(config.scopes[None].ignore, ())
             self.assertIn("work", config.scopes)
@@ -239,7 +307,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             work = root / "work"
             self._project(work, "three")
             self._project(work, "four")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -248,18 +319,33 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out.zip"
-            '''))
-            self.assertEqual(resolve_sources(config, BuildRequest.create("./one/"))[0].archive_root, "one")
-            self.assertEqual(resolve_sources(config, BuildRequest.create("work/three/"))[0].archive_root, "three")
-            self.assertEqual({s.archive_root for s in resolve_sources(config, BuildRequest.create("/"))}, {"one", "two", "work"})
-            self.assertEqual({s.archive_root for s in resolve_sources(config, BuildRequest.create("work/"))}, {"three", "four"})
+            """,
+                )
+            )
+            self.assertEqual(
+                resolve_sources(config, BuildRequest.create("./one/"))[0].archive_root, "one"
+            )
+            self.assertEqual(
+                resolve_sources(config, BuildRequest.create("work/three/"))[0].archive_root, "three"
+            )
+            self.assertEqual(
+                {s.archive_root for s in resolve_sources(config, BuildRequest.create("/"))},
+                {"one", "two", "work"},
+            )
+            self.assertEqual(
+                {s.archive_root for s in resolve_sources(config, BuildRequest.create("work/"))},
+                {"three", "four"},
+            )
 
     def test_scope_ignore_applies_to_single_and_expansion(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "keep")
             self._project(root, "archive")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -267,17 +353,25 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 ignore = ["archive/"]
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaises(SelectionError):
                 resolve_sources(config, BuildRequest.create("./archive/"))
-            self.assertEqual([s.archive_root for s in resolve_sources(config, BuildRequest.create("/"))], ["keep"])
+            self.assertEqual(
+                [s.archive_root for s in resolve_sources(config, BuildRequest.create("/"))],
+                ["keep"],
+            )
 
     def test_scope_name_is_not_part_of_archive_path(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             work = root / "work"
             self._project(work, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -285,7 +379,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             plan = plan_archive(config, BuildRequest.create("work/project/"))
             self.assertIn("project/file.txt", plan.entries)
             self.assertNotIn("work/project/file.txt", plan.entries)
@@ -301,7 +397,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             self._project(base_work, "base-target")
             self._project(derived_work, "derived-target")
             self._project(base_oss, "oss-target")
-            self._write(base_dir / "base.dirpluck", '''
+            self._write(
+                base_dir / "base.dirpluck",
+                """
                 [pluck]
                 description = "Base pluck."
                 must = ["file.txt"]
@@ -311,17 +409,29 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "oss"
                 [output]
                 path = "base-out.zip"
-            ''')
-            config = load_config(self._write(derived_dir / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    derived_dir / "default.dirpluck",
+                    """
                 [about]
                 base = "../base/base.dirpluck"
                 [scope.work]
                 path = "work"
                 [output]
                 path = "derived-out.zip"
-            '''))
-            self.assertEqual(resolve_sources(config, BuildRequest.create("work/derived-target/"))[0].directory, derived_work / "derived-target")
-            self.assertEqual(resolve_sources(config, BuildRequest.create("oss/oss-target/"))[0].directory, base_oss / "oss-target")
+            """,
+                )
+            )
+            self.assertEqual(
+                resolve_sources(config, BuildRequest.create("work/derived-target/"))[0].directory,
+                derived_work / "derived-target",
+            )
+            self.assertEqual(
+                resolve_sources(config, BuildRequest.create("oss/oss-target/"))[0].directory,
+                base_oss / "oss-target",
+            )
             with self.assertRaises(SelectionError):
                 resolve_sources(config, BuildRequest.create("work/base-target/"))
 
@@ -329,7 +439,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -337,7 +450,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "missing-mount"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.directory, root / "project")
             with self.assertRaisesRegex(SelectionError, "Scope 'external' root does not exist"):
@@ -348,13 +463,18 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             dot_dir = root / ".dirpluck"
             self._project(dot_dir, "project")
-            config = load_config(self._write(dot_dir / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    dot_dir / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.directory, dot_dir / "project")
 
@@ -364,7 +484,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             dot_dir = root / ".dirpluck"
             self._project(dot_dir, "default-project")
             self._project(dot_dir / "work", "named-project")
-            config = load_config(self._write(dot_dir / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    dot_dir / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -372,7 +495,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "work"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             default_source = resolve_sources(config, BuildRequest.create("./default-project/"))[0]
             named_source = resolve_sources(config, BuildRequest.create("work/named-project/"))[0]
             self.assertEqual(default_source.directory, dot_dir / "default-project")
@@ -387,7 +512,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             self._project(base_dir, "ignored")
             self._project(derived_dir, "derived-target")
             self._project(derived_dir, "ignored")
-            base_path = self._write(base_dir / "base.dirpluck", """
+            base_path = self._write(
+                base_dir / "base.dirpluck",
+                """
                 [namespace.base]
                 [pluck]
                 description = "Base."
@@ -397,17 +524,23 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 namespace = "base"
                 [output]
                 path = "base.zip"
-            """)
+            """,
+            )
             base_config = load_config(base_path)
             base_source = resolve_sources(base_config, BuildRequest.create("./base-target/"))[0]
             self.assertEqual(base_source.archive_root, "base/base-target")
 
-            config = load_config(self._write(derived_dir / "default.dirpluck", """
+            config = load_config(
+                self._write(
+                    derived_dir / "default.dirpluck",
+                    """
                 [about]
                 base = "../base/base.dirpluck"
                 [output]
                 path = "derived.zip"
-            """))
+            """,
+                )
+            )
             derived_source = resolve_sources(config, BuildRequest.create("./derived-target/"))[0]
             self.assertEqual(derived_source.directory, derived_dir / "derived-target")
             self.assertEqual(derived_source.archive_root, "derived-target")
@@ -422,7 +555,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
@@ -430,7 +566,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "."
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "Scope roots must be distinct"):
                 resolve_sources(config, BuildRequest.create("./project/"))
 
@@ -438,7 +576,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "work").mkdir()
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 may = ["x"]
@@ -448,7 +589,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "./work"
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "Scope roots must be distinct"):
                 resolve_sources(config, BuildRequest.create("local/x/"))
 
@@ -460,7 +603,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             project = base / "project"
             project.mkdir(parents=True)
             (project / "outer.txt").write_text("outer", encoding="utf-8")
-            self._write(base / "base.dirpluck", '''
+            self._write(
+                base / "base.dirpluck",
+                """
                 [shared.must]
                 chosen = ["inner.txt"]
                 [pluck]
@@ -470,15 +615,21 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "."
                 [output]
                 path = "base.zip"
-            ''')
-            config = load_config(self._write(derived / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    derived / "default.dirpluck",
+                    """
                 [about]
                 base = "../base/base.dirpluck"
                 [shared.must]
                 chosen = ["outer.txt"]
                 [output]
                 path = "derived.zip"
-            '''))
+            """,
+                )
+            )
             plan = plan_archive(config, BuildRequest.create("base/project/"))
             self.assertIn("project/outer.txt", plan.entries)
 
@@ -492,14 +643,17 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             target = project / "app"
             target.mkdir()
             (target / "file.txt").write_text("project", encoding="utf-8")
-            real = self._write(shared / "root-real.dirpluck", '''
+            real = self._write(
+                shared / "root-real.dirpluck",
+                """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
                 [scope]
                 [output]
                 path = "out.zip"
-            ''')
+            """,
+            )
             link = project / "default.dirpluck"
             try:
                 link.symlink_to(real)
@@ -516,12 +670,15 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             shared = root / "shared"
             shared.mkdir()
-            real = self._write(shared / "real.dirpluck", '''
+            real = self._write(
+                shared / "real.dirpluck",
+                """
                 [about]
                 base = "again.dirpluck"
                 [output]
                 path = "real.zip"
-            ''')
+            """,
+            )
             first = root / "first.dirpluck"
             again = root / "again.dirpluck"
             try:
@@ -536,18 +693,24 @@ class NewBuilderSemanticsTests(unittest.TestCase):
     def test_base_cycle_is_rejected(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            self._write(root / "a.dirpluck", '''
+            self._write(
+                root / "a.dirpluck",
+                """
                 [about]
                 base = "b.dirpluck"
                 [output]
                 path = "a.zip"
-            ''')
-            self._write(root / "b.dirpluck", '''
+            """,
+            )
+            self._write(
+                root / "b.dirpluck",
+                """
                 [about]
                 base = "a.dirpluck"
                 [output]
                 path = "b.zip"
-            ''')
+            """,
+            )
             config = load_config(root / "a.dirpluck")
             with self.assertRaisesRegex(ConfigurationError, "base cycle"):
                 plan_archive(config, BuildRequest.create())
@@ -558,9 +721,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             depth = 12
             for i in range(depth):
                 if i + 1 < depth:
-                    body = f'''[about]\nbase = "{i+1}.dirpluck"\n\n[output]\npath = "out-{i}.zip"\n'''
+                    body = f'''[about]\nbase = "{i + 1}.dirpluck"\n\n[output]\npath = "out-{i}.zip"\n'''
                 else:
-                    body = f'''[always.data]\npath = "data"\ndescription = "Data."\nmust = ["x.txt"]\n\n[output]\npath = "out-{i}.zip"\n'''
+                    body = f"""[always.data]\npath = "data"\ndescription = "Data."\nmust = ["x.txt"]\n\n[output]\npath = "out-{i}.zip"\n"""
                 self._write(root / f"{i}.dirpluck", body)
             (root / "data").mkdir()
             (root / "data" / "x.txt").write_text("x", encoding="utf-8")
@@ -574,20 +737,28 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             derived = root / "derived"
             (base / "refs").mkdir(parents=True)
             (base / "refs" / "note.txt").write_text("base", encoding="utf-8")
-            self._write(base / "base.dirpluck", '''
+            self._write(
+                base / "base.dirpluck",
+                """
                 [always.refs]
                 path = "refs"
                 description = "Refs."
                 must = ["note.txt"]
                 [output]
                 path = "base.zip"
-            ''')
-            config = load_config(self._write(derived / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    derived / "default.dirpluck",
+                    """
                 [about]
                 base = "../base/base.dirpluck"
                 [output]
                 path = "derived.zip"
-            '''))
+            """,
+                )
+            )
             source = resolve_sources(config, BuildRequest.create())[0]
             self.assertEqual(source.directory, base / "refs")
 
@@ -596,20 +767,28 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output]
                 path = "out/base.zip"
-            ''')
-            config = load_config(self._write(root / "derived.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "derived.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [output]
                 path = "out/derived.zip"
-            '''))
+            """,
+                )
+            )
             self.assertEqual(len(resolve_sources(config, BuildRequest.create())), 1)
 
     def test_output_same_fixed_file_conflicts_across_base_chain(self):
@@ -617,20 +796,28 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output]
                 path = "out/result.zip"
-            ''')
-            config = load_config(self._write(root / "derived.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "derived.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
                 [output]
                 path = "out/result.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "write boundaries overlap"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -640,23 +827,34 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             '''[output]\npath = "artifacts/result.zip"''',
         )
         for derived_output in cases:
-            with self.subTest(derived_output=derived_output), resolved_temporary_directory() as temp:
+            with (
+                self.subTest(derived_output=derived_output),
+                resolved_temporary_directory() as temp,
+            ):
                 root = Path(temp)
                 (root / "data").mkdir()
                 (root / "data" / "x").write_text("x")
-                self._write(root / "base.dirpluck", '''
+                self._write(
+                    root / "base.dirpluck",
+                    """
                     [always.data]
                     path = "data"
                     description = "D."
                     must = ["x"]
                     [output.timestamp]
                     path = "artifacts/"
-                ''')
-                config = load_config(self._write(root / "derived.dirpluck", f'''
+                """,
+                )
+                config = load_config(
+                    self._write(
+                        root / "derived.dirpluck",
+                        f"""
                     [about]
                     base = "base.dirpluck"
                     {derived_output}
-                '''))
+                """,
+                    )
+                )
                 with self.assertRaisesRegex(ConfigurationError, "write boundaries overlap"):
                     resolve_sources(config, BuildRequest.create())
 
@@ -669,20 +867,28 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             elsewhere.mkdir()
             (base / "data").mkdir(parents=True)
             (base / "data" / "x").write_text("x")
-            self._write(base / "base.dirpluck", '''
+            self._write(
+                base / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
                 [output]
                 path = "base-output/base.zip"
-            ''')
-            config = load_config(self._write(derived / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    derived / "default.dirpluck",
+                    """
                 [about]
                 base = "../base/base.dirpluck"
                 [output]
                 path = "result/output.zip"
-            '''))
+            """,
+                )
+            )
             previous = Path.cwd()
             try:
                 os.chdir(elsewhere)
@@ -697,7 +903,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [always.data]
                 path = "data"
                 description = "D."
@@ -706,31 +915,47 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 path = "snapshots/"
                 prefix = "project"
                 suffix = "review"
-            '''))
-            with patch("dirpluck._output._current_output_timestamp", return_value="20260920-120000"):
+            """,
+                )
+            )
+            with patch(
+                "dirpluck._output._current_output_timestamp", return_value="20260920-120000"
+            ):
                 output = build_archive(config, BuildRequest.create(sequence=3))
-            self.assertEqual(output, (root / "snapshots/project-20260920-120000-3-review.zip").resolve())
+            self.assertEqual(
+                output, (root / "snapshots/project-20260920-120000-3-review.zip").resolve()
+            )
 
     def test_pluck_uses_default_scope_without_scope_table(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._project(root, "project")
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [pluck]
                 description = "P."
                 must = ["file.txt"]
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             source = resolve_sources(config, BuildRequest.create("./project/"))[0]
             self.assertEqual(source.directory, root / "project")
 
     def test_source_less_effective_configuration_is_rejected(self):
         with resolved_temporary_directory() as temp:
-            config = load_config(self._write(Path(temp) / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    Path(temp) / "default.dirpluck",
+                    """
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             with self.assertRaisesRegex(ConfigurationError, "no Pluck or Always source"):
                 resolve_sources(config, BuildRequest.create())
 
@@ -738,7 +963,10 @@ class NewBuilderSemanticsTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "data").mkdir()
-            config = load_config(self._write(root / "default.dirpluck", '''
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [always.data]
                 path = "data"
                 description = "D."
@@ -746,7 +974,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
                 allow_empty = true
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             output = build_archive(config, BuildRequest.create())
             with zipfile.ZipFile(output) as archive:
                 self.assertIn("data/", archive.namelist())
@@ -756,19 +986,27 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
-            ''')
-            config = load_config(self._write(root / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
 
                 [output]
                 path = "out.zip"
-            '''))
+            """,
+                )
+            )
             output = build_archive(config, BuildRequest.create())
             with zipfile.ZipFile(output) as archive:
                 self.assertIn("data/x", archive.namelist())
@@ -778,7 +1016,9 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x")
-            self._write(root / "base.dirpluck", """
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
@@ -786,11 +1026,17 @@ class NewBuilderSemanticsTests(unittest.TestCase):
 
                 [output]
                 path = "base.zip"
-            """)
-            config = load_config(self._write(root / "default.dirpluck", """
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
-            """))
+            """,
+                )
+            )
             self.assertIsNone(config.output)
             plan = plan_archive(config, BuildRequest.create())
             self.assertEqual(tuple(plan.entries), ("data/x",))
@@ -803,20 +1049,30 @@ class NewBuilderSemanticsTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x")
-            self._write(root / "base.dirpluck", '''
+            self._write(
+                root / "base.dirpluck",
+                """
                 [always.data]
                 path = "data"
                 description = "D."
                 must = ["x"]
-            ''')
-            config = load_config(self._write(root / "default.dirpluck", '''
+            """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
                 [about]
                 base = "base.dirpluck"
 
                 [output.timestamp]
                 path = "artifacts/"
-            '''))
-            with patch("dirpluck._output._current_output_timestamp", return_value="20260920-120000"):
+            """,
+                )
+            )
+            with patch(
+                "dirpluck._output._current_output_timestamp", return_value="20260920-120000"
+            ):
                 output = build_archive(config, BuildRequest.create())
             self.assertEqual(output, (root / "artifacts/20260920-120000.zip").resolve())
 

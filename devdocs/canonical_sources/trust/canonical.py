@@ -47,7 +47,6 @@ class SECTION_001:
         """
         title @= 'Filesystem permission が実際の権限境界です'
 
-
     class SECTION_004:
         r"""
         Directory を `must` / `may` で選ぶと、その配下の regular file / directory が収集候補になります。`ignore` は name pattern、Selection root からの structured `{ path = "..." }` concrete relative path、root-relative path 全体へ適用する structured `{ match = "..." }` を使え、dirpluck がその entry を selection 対象として扱わない明示指示として、link-like / special entry の種類による診断より優先します。Directory name ignore、directory path reference、または directory path に一致する structured `match` の subtree は内部へ入る前に枝刈りし、ignored entry は skipped-link count や特殊 entry の diagnostic にも使いません。認識した non-ignored symbolic link / Windows directory junction は選択も traversal もせず Archive に含めません。FIFO、socket、device などその他の non-regular entry も Archive に含めません。`must` がそのような特殊 entry だけに一致した場合は理由付き error、`may` では optional missing とします。Hidden file、repository metadata、environment file、key material などを filename や内容から推論して自動 ignore することはありません。
@@ -58,7 +57,6 @@ class SECTION_001:
         """
         title @= 'Selection の内容は利用者が決めます'
 
-
     class SECTION_045:
         r"""
         dirpluck が明示的に link-like entry として非 traversal 対象にするのは、platform API で symbolic link または Windows directory junction として認識できた entry です。それとは別に、regular file / regular directory として扱えない FIFO、socket、device などの特殊 filesystem entry も Archive 対象から除外します。Filesystem / OS には別種の reparse point、redirecting mechanism、特殊な filesystem object が存在し得るため、あらゆる環境で link-like mechanism や filesystem object の意味を完全に列挙・解釈し、Archive からの完全な不在を保証するものではありません。
@@ -68,7 +66,6 @@ class SECTION_001:
         また、生成した ZIP を展開するときに entry metadata や filesystem object をどのように解釈・作成するかは、利用する extractor と platform に依存します。dirpluck は第三者の unzip / archive software の展開時挙動を制御・保証しません。
         """
         title @= 'Link-like entry の検出限界'
-
 
     class SECTION_005:
         r"""
@@ -83,7 +80,6 @@ class SECTION_001:
         Output path と existing file の扱いは、実行前に Configuration で確認してください。
         """
         title @= 'Output は宣言された policy に従います'
-
 
     class SECTION_006:
         r"""

@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
+from collections.abc import Mapping
 import tomllib
+from typing import cast
 
 from ._archive_mtime import validate_archive_mtime_spec
 from ._config_values import (
@@ -132,8 +133,9 @@ def _parse_targets(value: object, where: str) -> tuple[str, ...]:
         return ()
     if not isinstance(value, list):
         raise InvocationError(f"{where}: expected an array")
+    items = cast(list[object], value)
     targets: list[str] = []
-    for index, item in enumerate(value):
+    for index, item in enumerate(items):
         item_where = f"{where}[{index}]"
         if not isinstance(item, str) or not item:
             raise InvocationError(f"{item_where}: expected a non-empty string")
@@ -187,14 +189,15 @@ def load_invocation(path: str | Path) -> InvocationTemplate:
         )
     try:
         with manifest.open("rb") as file:
-            data = tomllib.load(file)
+            raw_data = tomllib.load(file)
     except FileNotFoundError as exc:
         raise InvocationError(f"invocation template file was not found: {manifest}") from exc
     except tomllib.TOMLDecodeError as exc:
         raise InvocationError(f"invalid TOML in {manifest}: {exc}") from exc
 
-    if not isinstance(data, dict):
+    if not isinstance(raw_data, dict):
         raise InvocationError(f"{manifest}: top level must be a table")
+    data = cast(dict[str, object], raw_data)
     _require_only_keys(data, {"invocation"}, str(manifest))
 
     if "invocation" not in data:
@@ -203,30 +206,29 @@ def load_invocation(path: str | Path) -> InvocationTemplate:
     where = f"{manifest} [invocation]"
     if not isinstance(raw_invocation, dict):
         raise InvocationError(f"{where}: expected a table")
+    invocation_table = cast(dict[str, object], raw_invocation)
 
     for field in sorted(_INVOCATION_FIELDS):
-        if isinstance(raw_invocation.get(field), dict):
+        if isinstance(invocation_table.get(field), dict):
             raise InvocationError(
                 f"{where}: invocation entry name {field!r} is reserved for the [invocation].{field} field"
             )
 
     root_fields = {
-        key: value
-        for key, value in raw_invocation.items()
-        if key in _INVOCATION_FIELDS
+        key: value for key, value in invocation_table.items() if key in _INVOCATION_FIELDS
     }
     default = _parse_invocation(root_fields, manifest=manifest, where=where)
 
     entries: dict[str, Invocation] = {}
     unknown_keys: list[str] = []
-    for key, value in raw_invocation.items():
+    for key, value in invocation_table.items():
         if key in _INVOCATION_FIELDS:
             continue
         if not isinstance(value, dict):
             unknown_keys.append(key)
             continue
         entries[key] = _parse_invocation(
-            value,
+            cast(dict[str, object], value),
             manifest=manifest,
             where=f"{manifest} [invocation.{key}]",
         )

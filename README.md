@@ -6,7 +6,7 @@ A TOML Configuration records what to include, what to exclude, and which fixed m
 
 ## Installation
 
-The current version is **0.14.0**.
+The current version is **0.14.1**.
 
 Python 3.11 or later is required.
 

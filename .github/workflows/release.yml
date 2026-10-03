@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test release tag
+  verify-tag:
+    name: Verify release tag
     runs-on: ubuntu-latest
 
     steps:
@@ -37,24 +37,22 @@ jobs:
           expected = f"v{__version__}"
           actual = os.environ["RELEASE_TAG"]
           if actual != expected:
-              raise SystemExit(f"release tag {actual!r} does not match project version; expected {expected!r}")
+              raise SystemExit(
+                  f"release tag {actual!r} does not match project version; expected {expected!r}"
+              )
           print(f"release tag {actual} matches project version")
           PY
 
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[test]"
-
-      - name: Check canonical documents
-        run: python tools/render_canonical_docs.py --check
-
-      - name: Run tests
-        run: python -m unittest discover -s tests -v
+  checks:
+    name: Quality and tests
+    needs: verify-tag
+    uses: ./.github/workflows/checks.yml
+    with:
+      checkout_ref: ${{ github.event.release.tag_name }}
 
   build:
     name: Build release distributions
-    needs: test
+    needs: checks
     runs-on: ubuntu-latest
 
     steps:

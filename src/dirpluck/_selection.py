@@ -91,6 +91,7 @@ def _file_is_excluded(
             return True
     return False
 
+
 def _directory_is_excluded(
     relative: str, exclusions: tuple[ExclusionPattern | PathExclusion | MatchPattern, ...]
 ) -> bool:
@@ -110,6 +111,7 @@ def _directory_is_excluded(
         if any(_name_matches(name, exclusion) for name in path.parts):
             return True
     return False
+
 
 def _link_is_excluded(
     relative: str, exclusions: tuple[ExclusionPattern | PathExclusion | MatchPattern, ...]
@@ -139,6 +141,7 @@ def _link_is_excluded(
         if any(_name_matches(name, exclusion) for name in path.parts):
             return True
     return False
+
 
 def _files_under_entry(
     entry: Path,
@@ -171,7 +174,9 @@ def _files_under_entry(
         try:
             children = sorted(directory.iterdir(), key=lambda path: path.name)
         except OSError as exc:
-            raise SelectionError(f"cannot inspect selected directory for {source_label}: {directory}") from exc
+            raise SelectionError(
+                f"cannot inspect selected directory for {source_label}: {directory}"
+            ) from exc
         for child in children:
             relative = child.relative_to(root).as_posix()
             if _is_link_like(child):
@@ -198,7 +203,9 @@ def _include_name_matches(name: str, pattern: str) -> bool:
     if "*" not in pattern:
         return name == pattern
     prefix, suffix = pattern.split("*", 1)
-    return name.startswith(prefix) and name.endswith(suffix) and len(name) >= len(prefix) + len(suffix)
+    return (
+        name.startswith(prefix) and name.endswith(suffix) and len(name) >= len(prefix) + len(suffix)
+    )
 
 
 def _matching_include_entries(
@@ -229,11 +236,15 @@ def _matching_include_entries(
             try:
                 children = tuple(parent.iterdir())
             except OSError as exc:
-                raise SelectionError(f"cannot inspect directory while matching include {pattern!r}: {parent}") from exc
+                raise SelectionError(
+                    f"cannot inspect directory while matching include {pattern!r}: {parent}"
+                ) from exc
             if "*" not in part:
                 next_candidates.extend(child for child in children if child.name == part)
             else:
-                next_candidates.extend(child for child in children if _include_name_matches(child.name, part))
+                next_candidates.extend(
+                    child for child in children if _include_name_matches(child.name, part)
+                )
         checked: list[Path] = []
         for candidate in next_candidates:
             relative = candidate.relative_to(root).as_posix()
@@ -278,6 +289,7 @@ def _matching_include_entries(
         tuple(sorted(unsupported_entries, key=lambda path: path.as_posix())),
         tuple(sorted(wrong_type_entries, key=lambda path: path.as_posix())),
     )
+
 
 def _matching_regex_entries(
     root: Path,
@@ -329,7 +341,10 @@ def _matching_regex_entries(
                     entries.append(child)
                 continue
 
-            if not _file_is_excluded(relative, exclusions) and compiled.fullmatch(relative) is not None:
+            if (
+                not _file_is_excluded(relative, exclusions)
+                and compiled.fullmatch(relative) is not None
+            ):
                 unsupported_entries.add(child)
 
     walk(root)
@@ -351,7 +366,7 @@ def _wrong_type_diagnostic(
     expected_directory = pattern.endswith("/")
     expected = "directory" if expected_directory else "file"
     actual = "file" if expected_directory else "directory"
-    rendered = []
+    rendered: list[str] = []
     for entry in entries:
         name = entry.name + ("/" if entry.is_dir() else "")
         rendered.append(repr(name))
@@ -365,7 +380,7 @@ def _wrong_type_diagnostic(
     verb = "exists" if len(entries) == 1 else "exist"
     return (
         f"{source_label}: {role}{expected} pattern {pattern!r} did not match, "
-        f"but matching {noun} {listed} {verb}; {hint}"
+        + f"but matching {noun} {listed} {verb}; {hint}"
     )
 
 
@@ -452,20 +467,20 @@ def select_files(source: ResolvedSource, *, allow_missing: bool = False) -> Sele
             listed = ", ".join(repr(path) for path in link_only_missing)
             details.append(
                 "must pattern(s) matched only symbolic links or Windows junctions, "
-                f"which are not selectable: {listed}"
+                + f"which are not selectable: {listed}"
             )
         if unsupported_only_missing:
             listed = ", ".join(repr(path) for path in unsupported_only_missing)
             details.append(
                 "must pattern(s) matched only unsupported special filesystem entries, "
-                f"which are not selectable: {listed}"
+                + f"which are not selectable: {listed}"
             )
         if mixed_nonselectable_missing:
             listed = ", ".join(repr(path) for path in mixed_nonselectable_missing)
             details.append(
                 "must pattern(s) matched only non-selectable filesystem entries "
-                "(symbolic links, Windows junctions, or unsupported special entries): "
-                f"{listed}"
+                + "(symbolic links, Windows junctions, or unsupported special entries): "
+                + f"{listed}"
             )
         for display, entries in wrong_type_required.items():
             details.append(

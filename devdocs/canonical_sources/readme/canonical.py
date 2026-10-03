@@ -127,7 +127,6 @@ class SECTION_001:
         overwrite = true
         """
 
-
         class SECTION_004:
             r"""
             Archive を作る前に、まず内容を確認します。この例では workspace root を runtime current working directory として実行するため、`default.dirpluck` が自動的に使われます。

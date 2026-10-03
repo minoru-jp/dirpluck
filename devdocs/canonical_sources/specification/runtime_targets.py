@@ -7,8 +7,6 @@ from shikumi_devdoc.norms.document import title
 
 
 @summary('Scope、Target reference、expansion、Always source、Case の解決規則。')
-
-
 @canonical_source('Runtime Target, Scope, and Case', filename='runtime-targets.md', order=50, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_037:

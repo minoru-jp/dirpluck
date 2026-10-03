@@ -1,6 +1,4 @@
 from devdocs.canonical_sources.vocabulary.canonical import TERMS
-from shikumi_devdoc.fields.api_reference import OPERATION, TYPE, VALUE, input, kind, name, output
-from shikumi_devdoc.fields.lifecycle import introduced
 from shikumi_devdoc.norms.common import canonical_source, merge, summary
 from shikumi_devdoc.norms.document import test_target_field, title
 
@@ -11,8 +9,6 @@ cwd_example = test_target_field("cwd example")
 
 
 @summary('公式 Python API の位置づけ、基本的な呼び出し方、互換性境界。')
-
-
 @canonical_source('Python API overview', filename='overview.md', order=0, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""
@@ -32,7 +28,6 @@ class API_REFERENCE_PART:
         0.14.x では、package root から明示的に export する名前だけを公式 Python API とします。低 level module や underscore 名は implementation detail であり、Beta 中の互換性保証対象には含めません。
         """
         title @= '位置づけ'
-
 
     class SECTION_003:
         r"""

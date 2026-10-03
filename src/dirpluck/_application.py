@@ -9,7 +9,7 @@ import os
 
 from ._archive import plan_archive, render_archive_tree
 from ._archive_mtime import resolve_archive_mtime, validate_archive_mtime_spec
-from ._builder_models import BuildRequest, RuntimeOutput
+from ._builder_models import ArchivePlan, BuildRequest, RuntimeOutput
 from .builder import _build_archive_with_plan
 from .config import load_config, resolve_config_path
 from .errors import UsageError
@@ -50,7 +50,7 @@ def _resolve_runtime_output(value: str | None, *, cwd: Path) -> RuntimeOutput | 
     if "\\" in value:
         raise UsageError(
             "output path: backslashes are not allowed in filesystem locations; "
-            "use '/' as the path separator"
+            + "use '/' as the path separator"
         )
     if glob.has_magic(value):
         raise UsageError("output path must name one concrete path")
@@ -60,9 +60,8 @@ def _resolve_runtime_output(value: str | None, *, cwd: Path) -> RuntimeOutput | 
     windows = PureWindowsPath(value)
     host = Path(value)
     has_non_host_root = (
-        (pure.is_absolute() or bool(windows.drive) or bool(windows.root))
-        and not host.is_absolute()
-    )
+        pure.is_absolute() or bool(windows.drive) or bool(windows.root)
+    ) and not host.is_absolute()
     if has_non_host_root:
         raise UsageError(
             "output path: absolute-root form is not supported by the host operating system"
@@ -78,6 +77,7 @@ def _resolve_runtime_output(value: str | None, *, cwd: Path) -> RuntimeOutput | 
     if not candidate.is_absolute():
         candidate = cwd / candidate
     return RuntimeOutput(path=Path(os.path.abspath(candidate)), generated=generated)
+
 
 def _validate_run_arguments(
     targets: tuple[str | Path, ...],
@@ -109,16 +109,16 @@ def _validate_run_arguments(
         raise UsageError("sequence must be an integer greater than or equal to 1")
     if archive_mtime is not None:
         try:
-            validate_archive_mtime_spec(archive_mtime)
+            _ = validate_archive_mtime_spec(archive_mtime)
         except ValueError as exc:
             raise UsageError(str(exc)) from exc
     if output is not None and (not isinstance(output, str) or not output):
         raise UsageError("output path must be a non-empty string")
     if not isinstance(force, bool):
-        raise UsageError("force must be a boolean")
+        raise UsageError("force must be a boolean")  # pyright: ignore[reportUnreachable]
 
 
-def _archive_entry_names(plan) -> tuple[str, ...]:
+def _archive_entry_names(plan: ArchivePlan) -> tuple[str, ...]:
     entries = {"README.md", *plan.entries.keys()}
     entries.update(f"{path.rstrip('/')}/" for path in plan.empty_directories)
     return ("README.md", *tuple(sorted(entries - {"README.md"})))
@@ -174,9 +174,7 @@ def run(
         invocation_empty = selected.is_empty
         template_config = selected.config_path()
         config_path = (
-            template_config
-            if template_config is not None
-            else resolve_config_path(cwd=runtime_cwd)
+            template_config if template_config is not None else resolve_config_path(cwd=runtime_cwd)
         )
         directories = selected.targets
         selected_case = case if case is not None else selected.case

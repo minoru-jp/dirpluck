@@ -7,8 +7,6 @@ from shikumi_devdoc.norms.document import title
 
 
 @summary('Base chain、cycle detection、definition composition、Output の扱い。')
-
-
 @canonical_source('Base chain and composition', filename='composition.md', order=40, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_025:

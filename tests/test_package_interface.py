@@ -11,8 +11,9 @@ class PublicInterfaceTests(unittest.TestCase):
         )
 
     def test_configuration_deprecation_warning_is_visible_warning_category(self):
-        self.assertTrue(
-            issubclass(dirpluck.ConfigurationDeprecationWarning, FutureWarning)
+        self.assertIn(
+            FutureWarning,
+            dirpluck.ConfigurationDeprecationWarning.__mro__,
         )
 
     def test_low_level_modules_are_not_reexported_from_package_root(self):

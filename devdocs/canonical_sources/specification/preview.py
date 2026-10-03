@@ -1,16 +1,13 @@
-from devdocs.canonical_sources.vocabulary.canonical import TERMS
 from devdocs.canonical_sources.specification.archive import SPECIFICATION_PART as ARCHIVE_SPEC
 from devdocs.canonical_sources.specification.composition import SPECIFICATION_PART as COMPOSITION_SPEC
 from devdocs.canonical_sources.specification.output import SPECIFICATION_PART as OUTPUT_SPEC
 from devdocs.canonical_sources.specification.runtime_targets import SPECIFICATION_PART as RUNTIME_TARGETS_SPEC
 from devdocs.canonical_sources.specification.selection import SPECIFICATION_PART as SELECTION_SPEC
 from shikumi_devdoc.fields.specification import MUST, condition, level, related
-from shikumi_devdoc.norms.common import canonical_source, merge, summary
+from shikumi_devdoc.norms.common import canonical_source, summary
 
 
 @summary('preview mode の出力と副作用境界。')
-
-
 @canonical_source('Preview', filename='preview.md', order=110, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_145:

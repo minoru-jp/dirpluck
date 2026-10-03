@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from _temp import resolved_temporary_directory
+from tests._temp import resolved_temporary_directory
 
 import dirpluck
 from dirpluck._archive_mtime import resolve_archive_mtime, validate_archive_mtime_spec
@@ -166,12 +166,13 @@ class ArchiveMtimeTests(unittest.TestCase):
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
+                """\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n""",
                 encoding="utf-8",
             )
 
             result = dirpluck.run("./app/", archive_mtime="zip-epoch", cwd=root)
             self.assertIsNotNone(result.output_path)
+            assert result.output_path is not None
             with zipfile.ZipFile(result.output_path) as archive:
                 self.assertEqual(
                     {info.date_time for info in archive.infolist()},
@@ -184,14 +185,14 @@ class ArchiveMtimeTests(unittest.TestCase):
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''
+                """
 [pluck]
 must = ["src/"]
 
 [output]
 path = "result.zip"
 overwrite = true
-''',
+""",
                 encoding="utf-8",
             )
             current = datetime(2026, 9, 21, 17, 35, 57, 900000)
@@ -203,6 +204,7 @@ overwrite = true
 
             clock.assert_called_once_with()
             self.assertIsNotNone(result.output_path)
+            assert result.output_path is not None
             with zipfile.ZipFile(result.output_path) as archive:
                 self.assertEqual(
                     {info.date_time for info in archive.infolist()},
@@ -215,19 +217,18 @@ overwrite = true
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''
+                """
 [pluck]
 must = ["src/"]
 
 [output]
 path = "result.zip"
 overwrite = true
-''',
+""",
                 encoding="utf-8",
             )
             previous = Path.cwd()
             try:
-                import os
                 os.chdir(root)
                 with redirect_stdout(StringIO()):
                     code = main(["./app/", "--archive-mtime", "zip-epoch"])
@@ -246,16 +247,17 @@ overwrite = true
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
+                """\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n""",
                 encoding="utf-8",
             )
             (root / "release.dirpluck-inv").write_text(
-                '''\n[invocation]\ntargets = ["./app/"]\narchive_mtime = "zip-epoch"\n''',
+                """\n[invocation]\ntargets = ["./app/"]\narchive_mtime = "zip-epoch"\n""",
                 encoding="utf-8",
             )
 
             result = dirpluck.run(invocation="release", cwd=root)
             self.assertIsNotNone(result.output_path)
+            assert result.output_path is not None
             with zipfile.ZipFile(result.output_path) as archive:
                 self.assertEqual(
                     {info.date_time for info in archive.infolist()},
@@ -268,11 +270,11 @@ overwrite = true
             (root / "app" / "src").mkdir(parents=True)
             (root / "app" / "src" / "main.py").write_text("x = 1\n", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                '''\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n''',
+                """\n[pluck]\nmust = ["src/"]\n\n[output]\npath = "result.zip"\noverwrite = true\n""",
                 encoding="utf-8",
             )
             (root / "release.dirpluck-inv").write_text(
-                '''\n[invocation]\ntargets = ["./app/"]\narchive_mtime = "zip-epoch"\n''',
+                """\n[invocation]\ntargets = ["./app/"]\narchive_mtime = "zip-epoch"\n""",
                 encoding="utf-8",
             )
 
@@ -282,6 +284,7 @@ overwrite = true
                 cwd=root,
             )
             self.assertIsNotNone(result.output_path)
+            assert result.output_path is not None
             with zipfile.ZipFile(result.output_path) as archive:
                 self.assertEqual(
                     {info.date_time for info in archive.infolist()},

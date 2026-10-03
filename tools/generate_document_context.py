@@ -15,13 +15,13 @@ def current_version() -> str:
     try:
         from dirpluck import __version__
     finally:
-        sys.path.pop(0)
+        _ = sys.path.pop(0)
     return __version__
 
 
 def main() -> None:
     payload = {"version": current_version()}
-    OUTPUT.write_text(
+    _ = OUTPUT.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )

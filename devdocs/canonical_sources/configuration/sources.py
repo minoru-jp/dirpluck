@@ -11,8 +11,6 @@ example_008 = test_target_field("example 008")
 
 
 @summary('Pluck、Scope、Namespace、Always source の定義と配置。')
-
-
 @canonical_source('Configuration sources', filename='sources.md', order=10, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""

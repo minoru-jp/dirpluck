@@ -4,8 +4,6 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 
 
 @summary('Archive placement に使用する Namespace の定義と制約。')
-
-
 @canonical_source('Namespace', filename='namespace.md', order=60, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_061:

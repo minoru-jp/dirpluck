@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from collections.abc import Mapping
+
 
 @dataclass(frozen=True)
 class ExclusionPattern:
@@ -20,6 +21,7 @@ class ExclusionPattern:
     match: str
     directory: bool
 
+
 @dataclass(frozen=True)
 class PathExclusion:
     """One concrete Selection-root-relative path excluded from one source tree.
@@ -32,6 +34,7 @@ class PathExclusion:
     raw: str
     path: str
     directory: bool
+
 
 @dataclass(frozen=True)
 class TargetIgnorePattern:
@@ -54,11 +57,13 @@ class MatchPattern:
 
     raw: str
 
+
 @dataclass(frozen=True)
 class SharedReference:
     """One reference to a named set in the field-specific Shared namespace."""
 
     name: str
+
 
 @dataclass(frozen=True)
 class SharedPatterns:
@@ -67,6 +72,7 @@ class SharedPatterns:
     must: Mapping[str, tuple[str | MatchPattern, ...]]
     may: Mapping[str, tuple[str | MatchPattern, ...]]
     ignore: Mapping[str, tuple[ExclusionPattern | MatchPattern, ...]]
+
 
 @dataclass(frozen=True)
 class SelectionDefinition:
@@ -78,6 +84,7 @@ class SelectionDefinition:
     ignore: tuple[ExclusionPattern | PathExclusion | MatchPattern | SharedReference, ...]
     allow_empty: bool
 
+
 @dataclass(frozen=True)
 class Selection:
     """One effective Selection with every Shared reference materialized."""
@@ -88,6 +95,7 @@ class Selection:
     ignore: tuple[ExclusionPattern | PathExclusion | MatchPattern, ...]
     allow_empty: bool
 
+
 @dataclass(frozen=True)
 class Pluck:
     """The Selection definition applied to runtime directory Targets."""
@@ -95,11 +103,13 @@ class Pluck:
     default: SelectionDefinition | None
     cases: Mapping[str, SelectionDefinition]
 
+
 @dataclass(frozen=True)
 class Namespace:
     """One archive-only directory namespace available to resolved sources."""
 
     name: str
+
 
 @dataclass(frozen=True)
 class Scope:
@@ -112,6 +122,7 @@ class Scope:
     ignore: tuple[TargetIgnorePattern, ...]
     namespace: str | None
 
+
 @dataclass(frozen=True)
 class Always:
     """One Configuration-bound source that participates in every run."""
@@ -121,6 +132,7 @@ class Always:
     selection: SelectionDefinition
     cases: Mapping[str, SelectionDefinition]
     namespace: str | None
+
 
 @dataclass(frozen=True)
 class Output:
@@ -135,6 +147,7 @@ class Output:
     @property
     def generated(self) -> bool:
         return self.timestamp
+
 
 @dataclass(frozen=True)
 class Config:

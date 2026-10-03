@@ -5,6 +5,10 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+from typing import Protocol, cast
+
+from shikumi_devdoc.cli import main as devdoc_main
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -13,17 +17,21 @@ for path in (ROOT, SRC):
     if value not in sys.path:
         sys.path.insert(0, value)
 
-from shikumi_devdoc.cli import main as devdoc_main
-
-
 CANONICAL_DOCUMENTS = ROOT / "devdocs" / "canonical_documents"
 CONTEXT_PATH = ROOT / "devdocs" / "config" / "context.json"
 NOTICE_PATH = ROOT / "devdocs" / "config" / "notice.toml"
 
+
+class _Arguments(Protocol):
+    check: bool
+
+
 # kind, canonical source module, shikumi-devdoc output target
 DOCUMENT_ARTIFACTS: tuple[tuple[str, str, Path], ...] = (
     ("document", "devdocs.canonical_sources.readme.canonical", Path(".")),
-    ("document", "devdocs.canonical_sources.changelog.canonical", Path(".")),
+    ("document", "devdocs.canonical_sources.changelog.current", Path(".")),
+    ("document", "devdocs.canonical_sources.changelog.archive.v0_9", Path("docs/changelog")),
+    ("document", "devdocs.canonical_sources.changelog.archive.v0_1_to_0_8", Path("docs/changelog")),
     ("document", "devdocs.canonical_sources.status.canonical", Path(".")),
     ("glossary", "devdocs.canonical_sources.vocabulary.canonical", Path("GLOSSARY.md")),
     ("document", "devdocs.canonical_sources.getting_started.canonical", Path("docs")),
@@ -45,27 +53,57 @@ DOCUMENT_ARTIFACTS: tuple[tuple[str, str, Path], ...] = (
     ("document", "devdocs.canonical_sources.python_api.errors", Path("docs/python_api")),
     ("document", "devdocs.canonical_sources.python_api.surface", Path("docs/python_api")),
     ("document", "devdocs.canonical_sources.specification.overview", Path("docs/specification")),
-    ("document", "devdocs.canonical_sources.specification.document_selection", Path("docs/specification")),
-    ("document", "devdocs.canonical_sources.specification.configuration_schema", Path("docs/specification")),
+    (
+        "document",
+        "devdocs.canonical_sources.specification.document_selection",
+        Path("docs/specification"),
+    ),
+    (
+        "document",
+        "devdocs.canonical_sources.specification.configuration_schema",
+        Path("docs/specification"),
+    ),
     ("document", "devdocs.canonical_sources.specification.paths", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.composition", Path("docs/specification")),
-    ("document", "devdocs.canonical_sources.specification.runtime_targets", Path("docs/specification")),
+    (
+        "document",
+        "devdocs.canonical_sources.specification.runtime_targets",
+        Path("docs/specification"),
+    ),
     ("document", "devdocs.canonical_sources.specification.namespace", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.selection", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.filesystem", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.archive", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.output", Path("docs/specification")),
     ("document", "devdocs.canonical_sources.specification.preview", Path("docs/specification")),
-    ("document", "devdocs.canonical_sources.specification.cli_contract", Path("docs/specification")),
+    (
+        "document",
+        "devdocs.canonical_sources.specification.cli_contract",
+        Path("docs/specification"),
+    ),
 )
 
 # canonical source package, output directory, index title
 INDEX_ARTIFACTS: tuple[tuple[str, Path, str], ...] = (
+    (
+        "devdocs.canonical_sources.changelog.archive",
+        Path("docs/changelog"),
+        "dirpluck Changelog Archive",
+    ),
     ("devdocs.canonical_sources.cli", Path("docs/cli"), "dirpluck CLI Guide"),
-    ("devdocs.canonical_sources.configuration", Path("docs/configuration"), "dirpluck Configuration Guide"),
+    (
+        "devdocs.canonical_sources.configuration",
+        Path("docs/configuration"),
+        "dirpluck Configuration Guide",
+    ),
     ("devdocs.canonical_sources.python_api", Path("docs/python_api"), "dirpluck Python API"),
-    ("devdocs.canonical_sources.specification", Path("docs/specification"), "dirpluck Specification"),
+    (
+        "devdocs.canonical_sources.specification",
+        Path("docs/specification"),
+        "dirpluck Specification",
+    ),
 )
+
 
 def _context() -> str:
     return CONTEXT_PATH.read_text(encoding="utf-8")
@@ -122,8 +160,7 @@ def _check() -> None:
             | {
                 path
                 for path in actual_files & rendered_files
-                if (CANONICAL_DOCUMENTS / path).read_bytes()
-                != (temp_root / path).read_bytes()
+                if (CANONICAL_DOCUMENTS / path).read_bytes() != (temp_root / path).read_bytes()
             }
         )
 
@@ -131,8 +168,8 @@ def _check() -> None:
         rendered = "\n".join(f"  - {path.as_posix()}" for path in mismatches)
         raise SystemExit(
             "canonical documents are out of date:\n"
-            f"{rendered}\n"
-            "run `python tools/render_canonical_docs.py` and commit the results"
+            + f"{rendered}\n"
+            + "run `python tools/render_canonical_docs.py` and commit the results"
         )
     print("canonical documents are up to date")
 
@@ -148,12 +185,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate committed Japanese canonical documents with shikumi-devdoc."
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--check",
         action="store_true",
         help="verify committed canonical documents without modifying them",
     )
-    args = parser.parse_args()
+    args = cast(_Arguments, cast(object, parser.parse_args()))
     if args.check:
         _check()
     else:

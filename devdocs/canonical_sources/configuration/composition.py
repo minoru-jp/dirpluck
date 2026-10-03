@@ -6,8 +6,6 @@ example_019 = test_target_field("example 019")
 
 
 @summary('Base Configuration による再利用と composition。')
-
-
 @canonical_source('Configuration composition', filename='composition.md', order=30, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""

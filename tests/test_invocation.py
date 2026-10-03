@@ -4,7 +4,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _temp import resolved_temporary_directory
+from tests._temp import resolved_temporary_directory
 
 from dirpluck.errors import InvocationError
 from dirpluck.invocation import (
@@ -25,12 +25,12 @@ class InvocationTemplateTests(unittest.TestCase):
             root = Path(temp)
             manifest = self._write(
                 root / ".dirpluck" / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 config = "release.dirpluck"
                 targets = ["work/frontend/", "work/backend/", "docs/"]
                 case = "publish"
-                ''',
+                """,
             )
             template = load_invocation(manifest)
             invocation = template.select()
@@ -84,10 +84,10 @@ class InvocationTemplateTests(unittest.TestCase):
             root = Path(temp)
             manifest = self._write(
                 root / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 config = "configs/release-1.2"
-                ''',
+                """,
             )
             invocation = load_invocation(manifest).select()
             self.assertEqual(invocation.config, "configs/release-1.2.dirpluck")
@@ -100,11 +100,11 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation.release]
                 targets = ["./app/"]
                 case = "publish"
-                ''',
+                """,
             )
             template = load_invocation(manifest)
             self.assertTrue(template.select().is_empty)
@@ -117,10 +117,10 @@ class InvocationTemplateTests(unittest.TestCase):
             with self.subTest(name=name), resolved_temporary_directory() as temp:
                 manifest = self._write(
                     Path(temp) / "release.dirpluck-inv",
-                    f'''
+                    f"""
                     [invocation.{name}]
                     value = "x"
-                    ''',
+                    """,
                 )
                 with self.assertRaisesRegex(
                     InvocationError,
@@ -132,13 +132,13 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 archive_mtime = "zip-epoch"
 
                 [invocation.snapshot]
                 archive_mtime = "now"
-                ''',
+                """,
             )
             template = load_invocation(manifest)
             self.assertEqual(template.select().archive_mtime, "zip-epoch")
@@ -149,10 +149,10 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 archive_mtime = "1970-01-01T00:00:00"
-                ''',
+                """,
             )
             with self.assertRaisesRegex(InvocationError, "archive mtime timestamp must be within"):
                 load_invocation(manifest)
@@ -161,14 +161,14 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 config = "shared.dirpluck"
                 case = "default-case"
 
                 [invocation.release]
                 targets = ["./app/"]
-                ''',
+                """,
             )
             template = load_invocation(manifest)
             release = template.select("release")
@@ -188,12 +188,12 @@ class InvocationTemplateTests(unittest.TestCase):
             root = Path(temp)
             manifest = self._write(
                 root / "release.dirpluck-inv",
-                '''
+                """
                 [invocation.release]
                 config = "release.dirpluck"
                 targets = ["./app/"]
                 case = "publish"
-                ''',
+                """,
             )
             invocation = load_invocation(manifest).select("release")
             self.assertEqual(invocation.config, "release.dirpluck")
@@ -205,10 +205,10 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation.release.extra]
                 value = true
-                ''',
+                """,
             )
             with self.assertRaisesRegex(InvocationError, "unknown key.*extra"):
                 load_invocation(manifest)
@@ -217,13 +217,13 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 targets = ["./app/"]
 
                 [other]
                 value = true
-                ''',
+                """,
             )
             with self.assertRaisesRegex(InvocationError, "unknown key.*other"):
                 load_invocation(manifest)
@@ -232,10 +232,10 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 targets = [""]
-                ''',
+                """,
             )
             with self.assertRaisesRegex(InvocationError, "expected a non-empty string"):
                 load_invocation(manifest)
@@ -244,10 +244,10 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             manifest = self._write(
                 Path(temp) / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 case = "   "
-                ''',
+                """,
             )
             with self.assertRaisesRegex(InvocationError, "expected a non-empty string"):
                 load_invocation(manifest)
@@ -312,9 +312,12 @@ class InvocationTemplateTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             for reference in (".", "..", "invocations/"):
-                with self.subTest(reference=reference), self.assertRaisesRegex(
-                    InvocationError,
-                    "must name one Invocation Template file",
+                with (
+                    self.subTest(reference=reference),
+                    self.assertRaisesRegex(
+                        InvocationError,
+                        "must name one Invocation Template file",
+                    ),
                 ):
                     resolve_invocation_path(reference, cwd=root)
 
@@ -324,10 +327,10 @@ class InvocationTemplateTests(unittest.TestCase):
             shared = root / "shared"
             real = self._write(
                 shared / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 config = "release"
-                ''',
+                """,
             )
             (root / "release.dirpluck").write_text("", encoding="utf-8")
             link = root / "release.dirpluck-inv"
@@ -389,14 +392,17 @@ class InvocationTemplateTests(unittest.TestCase):
                 self.skipTest("symbolic links are not available")
             manifest = self._write(
                 root / "release.dirpluck-inv",
-                '''
+                """
                 [invocation]
                 config = "release"
-                ''',
+                """,
             )
             invocation = load_invocation(manifest).select()
-            self.assertEqual(invocation.config_path(), link.absolute())
-            self.assertEqual(invocation.config_path().resolve(), real.resolve())
+            config_path = invocation.config_path()
+            self.assertIsNotNone(config_path)
+            assert config_path is not None
+            self.assertEqual(config_path, link.absolute())
+            self.assertEqual(config_path.resolve(), real.resolve())
 
     def test_template_path_uses_filesystem_location_notation(self):
         with resolved_temporary_directory() as temp:

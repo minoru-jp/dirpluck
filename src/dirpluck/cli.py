@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Protocol, cast
 
 from . import __version__
 from ._application import run
@@ -11,6 +12,21 @@ from ._archive import render_link_skip_note
 from ._config_parser import collect_configuration_deprecations
 from .config import CONFIG_NAME
 from .errors import DirpluckError
+
+
+class _Arguments(Protocol):
+    directories: list[str]
+    case: list[str] | None
+    sequence: list[int] | None
+    config: str | None
+    invocation_template: list[str] | None
+    entry: list[str] | None
+    archive_mtime: list[str] | None
+    here: bool
+    output: list[str] | None
+    force: bool
+    preview: bool
+    paths: bool
 
 
 def _positive_sequence(value: str) -> int:
@@ -65,96 +81,95 @@ def _validate_here_filename(parser: argparse.ArgumentParser, value: str) -> str:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dirpluck")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument(
+    _ = parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    _ = parser.add_argument(
         "directories",
         nargs="*",
         metavar="TARGET",
         help=(
             "Target reference: NAME or ./NAME (default file), ./NAME/ (default directory), "
-            "SCOPE/NAME (named file), SCOPE/NAME/ (named directory), "
-            "/ or SCOPE/ (Scope expansion), :[...] / SCOPE:[...] (literal Target lists), "
-            "or :<REGEX> / SCOPE:<REGEX> (regular-expression Target selectors); "
-            "one or more required when [pluck] is defined"
+            + "SCOPE/NAME (named file), SCOPE/NAME/ (named directory), "
+            + "/ or SCOPE/ (Scope expansion), :[...] / SCOPE:[...] (literal Target lists), "
+            + "or :<REGEX> / SCOPE:<REGEX> (regular-expression Target selectors); "
+            + "one or more required when [pluck] is defined"
         ),
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--case",
         action="append",
         metavar="NAME",
         help="one named Configuration Case",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--sequence",
         action="append",
         type=_positive_sequence,
         metavar="N",
         help="one explicit positive sequence number for a timestamp output name",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--config",
         metavar="PATH",
         help=(
             "Configuration document path; relative paths use cwd and '.dirpluck' "
-            f"may be omitted (default: ./{CONFIG_NAME})"
+            + f"may be omitted (default: ./{CONFIG_NAME})"
         ),
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-i",
         "--invocation-template",
         action="append",
         metavar="PATH",
         help=(
             "Invocation Template document path; relative paths use cwd and "
-            "'.dirpluck-inv' may be omitted"
+            + "'.dirpluck-inv' may be omitted"
         ),
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-e",
         "--entry",
         action="append",
         metavar="NAME",
         help="one named Invocation entry from the selected Invocation Template",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--archive-mtime",
         action="append",
         metavar="VALUE",
         help=(
-            "set one timestamp on every ZIP entry: YYYY-MM-DDTHH:MM:SS, "
-            "'now', or 'zip-epoch'"
+            "set one timestamp on every ZIP entry: YYYY-MM-DDTHH:MM:SS, " + "'now', or 'zip-epoch'"
         ),
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--here",
         action="store_true",
         help=(
             "write to cwd; use --here=FILENAME for an explicit filename, "
-            "otherwise use an automatic timestamp name"
+            + "otherwise use an automatic timestamp name"
         ),
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-o",
         "--output",
         action="append",
         metavar="PATH",
         help=(
             "runtime output path; a trailing '/' selects automatic timestamp naming "
-            "in that directory"
+            + "in that directory"
         ),
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-f",
         "--force",
         action="store_true",
         help="allow the effective output archive to be replaced if it already exists",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--preview",
         action="store_true",
         help="preview the ZIP contents as a tree without creating an archive",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--paths",
         action="store_true",
         help="include resolved source filesystem paths in the generated archive README",
@@ -166,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     normalized_argv, here_filename, here_count = _normalize_here_arguments(raw_argv)
-    args = parser.parse_args(normalized_argv)
+    args = cast(_Arguments, cast(object, parser.parse_args(normalized_argv)))
 
     if here_count > 1:
         parser.error("--here may be specified at most once")
@@ -185,12 +200,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--output may be specified at most once")
     selected_case = None if args.case is None else args.case[0]
     selected_sequence = None if args.sequence is None else args.sequence[0]
-    selected_archive_mtime = (
-        None if args.archive_mtime is None else args.archive_mtime[0]
-    )
-    selected_invocation = (
-        None if args.invocation_template is None else args.invocation_template[0]
-    )
+    selected_archive_mtime = None if args.archive_mtime is None else args.archive_mtime[0]
+    selected_invocation = None if args.invocation_template is None else args.invocation_template[0]
     selected_entry = None if args.entry is None else args.entry[0]
     selected_output = None if args.output is None else args.output[0]
     if args.here and selected_output is not None:
@@ -246,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         if result.invocation_empty:
             print(
                 "note: selected Invocation provides no config, targets, case, or archive_mtime; "
-                "execution uses CLI values and normal defaults"
+                + "execution uses CLI values and normal defaults"
             )
         if not args.preview and result.skipped_link_count:
             print(render_link_skip_note(result.skipped_link_count, preview=False))

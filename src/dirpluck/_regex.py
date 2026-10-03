@@ -23,9 +23,7 @@ def compile_regular_expression(
     if not text:
         raise error_type(f"{where}: {label} must not be empty")
     if len(text) > REGEX_MAX_LENGTH:
-        raise error_type(
-            f"{where}: {label} exceeds the {REGEX_MAX_LENGTH}-character limit"
-        )
+        raise error_type(f"{where}: {label} exceeds the {REGEX_MAX_LENGTH}-character limit")
     try:
         return re.compile(text)
     except re.error as exc:

@@ -7,8 +7,6 @@ example_005 = test_target_field("example 005")
 
 
 @summary('`.dirpluck-inv` Invocation Template の記述と選択。')
-
-
 @canonical_source('Invocation Templates', filename='invocation-templates.md', order=10, merge_policy="local", heading="title")
 class CLI_PART:
     r"""この文書は繰り返し使う CLI invocation を `.dirpluck-inv` Invocation Template に保存し、選択・上書きする方法を説明します。

@@ -3,8 +3,8 @@ import os
 import subprocess
 import unittest
 
-from _config_support import ConfigTestCase
-from _temp import resolved_temporary_directory
+from tests._config_support import ConfigTestCase
+from tests._temp import resolved_temporary_directory
 
 from dirpluck.config import load_config, resolve_config_path
 from dirpluck.errors import ConfigurationError
@@ -128,9 +128,12 @@ class ConfigPathTests(ConfigTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             for reference in (".", "..", "configs/"):
-                with self.subTest(reference=reference), self.assertRaisesRegex(
-                    ConfigurationError,
-                    "must name one Configuration file",
+                with (
+                    self.subTest(reference=reference),
+                    self.assertRaisesRegex(
+                        ConfigurationError,
+                        "must name one Configuration file",
+                    ),
                 ):
                     resolve_config_path(reference, cwd=root)
 
@@ -149,7 +152,12 @@ class ConfigPathTests(ConfigTestCase):
                 ConfigurationError,
                 r"base Configuration path must end with '\.dirpluck'",
             ):
-                load_config(self._write(root, '''
+                load_config(
+                    self._write(
+                        root,
+                        """
                     [about]
                     base = "base.toml"
-                '''))
+                """,
+                    )
+                )

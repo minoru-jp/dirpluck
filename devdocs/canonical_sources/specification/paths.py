@@ -1,11 +1,8 @@
-from devdocs.canonical_sources.vocabulary.canonical import TERMS
 from shikumi_devdoc.fields.specification import MUST, level
-from shikumi_devdoc.norms.common import canonical_source, merge, summary
+from shikumi_devdoc.norms.common import canonical_source, summary
 
 
 @summary('Configuration と runtime input で使用する filesystem path notation。')
-
-
 @canonical_source('Filesystem path notation', filename='paths.md', order=30, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_017:

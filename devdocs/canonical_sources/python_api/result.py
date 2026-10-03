@@ -1,8 +1,7 @@
-from devdocs.canonical_sources.vocabulary.canonical import TERMS
-from shikumi_devdoc.fields.api_reference import OPERATION, TYPE, VALUE, input, kind, name, output
+from shikumi_devdoc.fields.api_reference import TYPE, kind, name, output
 from shikumi_devdoc.fields.lifecycle import introduced
-from shikumi_devdoc.norms.common import canonical_source, merge, summary
-from shikumi_devdoc.norms.document import test_target_field, title
+from shikumi_devdoc.norms.common import canonical_source, summary
+from shikumi_devdoc.norms.document import test_target_field
 
 
 preview_example = test_target_field("preview example")
@@ -10,8 +9,6 @@ result_fields = test_target_field("RunResult public fields")
 
 
 @summary('preview/build の結果として返す `RunResult` とその公開 field。')
-
-
 @canonical_source('RunResult', filename='result.md', order=20, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""

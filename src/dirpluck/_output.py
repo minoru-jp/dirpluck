@@ -57,7 +57,7 @@ def _resolve_output_path(config: Config, request: BuildRequest) -> tuple[Path, b
         if output is None:
             raise ConfigurationError(
                 f"{config.manifest}: the root Configuration must define "
-                "[output] or [output.timestamp], or the invocation must provide runtime output"
+                + "[output] or [output.timestamp], or the invocation must provide runtime output"
             )
         base = config.manifest.parent
         if output.generated:
@@ -82,7 +82,7 @@ def _resolve_output_path(config: Config, request: BuildRequest) -> tuple[Path, b
     return candidate, overwrite
 
 
-def _prepare_output(config: Config, request: BuildRequest) -> tuple[Path, bool]:
+def _prepare_output(config: Config, request: BuildRequest) -> tuple[Path, bool]:  # pyright: ignore[reportUnusedFunction]
     """Resolve and validate the effective Output before archive planning begins."""
 
     if not isinstance(request.force, bool):
@@ -93,13 +93,9 @@ def _prepare_output(config: Config, request: BuildRequest) -> tuple[Path, bool]:
             or not isinstance(request.sequence, int)
             or request.sequence < 1
         ):
-            raise SelectionError(
-                "output sequence must be an integer greater than or equal to 1"
-            )
+            raise SelectionError("output sequence must be an integer greater than or equal to 1")
         if not _effective_output_is_generated(config, request):
-            raise SelectionError(
-                "output sequence can only be used with timestamp output"
-            )
+            raise SelectionError("output sequence can only be used with timestamp output")
 
     output_path, overwrite = _resolve_output_path(config, request)
     if output_path.exists() and not overwrite:
@@ -145,7 +141,7 @@ def _write_source_with_mtime(
         shutil.copyfileobj(src, dest, 1024 * 8)
 
 
-def _write_archive(
+def _write_archive(  # pyright: ignore[reportUnusedFunction]
     plan: ArchivePlan,
     output_path: Path,
     overwrite: bool,
@@ -177,9 +173,7 @@ def _write_archive(
         try:
             temporary.touch(mode=0o666, exist_ok=False)
         except OSError as exc:
-            raise SelectionError(
-                f"cannot create temporary output archive: {temporary}"
-            ) from exc
+            raise SelectionError(f"cannot create temporary output archive: {temporary}") from exc
 
         with zipfile.ZipFile(
             temporary,
@@ -217,9 +211,7 @@ def _write_archive(
                             archive_mtime,
                         )
                 except OSError as exc:
-                    raise SelectionError(
-                        f"cannot add selected file to archive: {source}"
-                    ) from exc
+                    raise SelectionError(f"cannot add selected file to archive: {source}") from exc
 
         if not overwrite and output_path.exists():
             raise SelectionError(f"output archive already exists: {output_path}")

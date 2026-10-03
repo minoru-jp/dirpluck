@@ -33,7 +33,6 @@ class SECTION_001:
         """
         title @= '構成'
 
-
     class SECTION_003:
         r"""
         `canonical_sources/` 自体を Python package とし、文書目的ごとに sub-package を分けます。単一文書は `canonical.py` を正本とし、README は `canonical_sources/readme/canonical.py`、project status は `canonical_sources/status/canonical.py`、最初の実行手順は `canonical_sources/getting_started/canonical.py` に置きます。複数文書の collection は sub-package 直下に独立した canonical module を並べ、CLI guide は `canonical_sources/cli/`、Configuration guide は `canonical_sources/configuration/`、Python API は `canonical_sources/python_api/`、Specification は `canonical_sources/specification/` を使います。
@@ -61,7 +60,6 @@ class SECTION_001:
         """
         title @= 'Configuration'
 
-
     class SECTION_005:
         r"""
         `canonical_documents/` は canonical source から shikumi-devdoc で実現した日本語 Markdown を格納します。canonical source と canonical document の言語は日本語で固定しているため、言語名の sub-directory は設けません。
@@ -74,6 +72,8 @@ class SECTION_001:
         canonical_documents/CHANGELOG.md
         canonical_documents/STATUS.md
         canonical_documents/docs/GETTING_STARTED.md
+        canonical_documents/docs/changelog/INDEX.md
+        canonical_documents/docs/changelog/*.md
         canonical_documents/docs/cli/INDEX.md
         canonical_documents/docs/cli/*.md
         canonical_documents/docs/configuration/INDEX.md
@@ -89,7 +89,6 @@ class SECTION_001:
         Wheel 用に別の canonical artifact は生成しません。Repository へ公開する英語 Markdown がそのまま wheel に同梱されるため、canonical document も repository publication path に対応する1系統だけを保持します。
         """
         title @= 'Canonical documents'
-
 
     class SECTION_006:
         r"""
@@ -121,22 +120,23 @@ class SECTION_001:
         """
         title @= '生成と翻訳'
 
-
     class SECTION_007:
         r"""
         Canonical sources、日本語 canonical documents、公開英語文書はいずれも version control へ commit し、正本から公開物までの差分を review できる状態にします。
 
-        `devdocs/` は source distribution に含め、release の文書生成・検証に利用できるようにします。一方、wheel には canonical source / canonical document は含めません。Wheel には repository の公開 `README.md`、`GLOSSARY.md`、`CHANGELOG.md`、`STATUS.md`、`docs/` 全体を `dirpluck/_docs/` 以下へ同梱します。
+        `devdocs/` は source distribution に含め、release の文書生成・検証に利用できるようにします。一方、wheel には canonical source / canonical document は含めません。Wheel には repository の公開 `README.md`、`GLOSSARY.md`、トップレベルの `CHANGELOG.md`、`STATUS.md`、CHANGELOG archive を含む `docs/` 全体を `dirpluck/_docs/` 以下へ同梱します。
 
         Source distribution は release の再構築・検証に必要な source 全体を含め、repository operation 専用の `.github/` は除外します。Build backend は Hatchling を使用し、通常の cache、virtual environment、build artifact などは VCS ignore rules に従って配布対象から除外します。
 
         `devdocs/` の directory layout や canonical implementation は repository development surface であり、{{TERM_1}} の product compatibility contract ではありません。
 
-        GitHub Actions の CI は `main` への push と `main` を対象とする pull request で実行します。Python 3.11 から 3.14 の matrix で `.[test]` を install し、canonical document の drift check と test suite を実行します。別の build job では wheel / sdist を構築し、distribution metadata と contents を検証します。
+        GitHub Actions の共通品質 gate は reusable `.github/workflows/checks.yml` に集約します。Ruff formatter は `src/`、`tests/`、`tools/` を対象に `ruff format --check` で検証し、canonical source を含む repository 全体には `ruff check .` を適用します。Canonical source は Python syntax を使う文書 DSL で raw document content の indentation も意味を持つため formatter 対象には含めません。あわせて basedpyright、canonical document drift check、Python 3.11 から 3.14 の `unittest` matrix を実行し、Python 3.13 では従来の `python -m unittest discover -s tests` 形式も互換確認します。
 
-        GitHub Release の `published` event では release tag 自体を checkout し、tag と package version の一致を確認したうえで、Python 3.13 の単一環境で canonical document check と test suite を再実行します。これらが成功した場合だけ release distribution を build・検証し、built wheel の install smoke test を通した同一 artifact を PyPI Trusted Publishing で公開します。
+        通常 CI は `main` への push と `main` を対象とする pull request で共通 checks を呼び出し、別の build job で wheel / sdist を構築して distribution metadata と contents を検証します。
 
-        Local では `python tools/check_release.py` により、test、canonical document check、wheel / sdist build、metadata / distribution contents、installed wheel の CLI smoke test をまとめて再現できます。
+        GitHub Release の `published` event では release tag 自体を checkout し、tag と dynamic package version の一致を先に確認します。その後、同じ reusable checks を release tag に対して実行し、成功した場合だけ release distribution を build・検証します。Built wheel の isolated install smoke test を通した同一 artifact を PyPI Trusted Publishing で公開します。
+
+        Local では `python tools/check_release.py` により、Ruff format / lint、basedpyright、両方の `unittest` discovery 形式、canonical document check、wheel / sdist build、metadata / distribution contents、installed wheel の CLI smoke test をまとめて再現できます。
         """
         title @= 'Version control と distribution'
 

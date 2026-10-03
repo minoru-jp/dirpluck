@@ -8,13 +8,13 @@ import warnings
 from unittest.mock import patch
 import zipfile
 
-from _temp import resolved_temporary_directory
+from tests._temp import resolved_temporary_directory
 
 from dirpluck import ConfigurationDeprecationWarning, __version__
 from dirpluck.cli import main
 
 
-CONFIG = '''
+CONFIG = """
 [pluck]
 description = "Default development target."
 must = ["src/"]
@@ -33,7 +33,7 @@ must = ["src/"]
 [output]
 path = "result.zip"
 overwrite = false
-'''
+"""
 
 
 class CliTests(unittest.TestCase):
@@ -63,7 +63,8 @@ class CliTests(unittest.TestCase):
             app = root / "app"
             (app / "src").mkdir(parents=True)
             (app / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent(r'''
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(r"""
                 [shared.must]
                 required = ["src/"]
 
@@ -82,7 +83,9 @@ class CliTests(unittest.TestCase):
 
                 [output]
                 path = "result.zip"
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
 
             stderr = StringIO()
             previous = Path.cwd()
@@ -97,7 +100,10 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
             self.assertFalse(
-                any(issubclass(warning.category, ConfigurationDeprecationWarning) for warning in caught)
+                any(
+                    issubclass(warning.category, ConfigurationDeprecationWarning)
+                    for warning in caught
+                )
             )
             warning = stderr.getvalue()
             self.assertEqual(warning.count("dirpluck: warning:"), 1)
@@ -112,7 +118,8 @@ class CliTests(unittest.TestCase):
             app = root / "app"
             (app / "src").mkdir(parents=True)
             (app / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
-            (root / "base.dirpluck").write_text(textwrap.dedent(r'''
+            (root / "base.dirpluck").write_text(
+                textwrap.dedent(r"""
                 [shared.must]
                 required = ["src/"]
 
@@ -120,14 +127,19 @@ class CliTests(unittest.TestCase):
                 must = [["required"]]
 
                 [scope]
-            '''), encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent(r'''
+            """),
+                encoding="utf-8",
+            )
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(r"""
                 [about]
                 base = "base.dirpluck"
 
                 [output]
                 path = "result.zip"
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
 
             stderr = StringIO()
             previous = Path.cwd()
@@ -170,7 +182,8 @@ class CliTests(unittest.TestCase):
             (returned / "repo-a.zip").write_bytes(b"a")
             (returned / "repo-b.zip").write_bytes(b"b")
             (guidelines / "rules.md").write_text("rules\n", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent('''
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [namespace.returned]
 
                 [scope.returned]
@@ -186,7 +199,9 @@ class CliTests(unittest.TestCase):
 
                 [output]
                 path = "result.zip"
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
 
             previous = Path.cwd()
             try:
@@ -220,14 +235,17 @@ class CliTests(unittest.TestCase):
             (returned / "repo-a.zip").write_bytes(b"a")
             (returned / "repo-b.zip").write_bytes(b"b")
             (returned / "notes.txt").write_text("notes\n", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent('''
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [scope.returned]
                 path = "returned"
                 target_kind = "file"
 
                 [output]
                 path = "result.zip"
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
 
             previous = Path.cwd()
             try:
@@ -342,14 +360,17 @@ class CliTests(unittest.TestCase):
             (app / "src").mkdir(parents=True)
             (app / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
             config = root / ".dirpluck" / "default.dirpluck"
-            config.write_text(textwrap.dedent('''
+            config.write_text(
+                textwrap.dedent("""
                 [pluck]
                 description = "Default development target."
                 must = ["src/"]
 
                 [output]
                 path = "result.zip"
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -469,7 +490,8 @@ class CliTests(unittest.TestCase):
             root = Path(temp)
             (root / "documents").mkdir()
             (root / "documents" / "a.md").write_text("A", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent('''
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.documents]
                 path = "documents"
                 description = "Documents."
@@ -478,7 +500,9 @@ class CliTests(unittest.TestCase):
                 [output]
                 path = "result.zip"
                 overwrite = false
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -494,7 +518,8 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "documents").mkdir()
-            (root / "default.dirpluck").write_text(textwrap.dedent('''
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.documents]
                 path = "documents"
                 description = "Documents."
@@ -504,7 +529,9 @@ class CliTests(unittest.TestCase):
                 [output]
                 path = "result.zip"
                 overwrite = false
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             stderr = StringIO()
             previous = Path.cwd()
             try:
@@ -540,7 +567,8 @@ class CliTests(unittest.TestCase):
             (root / "documents" / "archive" / "old.md").write_text("old", encoding="utf-8")
             (root / "assets").mkdir()
             (root / "assets" / "figure.txt").write_text("figure", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent('''
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.documents]
                 path = "documents"
                 description = "Current documents."
@@ -558,7 +586,9 @@ class CliTests(unittest.TestCase):
                 [output]
                 path = "result.zip"
                 overwrite = false
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -595,13 +625,15 @@ class CliTests(unittest.TestCase):
     def test_archive_mtime_option_cannot_be_repeated(self):
         stderr = StringIO()
         with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
-            main([
-                "app",
-                "--archive-mtime",
-                "zip-epoch",
-                "--archive-mtime",
-                "now",
-            ])
+            main(
+                [
+                    "app",
+                    "--archive-mtime",
+                    "zip-epoch",
+                    "--archive-mtime",
+                    "now",
+                ]
+            )
         self.assertEqual(caught.exception.code, 2)
         self.assertIn("--archive-mtime may be specified at most once", stderr.getvalue())
 
@@ -641,7 +673,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(result, 0)
                 self.assertIn(
                     "Note: 2 link-like filesystem entries (symbolic links or Windows junctions) "
-                    "were skipped and will not be archived.",
+                    + "were skipped and will not be archived.",
                     preview_output.getvalue(),
                 )
                 self.assertFalse((root / "result.zip").exists())
@@ -652,7 +684,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(result, 0)
                 self.assertIn(
                     "Note: 2 link-like filesystem entries (symbolic links or Windows junctions) "
-                    "were skipped and not archived.",
+                    + "were skipped and not archived.",
                     build_output.getvalue(),
                 )
                 with zipfile.ZipFile(root / "result.zip") as archive:
@@ -719,17 +751,18 @@ class CliTests(unittest.TestCase):
             self.assertFalse((root / "result.zip").exists())
             self.assertEqual(
                 stdout.getvalue().strip(),
-                "\n".join([
-                    "├── README.md",
-                    "├── app/",
-                    "│   └── src/",
-                    "│       └── app.py",
-                    "└── framework/",
-                    "    └── src/",
-                    "        └── core.py",
-                ]),
+                "\n".join(
+                    [
+                        "├── README.md",
+                        "├── app/",
+                        "│   └── src/",
+                        "│       └── app.py",
+                        "└── framework/",
+                        "    └── src/",
+                        "        └── core.py",
+                    ]
+                ),
             )
-
 
     def test_wrong_type_may_diagnostic_is_reported_for_preview_and_build(self):
         with resolved_temporary_directory() as temp:
@@ -738,7 +771,7 @@ class CliTests(unittest.TestCase):
             (root / "app" / "src" / "main.py").write_text("x", encoding="utf-8")
             (root / "app" / "README.md").write_text("readme", encoding="utf-8")
             (root / "default.dirpluck").write_text(
-                textwrap.dedent('''
+                textwrap.dedent("""
                     [pluck]
                     must = ["README.md"]
                     may = ["src"]
@@ -746,7 +779,7 @@ class CliTests(unittest.TestCase):
                     [output]
                     path = "result.zip"
                     overwrite = false
-                '''),
+                """),
                 encoding="utf-8",
             )
             previous = Path.cwd()
@@ -763,7 +796,6 @@ class CliTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
-
     def test_wrong_type_must_diagnostic_is_reported_during_preview(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
@@ -771,10 +803,10 @@ class CliTests(unittest.TestCase):
             (root / "app" / "src" / "main.py").write_text("x", encoding="utf-8")
             (root / "default.dirpluck").write_text(
                 textwrap.dedent(
-                    '''
+                    """
                     [pluck]
                     must = ["src"]
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -790,7 +822,9 @@ class CliTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
             self.assertIn("src [missing]", stdout.getvalue())
-            self.assertIn("dirpluck: warning: target: file pattern 'src' did not match", stderr.getvalue())
+            self.assertIn(
+                "dirpluck: warning: target: file pattern 'src' did not match", stderr.getvalue()
+            )
             self.assertIn("add a trailing '/'", stderr.getvalue())
 
     def test_paths_can_be_combined_with_preview_without_changing_tree_output(self):
@@ -872,7 +906,8 @@ class CliTests(unittest.TestCase):
             (data / "x").write_text("x", encoding="utf-8")
             config = root / ".dirpluck" / "review.dirpluck"
             config.parent.mkdir()
-            config.write_text(textwrap.dedent('''
+            config.write_text(
+                textwrap.dedent("""
                 [always.data]
                 path = "../data"
                 description = "Data."
@@ -880,7 +915,9 @@ class CliTests(unittest.TestCase):
 
                 [output]
                 path = "../result.zip"
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -947,11 +984,14 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
                 case = "review"
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -969,10 +1009,13 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "set-2.1.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "set-2.1.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -986,10 +1029,13 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1005,10 +1051,13 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             invocation = root / ".dirpluck" / "release.dirpluck-inv"
             invocation.parent.mkdir()
-            invocation.write_text(textwrap.dedent("""
+            invocation.write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1026,7 +1075,8 @@ class CliTests(unittest.TestCase):
             (data / "x").write_text("x", encoding="utf-8")
             dot_dir = root / ".dirpluck"
             dot_dir.mkdir()
-            (dot_dir / "snapshot.dirpluck").write_text(textwrap.dedent("""
+            (dot_dir / "snapshot.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.data]
                 path = "../data"
                 description = "Data."
@@ -1034,11 +1084,16 @@ class CliTests(unittest.TestCase):
 
                 [output]
                 path = "../snapshot.zip"
-            """), encoding="utf-8")
-            (dot_dir / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            """),
+                encoding="utf-8",
+            )
+            (dot_dir / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 config = "snapshot"
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1055,10 +1110,13 @@ class CliTests(unittest.TestCase):
             self._workspace(root)
             invocation = root / ".dirpluck" / "release.dirpluck-inv"
             invocation.parent.mkdir()
-            invocation.write_text(textwrap.dedent("""
+            invocation.write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1073,10 +1131,13 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "default.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "default.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./missing/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1090,14 +1151,17 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
 
                 [invocation.review]
                 targets = ["./app/"]
                 case = "review"
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1115,11 +1179,14 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation.review]
                 targets = ["./app/"]
                 case = "review"
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1157,7 +1224,8 @@ class CliTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent("""
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.data]
                 path = "data"
                 description = "Data."
@@ -1165,11 +1233,16 @@ class CliTests(unittest.TestCase):
 
                 [output]
                 path = "result.zip"
-            """), encoding="utf-8")
-            (root / "library.dirpluck-inv").write_text(textwrap.dedent("""
+            """),
+                encoding="utf-8",
+            )
+            (root / "library.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation.named]
                 targets = ["./unused/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             stdout = StringIO()
             previous = Path.cwd()
             try:
@@ -1180,19 +1253,25 @@ class CliTests(unittest.TestCase):
                 os.chdir(previous)
             self.assertEqual(result, 0)
             self.assertTrue((root / "result.zip").is_file())
-            self.assertIn("selected Invocation provides no config, targets, case, or archive_mtime", stdout.getvalue())
+            self.assertIn(
+                "selected Invocation provides no config, targets, case, or archive_mtime",
+                stdout.getvalue(),
+            )
 
     def test_empty_invocation_is_noted_in_preview(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent("""
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.data]
                 path = "data"
                 description = "Data."
                 must = ["x"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             (root / "library.dirpluck-inv").write_text("[invocation]\n", encoding="utf-8")
             stdout = StringIO()
             previous = Path.cwd()
@@ -1204,7 +1283,10 @@ class CliTests(unittest.TestCase):
                 os.chdir(previous)
             self.assertEqual(result, 0)
             self.assertIn("README.md", stdout.getvalue())
-            self.assertIn("selected Invocation provides no config, targets, case, or archive_mtime", stdout.getvalue())
+            self.assertIn(
+                "selected Invocation provides no config, targets, case, or archive_mtime",
+                stdout.getvalue(),
+            )
 
     def test_invocation_template_rejects_target_override(self):
         stderr = StringIO()
@@ -1217,10 +1299,13 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1238,11 +1323,14 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
                 case = "missing"
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1267,10 +1355,13 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             stdout = StringIO()
             previous = Path.cwd()
             try:
@@ -1287,10 +1378,13 @@ class CliTests(unittest.TestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             self._workspace(root)
-            (root / "release.dirpluck-inv").write_text(textwrap.dedent("""
+            (root / "release.dirpluck-inv").write_text(
+                textwrap.dedent("""
                 [invocation]
                 targets = ["./app/"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1310,7 +1404,8 @@ class CliTests(unittest.TestCase):
             data = root / "data"
             data.mkdir()
             (data / "x").write_text("x", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent("""
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.data]
                 path = "data"
                 description = "Data."
@@ -1319,7 +1414,9 @@ class CliTests(unittest.TestCase):
                 [output.timestamp]
                 path = "artifacts/"
                 prefix = "snapshot"
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             (root / "release.dirpluck-inv").write_text("[invocation]\n", encoding="utf-8")
             stdout = StringIO()
             previous = Path.cwd()
@@ -1353,12 +1450,15 @@ class CliTests(unittest.TestCase):
             root = Path(temp)
             (root / "data").mkdir()
             (root / "data" / "x").write_text("x", encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent("""
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent("""
                 [always.data]
                 path = "data"
                 description = "Data."
                 must = ["x"]
-            """), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             stdout = StringIO()
             previous = Path.cwd()
             try:
@@ -1488,9 +1588,7 @@ class CliTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
-            self.assertTrue(
-                (root / "artifacts" / "dirpluck-20260923-021600.zip").is_file()
-            )
+            self.assertTrue((root / "artifacts" / "dirpluck-20260923-021600.zip").is_file())
 
     def test_runtime_automatic_name_reuses_root_timestamp_naming(self):
         with resolved_temporary_directory() as temp:
@@ -1500,12 +1598,12 @@ class CliTests(unittest.TestCase):
             config.write_text(
                 config.read_text(encoding="utf-8").split("[output]", 1)[0]
                 + textwrap.dedent(
-                    '''
+                    """
                     [output.timestamp]
                     path = "configured/"
                     prefix = "project"
                     suffix = "review"
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -1519,19 +1617,11 @@ class CliTests(unittest.TestCase):
                     ),
                     redirect_stdout(StringIO()),
                 ):
-                    result = main(
-                        ["./app/", "--output", "runtime/", "--sequence", "4"]
-                    )
+                    result = main(["./app/", "--output", "runtime/", "--sequence", "4"])
             finally:
                 os.chdir(previous)
             self.assertEqual(result, 0)
-            self.assertTrue(
-                (
-                    root
-                    / "runtime"
-                    / "project-20260923-021700-4-review.zip"
-                ).is_file()
-            )
+            self.assertTrue((root / "runtime" / "project-20260923-021700-4-review.zip").is_file())
             self.assertFalse((root / "configured").exists())
 
     def test_runtime_exact_output_does_not_reuse_timestamp_naming(self):
@@ -1542,12 +1632,12 @@ class CliTests(unittest.TestCase):
             config.write_text(
                 config.read_text(encoding="utf-8").split("[output]", 1)[0]
                 + textwrap.dedent(
-                    '''
+                    """
                     [output.timestamp]
                     path = "configured/"
                     prefix = "project"
                     suffix = "review"
-                    '''
+                    """
                 ),
                 encoding="utf-8",
             )
@@ -1665,7 +1755,8 @@ class CliTests(unittest.TestCase):
             for name in ("alpha", "beta"):
                 (projects / name / "src").mkdir(parents=True)
                 (projects / name / "src" / f"{name}.py").write_text(name, encoding="utf-8")
-            (root / "default.dirpluck").write_text(textwrap.dedent(f'''
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(f"""
                 [pluck]
                 description = "Projects."
                 must = ["src/"]
@@ -1676,7 +1767,9 @@ class CliTests(unittest.TestCase):
                 [output]
                 path = "result.zip"
                 overwrite = false
-            '''), encoding="utf-8")
+            """),
+                encoding="utf-8",
+            )
             previous = Path.cwd()
             try:
                 os.chdir(root)
@@ -1689,6 +1782,7 @@ class CliTests(unittest.TestCase):
                 names = set(archive.namelist())
             self.assertIn("alpha/src/alpha.py", names)
             self.assertIn("beta/src/beta.py", names)
+
 
 if __name__ == "__main__":
     unittest.main()

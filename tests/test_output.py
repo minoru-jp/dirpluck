@@ -1,19 +1,15 @@
 from pathlib import Path
 import os
 import stat
-import subprocess
-import textwrap
 import unittest
 from unittest.mock import patch
 import zipfile
 
-from _temp import resolved_temporary_directory
-from _builder_support import BuilderTestCase
+from tests._temp import resolved_temporary_directory
+from tests._builder_support import BuilderTestCase
 
-import dirpluck._filesystem as filesystem_module
 from dirpluck._builder_models import BuildRequest
 from dirpluck.builder import build_archive
-from dirpluck.config import load_config
 from dirpluck.errors import SelectionError
 
 
@@ -24,11 +20,15 @@ class OutputTests(BuilderTestCase):
             project = root / "application" / "src"
             project.mkdir(parents=True)
             (project / "main.py").write_text("x", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            ''', output="artifacts/context.zip")
+            """,
+                output="artifacts/context.zip",
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(output, root / "artifacts" / "context.zip")
             self.assertTrue(output.is_file())
@@ -38,11 +38,15 @@ class OutputTests(BuilderTestCase):
             root = Path(temp)
             (root / "application" / "src").mkdir(parents=True)
             (root / "out.zip").write_bytes(b"old")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            ''', overwrite=False)
+            """,
+                overwrite=False,
+            )
             with self.assertRaises(SelectionError):
                 build_archive(config, BuildRequest.create("./application/"))
             self.assertEqual((root / "out.zip").read_bytes(), b"old")
@@ -51,27 +55,42 @@ class OutputTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "out.zip").write_bytes(b"old")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["missing"]
-            """, overwrite=False)
+            """,
+                overwrite=False,
+            )
 
-            with patch("dirpluck._archive.plan_archive", side_effect=AssertionError("planning should not run")):
+            with patch(
+                "dirpluck._archive.plan_archive",
+                side_effect=AssertionError("planning should not run"),
+            ):
                 with self.assertRaisesRegex(SelectionError, "output archive already exists"):
                     build_archive(config, BuildRequest.create("./application/"))
 
     def test_fixed_output_sequence_is_rejected_before_archive_planning(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["missing"]
-            """)
+            """,
+            )
 
-            with patch("dirpluck._archive.plan_archive", side_effect=AssertionError("planning should not run")):
-                with self.assertRaisesRegex(SelectionError, "sequence can only be used with timestamp output"):
+            with patch(
+                "dirpluck._archive.plan_archive",
+                side_effect=AssertionError("planning should not run"),
+            ):
+                with self.assertRaisesRegex(
+                    SelectionError, "sequence can only be used with timestamp output"
+                ):
                     build_archive(config, BuildRequest.create("./application/", sequence=1))
 
     def test_fixed_output_overwrite_replaces_existing_archive(self):
@@ -81,11 +100,15 @@ class OutputTests(BuilderTestCase):
             project.mkdir(parents=True)
             (project / "main.py").write_text("x", encoding="utf-8")
             (root / "out.zip").write_bytes(b"old")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            ''', overwrite=True)
+            """,
+                overwrite=True,
+            )
             build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(root / "out.zip") as archive:
                 self.assertIn("application/src/main.py", archive.namelist())
@@ -97,10 +120,13 @@ class OutputTests(BuilderTestCase):
             project = root / "application" / "src"
             project.mkdir(parents=True)
             (project / "main.py").write_text("x", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["src/"]
-            ''')
+            """,
+            )
 
             previous_umask = os.umask(0o027)
             try:
@@ -120,10 +146,14 @@ class OutputTests(BuilderTestCase):
             output = root / "out.zip"
             output.write_bytes(b"old")
             output.chmod(0o600)
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["src/"]
-            ''', overwrite=True)
+            """,
+                overwrite=True,
+            )
 
             previous_umask = os.umask(0o022)
             try:
@@ -142,14 +172,17 @@ class OutputTests(BuilderTestCase):
             project.mkdir(parents=True)
             (project / "main.py").write_text("x", encoding="utf-8")
 
-            parent_config = self._config(root, '''
+            parent_config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
                 [output]
                 path = "../parent.zip"
                 overwrite = false
-            ''')
+            """,
+            )
             parent_output = build_archive(
                 parent_config,
                 BuildRequest.create("./application/"),
@@ -158,14 +191,17 @@ class OutputTests(BuilderTestCase):
             self.assertTrue(parent_output.is_file())
 
             absolute = workspace / "absolute.zip"
-            absolute_config = self._config(root, f'''
+            absolute_config = self._config(
+                root,
+                f"""
                 [pluck]
                 description = "Target."
                 must = ["src/"]
                 [output]
                 path = {absolute.as_posix()!r}
                 overwrite = false
-            ''')
+            """,
+            )
             absolute_output = build_archive(
                 absolute_config,
                 BuildRequest.create("./application/"),
@@ -177,11 +213,14 @@ class OutputTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             (root / "application" / "src").mkdir(parents=True)
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            """)
+            """,
+            )
             with self.assertRaises(SelectionError):
                 build_archive(
                     config,
@@ -198,11 +237,15 @@ class OutputTests(BuilderTestCase):
                 link.symlink_to(Path(other), target_is_directory=True)
             except OSError as exc:
                 self.skipTest(f"symbolic links are unavailable: {exc}")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "Target."
                 must = ["src/"]
-            ''', output="artifacts/out.zip")
+            """,
+                output="artifacts/out.zip",
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             self.assertEqual(output, Path(other) / "out.zip")
             self.assertTrue((Path(other) / "out.zip").is_file())

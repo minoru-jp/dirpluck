@@ -7,8 +7,6 @@ example_023 = test_target_field("example 023")
 
 
 @summary('Configuration 全体を組み合わせた complete example。')
-
-
 @canonical_source('Configuration examples', filename='examples.md', order=50, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""

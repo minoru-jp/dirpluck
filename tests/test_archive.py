@@ -1,19 +1,15 @@
 from pathlib import Path
 import os
-import subprocess
-import textwrap
 import unittest
 from unittest.mock import patch
 import zipfile
 
-from _temp import resolved_temporary_directory
-from _builder_support import BuilderTestCase
+from tests._temp import resolved_temporary_directory
+from tests._builder_support import BuilderTestCase
 
-import dirpluck._filesystem as filesystem_module
 from dirpluck._builder_models import BuildRequest
 from dirpluck._effective import resolve_sources
 from dirpluck.builder import build_archive
-from dirpluck.config import load_config
 from dirpluck.errors import SelectionError
 
 
@@ -24,12 +20,15 @@ class ArchiveTests(BuilderTestCase):
             source = root / "input.txt"
             source.write_text("payload\n", encoding="utf-8")
             os.utime(source, (0, 0))
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [always.input]
                 path = "."
                 description = "Input."
                 must = ["input.txt"]
-            """)
+            """,
+            )
 
             output = build_archive(config, BuildRequest.create())
 
@@ -44,12 +43,15 @@ class ArchiveTests(BuilderTestCase):
             root = Path(temp)
             source = root / "input.txt"
             source.write_text("payload\n", encoding="utf-8")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [always.input]
                 path = "."
                 description = "Input."
                 must = ["input.txt"]
-            """)
+            """,
+            )
 
             with patch.object(zipfile.ZipFile, "write", side_effect=PermissionError("denied")):
                 with self.assertRaisesRegex(SelectionError, "cannot add selected file to archive"):
@@ -64,24 +66,27 @@ class ArchiveTests(BuilderTestCase):
             target = root / "application"
             target.mkdir()
             (target / "file.txt").write_text("x", encoding="utf-8")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [about]
                 description = "Materials prepared for an authentication review."
 
                 [pluck]
                 description = "Application sources."
                 must = ["file.txt"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
             self.assertTrue(
                 readme.startswith(
                     "# Archive contents\n\n"
-                    "Materials prepared for an authentication review.\n\n"
-                    "## `application/`\n\n"
-                    "Files: 1\n\n"
-                    "Application sources.\n"
+                    + "Materials prepared for an authentication review.\n\n"
+                    + "## `application/`\n\n"
+                    + "Files: 1\n\n"
+                    + "Application sources.\n"
                 )
             )
 
@@ -93,7 +98,9 @@ class ArchiveTests(BuilderTestCase):
             (project / "dist").mkdir()
             (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
             (project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl").write_bytes(b"wheel")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [pluck]
                 description = "The project currently being changed."
                 must = ["src/"]
@@ -101,7 +108,8 @@ class ArchiveTests(BuilderTestCase):
                 path = "shikumi-devdoc"
                 description = "The current built distribution used as a reference."
                 must = ["dist/shikumi_devdoc-*.whl"]
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(SelectionError, "distinct archive roots"):
                 resolve_sources(config, BuildRequest.create("./shikumi-devdoc/"))
 
@@ -113,7 +121,9 @@ class ArchiveTests(BuilderTestCase):
             (project / "dist").mkdir()
             (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
             (project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl").write_bytes(b"wheel")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [namespace.reference]
 
                 [pluck]
@@ -125,7 +135,8 @@ class ArchiveTests(BuilderTestCase):
                 namespace = "reference"
                 description = "The current built distribution used as a reference."
                 must = ["dist/shikumi_devdoc-*.whl"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./shikumi-devdoc/"))
             with zipfile.ZipFile(output) as archive:
                 names = archive.namelist()
@@ -140,8 +151,7 @@ class ArchiveTests(BuilderTestCase):
             self.assertNotIn("Source root:", readme)
             self.assertIn("The current built distribution used as a reference.", readme)
             self.assertIn(
-                "## `shikumi-devdoc/`\n\nFiles: 1\n\n"
-                "The project currently being changed.",
+                "## `shikumi-devdoc/`\n\nFiles: 1\n\n" + "The project currently being changed.",
                 readme,
             )
 
@@ -157,7 +167,9 @@ class ArchiveTests(BuilderTestCase):
             external.mkdir()
             (external / target_wheel.name).write_bytes(b"always wheel")
 
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [namespace.shikumi-devdoc]
 
                 [pluck]
@@ -167,9 +179,12 @@ class ArchiveTests(BuilderTestCase):
                 path = {external.as_posix()!r}
                 namespace = "shikumi-devdoc"
                 must = ["*.whl"]
-            ''')
+            """,
+            )
 
-            with self.assertRaisesRegex(SelectionError, "multiple files resolve to the same archive path"):
+            with self.assertRaisesRegex(
+                SelectionError, "multiple files resolve to the same archive path"
+            ):
                 build_archive(config, BuildRequest.create("./shikumi-devdoc/"))
 
     def test_target_and_always_may_include_same_physical_file_at_different_archive_paths(self):
@@ -181,7 +196,9 @@ class ArchiveTests(BuilderTestCase):
             (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
             wheel = project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl"
             wheel.write_bytes(b"wheel")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [namespace.devdoc]
 
                 [pluck]
@@ -193,7 +210,8 @@ class ArchiveTests(BuilderTestCase):
                 namespace = "devdoc"
                 description = "The built distribution used as a development tool."
                 must = ["*.whl"]
-            ''')
+            """,
+            )
 
             output = build_archive(config, BuildRequest.create("./shikumi-devdoc/"))
 
@@ -207,9 +225,9 @@ class ArchiveTests(BuilderTestCase):
             )
             self.assertIn(
                 "## `devdoc/shikumi-devdoc/dist/`\n\n"
-                "Files: 1\n"
-                "Target overlap: 1 selected file is also included under `shikumi-devdoc/`.\n\n"
-                "The built distribution used as a development tool.",
+                + "Files: 1\n"
+                + "Target overlap: 1 selected file is also included under `shikumi-devdoc/`.\n\n"
+                + "The built distribution used as a development tool.",
                 readme,
             )
 
@@ -222,7 +240,9 @@ class ArchiveTests(BuilderTestCase):
             (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
             wheel = project / "dist" / "shikumi_devdoc-0.1.0-py3-none-any.whl"
             wheel.write_bytes(b"wheel")
-            config = self._config(root, '''
+            config = self._config(
+                root,
+                """
                 [namespace.devdoc]
 
                 [pluck]
@@ -234,7 +254,8 @@ class ArchiveTests(BuilderTestCase):
                 namespace = "devdoc"
                 description = "The built distribution used as a development tool."
                 must = ["*.whl"]
-            ''')
+            """,
+            )
 
             output = build_archive(config, BuildRequest.create("./shikumi-devdoc/"))
 
@@ -256,7 +277,9 @@ class ArchiveTests(BuilderTestCase):
             outside = Path(other) / "reference"
             outside.mkdir()
             (outside / "guide.md").write_text("guide", encoding="utf-8")
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [pluck]
                 description = "Application sources."
                 must = ["src/"]
@@ -265,7 +288,8 @@ class ArchiveTests(BuilderTestCase):
                 path = {outside.as_posix()!r}
                 description = "Reference material."
                 must = ["guide.md"]
-            ''')
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
@@ -284,7 +308,9 @@ class ArchiveTests(BuilderTestCase):
             outside = Path(other) / "reference"
             outside.mkdir()
             (outside / "guide.md").write_text("guide", encoding="utf-8")
-            config = self._config(root, f'''
+            config = self._config(
+                root,
+                f"""
                 [pluck]
                 description = "Application sources."
                 must = ["src/"]
@@ -293,7 +319,8 @@ class ArchiveTests(BuilderTestCase):
                 path = {outside.as_posix()!r}
                 description = "Reference material."
                 must = ["guide.md"]
-            ''')
+            """,
+            )
             output = build_archive(
                 config,
                 BuildRequest.create("./application/", paths=True),
@@ -315,24 +342,27 @@ class ArchiveTests(BuilderTestCase):
             docs = root / "docs"
             docs.mkdir()
             (docs / "guide.md").write_text("guide", encoding="utf-8")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["file.txt"]
 
                 [always.docs]
                 path = "docs"
                 must = ["guide.md"]
-            """)
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
             self.assertEqual(
                 readme,
                 "# Archive contents\n\n"
-                "## `application/`\n\n"
-                "Files: 1\n\n"
-                "## `docs/`\n\n"
-                "Files: 1\n",
+                + "## `application/`\n\n"
+                + "Files: 1\n\n"
+                + "## `docs/`\n\n"
+                + "Files: 1\n",
             )
 
     def test_archive_readme_preserves_multiline_source_description_as_section_body(self):
@@ -341,18 +371,21 @@ class ArchiveTests(BuilderTestCase):
             target = root / "application"
             target.mkdir()
             (target / "file.txt").write_text("x", encoding="utf-8")
-            config = self._config(root, r"""
+            config = self._config(
+                root,
+                r"""
                 [pluck]
                 description = "Primary review material.\n\nPay attention to compatibility | public API changes."
                 must = ["file.txt"]
-            """)
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn(
                 "## `application/`\n\nFiles: 1\n\n"
-                "Primary review material.\n\n"
-                "Pay attention to compatibility | public API changes.",
+                + "Primary review material.\n\n"
+                + "Pay attention to compatibility | public API changes.",
                 readme,
             )
             self.assertNotIn("| Path |", readme)
@@ -366,7 +399,9 @@ class ArchiveTests(BuilderTestCase):
             docs = root / "docs"
             docs.mkdir()
             (docs / "guide.md").write_text("guide", encoding="utf-8")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [pluck]
                 must = ["file.txt"]
 
@@ -374,27 +409,33 @@ class ArchiveTests(BuilderTestCase):
                 path = "docs"
                 description = "Review guidance."
                 must = ["guide.md"]
-            """)
+            """,
+            )
             output = build_archive(config, BuildRequest.create("./application/"))
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("## `application/`\n\nFiles: 1", readme)
             self.assertIn("## `docs/`\n\nFiles: 1\n\nReview guidance.", readme)
 
-    def test_archive_readme_namespaced_source_uses_final_archive_root_without_namespace_metadata(self):
+    def test_archive_readme_namespaced_source_uses_final_archive_root_without_namespace_metadata(
+        self,
+    ):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             docs = root / "docs"
             docs.mkdir()
             (docs / "guide.md").write_text("guide", encoding="utf-8")
-            config = self._config(root, """
+            config = self._config(
+                root,
+                """
                 [namespace.reference]
 
                 [always.docs]
                 path = "docs"
                 namespace = "reference"
                 must = ["guide.md"]
-            """)
+            """,
+            )
             output = build_archive(config, BuildRequest.create())
             with zipfile.ZipFile(output) as archive:
                 readme = archive.read("README.md").decode("utf-8")

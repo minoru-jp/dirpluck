@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 import inspect
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import Mapping
 import tomllib
+from typing import cast
 import warnings
 
-from ._config_models import Always, Config, Namespace, Output, Scope
+from ._config_models import Always, Config, Namespace, Output, Scope, TargetIgnorePattern
 from ._config_values import (
     CONFIG_NAME,
     CONFIG_SUFFIX,
@@ -43,7 +43,7 @@ _CONFIGURATION_DEPRECATIONS: ContextVar[list[str] | None] = ContextVar(
 
 
 @contextmanager
-def collect_configuration_deprecations() -> Iterator[list[str]]:
+def collect_configuration_deprecations() -> Generator[list[str], None, None]:
     """Collect deprecated Configuration syntax diagnostics for one caller."""
 
     messages: list[str] = []
@@ -69,7 +69,7 @@ def _report_configuration_deprecation(message: str) -> None:
     frame = inspect.currentframe()
     try:
         while frame is not None:
-            module_name = frame.f_globals.get("__name__", "")
+            module_name = cast(str, frame.f_globals.get("__name__", ""))
             if module_name != "dirpluck" and not module_name.startswith("dirpluck."):
                 break
             stacklevel += 1
@@ -89,23 +89,21 @@ def _selection_uses_deprecated_reference_syntax(value: object) -> bool:
 
     if not isinstance(value, dict):
         return False
+    table = cast(dict[str, object], value)
     for field in ("must", "may", "ignore"):
-        entries = value.get(field)
+        entries = table.get(field)
         if not isinstance(entries, list):
             continue
-        for entry in entries:
-            if (
-                isinstance(entry, list)
-                and len(entry) == 1
-                and isinstance(entry[0], str)
-                and bool(entry[0].strip())
-            ):
-                return True
-    cases = value.get("case")
+        for entry in cast(list[object], entries):
+            if isinstance(entry, list):
+                legacy = cast(list[object], entry)
+                if len(legacy) == 1 and isinstance(legacy[0], str) and bool(legacy[0].strip()):
+                    return True
+    cases = table.get("case")
     if isinstance(cases, dict):
         return any(
             _selection_uses_deprecated_reference_syntax(case)
-            for case in cases.values()
+            for case in cast(dict[str, object], cases).values()
         )
     return False
 
@@ -119,7 +117,7 @@ def _uses_deprecated_reference_syntax(data: Mapping[str, object]) -> bool:
     if isinstance(always, dict):
         return any(
             _selection_uses_deprecated_reference_syntax(source)
-            for source in always.values()
+            for source in cast(dict[str, object], always).values()
         )
     return False
 
@@ -127,31 +125,34 @@ def _uses_deprecated_reference_syntax(data: Mapping[str, object]) -> bool:
 def _read_toml(path: Path) -> dict[str, object]:
     try:
         with path.open("rb") as file:
-            data = tomllib.load(file)
+            raw_data = tomllib.load(file)
     except FileNotFoundError as exc:
         raise ConfigurationError(f"configuration file was not found: {path}") from exc
     except tomllib.TOMLDecodeError as exc:
         raise ConfigurationError(f"invalid TOML in {path}: {exc}") from exc
-    if not isinstance(data, dict):
+    if not isinstance(raw_data, dict):
         raise ConfigurationError(f"{path}: top level must be a table")
-    return data
+    return cast(dict[str, object], raw_data)
+
 
 def _parse_namespaces(value: object, where: str) -> Mapping[str, Namespace]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    if not value:
+    table = cast(dict[str, object], value)
+    if not table:
         raise ConfigurationError(f"{where}: define at least one [namespace.<name>]")
     namespaces: dict[str, Namespace] = {}
-    for raw_name, raw_namespace in value.items():
+    for raw_name, raw_namespace in table.items():
         name = _validate_namespace_name(raw_name, where)
         namespace_where = f"{where}.{name}"
         if not isinstance(raw_namespace, dict):
             raise ConfigurationError(f"{namespace_where}: expected a table")
-        _require_only_keys(raw_namespace, set(), namespace_where)
+        _require_only_keys(cast(dict[str, object], raw_namespace), set(), namespace_where)
         namespaces[name] = Namespace(name=name)
     return MappingProxyType(namespaces)
+
 
 def _parse_scope_target_kind(value: object, where: str) -> str:
     if value is None:
@@ -165,9 +166,11 @@ def _parse_scope_target_kind(value: object, where: str) -> str:
 
 def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
     if value is None:
-        value = {}
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"{where}: expected a table")
+        table: dict[str, object] = {}
+    else:
+        if not isinstance(value, dict):
+            raise ConfigurationError(f"{where}: expected a table")
+        table = cast(dict[str, object], value)
 
     scopes: dict[str | None, Scope] = {}
     unnamed_description: str | None = None
@@ -175,7 +178,7 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
     unnamed_ignore: tuple[TargetIgnorePattern, ...] = ()
     unnamed_namespace: str | None = None
 
-    for raw_key, raw_value in value.items():
+    for raw_key, raw_value in table.items():
         if raw_key == "description" and not isinstance(raw_value, dict):
             unnamed_description = _validated_description(raw_value, f"{where}.description")
             continue
@@ -195,21 +198,28 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
 
         name = _validate_scope_name(raw_key, where)
         scope_where = f"{where}.{name}"
+        scope_table = cast(dict[str, object], raw_value)
         _require_only_keys(
-            raw_value,
+            scope_table,
             {"path", "description", "target_kind", "ignore", "namespace"},
             scope_where,
         )
-        raw_path = raw_value.get("path")
+        raw_path = scope_table.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{scope_where}.path: expected a string")
         path = _validate_filesystem_location(raw_path, f"{scope_where}.path", label="Scope path")
         description = None
-        if "description" in raw_value:
-            description = _validated_description(raw_value["description"], f"{scope_where}.description")
-        target_kind = _parse_scope_target_kind(raw_value.get("target_kind"), f"{scope_where}.target_kind")
-        ignore = _validated_target_ignores(raw_value.get("ignore"), f"{scope_where}.ignore")
-        namespace = _parse_namespace_reference(raw_value.get("namespace"), f"{scope_where}.namespace")
+        if "description" in scope_table:
+            description = _validated_description(
+                scope_table["description"], f"{scope_where}.description"
+            )
+        target_kind = _parse_scope_target_kind(
+            scope_table.get("target_kind"), f"{scope_where}.target_kind"
+        )
+        ignore = _validated_target_ignores(scope_table.get("ignore"), f"{scope_where}.ignore")
+        namespace = _parse_namespace_reference(
+            scope_table.get("namespace"), f"{scope_where}.namespace"
+        )
         scopes[name] = Scope(
             name=name,
             path=path,
@@ -232,28 +242,43 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
     )
     return MappingProxyType(scopes)
 
+
 def _parse_always(value: object, where: str) -> Mapping[str, Always]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
+    table = cast(dict[str, object], value)
     always: dict[str, Always] = {}
-    for raw_name, raw_source in value.items():
+    for raw_name, raw_source in table.items():
         name = _require_name(raw_name, where)
         source_where = f"{where}.{name}"
         if not isinstance(raw_source, dict):
             raise ConfigurationError(f"{source_where}: expected a table")
-        _require_only_keys(raw_source, {"path", "description", "must", "may", "ignore", "allow_empty", "case", "namespace"}, source_where)
-        raw_path = raw_source.get("path")
-        if not isinstance(raw_path, str):
-            raise ConfigurationError(f"{source_where}.path: expected a string")
-        path = _validate_filesystem_location(raw_path, f"{source_where}.path", label="Always source path")
-        selection = _parse_selection(
-            {key: item for key, item in raw_source.items() if key not in {"path", "case", "namespace"}},
+        source_table = cast(dict[str, object], raw_source)
+        _require_only_keys(
+            source_table,
+            {"path", "description", "must", "may", "ignore", "allow_empty", "case", "namespace"},
             source_where,
         )
-        cases = _parse_cases(raw_source.get("case"), f"{source_where}.case")
-        namespace = _parse_namespace_reference(raw_source.get("namespace"), f"{source_where}.namespace")
+        raw_path = source_table.get("path")
+        if not isinstance(raw_path, str):
+            raise ConfigurationError(f"{source_where}.path: expected a string")
+        path = _validate_filesystem_location(
+            raw_path, f"{source_where}.path", label="Always source path"
+        )
+        selection = _parse_selection(
+            {
+                key: item
+                for key, item in source_table.items()
+                if key not in {"path", "case", "namespace"}
+            },
+            source_where,
+        )
+        cases = _parse_cases(source_table.get("case"), f"{source_where}.case")
+        namespace = _parse_namespace_reference(
+            source_table.get("namespace"), f"{source_where}.namespace"
+        )
         always[name] = Always(
             name=name,
             path=path,
@@ -263,70 +288,88 @@ def _parse_always(value: object, where: str) -> Mapping[str, Always]:
         )
     return MappingProxyType(always)
 
+
 def _parse_about(value: object, where: str) -> tuple[str | None, str | None]:
     if value is None:
         return None, None
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    _require_only_keys(value, {"description", "base"}, where)
-    if not value:
+    table = cast(dict[str, object], value)
+    _require_only_keys(table, {"description", "base"}, where)
+    if not table:
         raise ConfigurationError(f"{where}: define description and/or base")
     description = None
-    if "description" in value:
-        description = _validated_description(value["description"], f"{where}.description")
+    if "description" in table:
+        description = _validated_description(table["description"], f"{where}.description")
     base = None
-    if "base" in value:
-        base = _validate_base_path(value["base"], f"{where}.base")
+    if "base" in table:
+        base = _validate_base_path(table["base"], f"{where}.base")
     return description, base
+
 
 def _parse_output(value: object, where: str) -> Output | None:
     if value is None:
         return None
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    _require_only_keys(value, {"path", "overwrite", "timestamp"}, where)
+    table = cast(dict[str, object], value)
+    _require_only_keys(table, {"path", "overwrite", "timestamp"}, where)
 
-    if "timestamp" in value:
-        if "path" in value or "overwrite" in value:
-            raise ConfigurationError(f"{where}: fixed output fields and [output.timestamp] are mutually exclusive")
-        raw_timestamp = value["timestamp"]
+    if "timestamp" in table:
+        if "path" in table or "overwrite" in table:
+            raise ConfigurationError(
+                f"{where}: fixed output fields and [output.timestamp] are mutually exclusive"
+            )
+        raw_timestamp = table["timestamp"]
         if not isinstance(raw_timestamp, dict):
             raise ConfigurationError(f"{where}.timestamp: expected a table")
-        _require_only_keys(raw_timestamp, {"path", "prefix", "suffix"}, f"{where}.timestamp")
-        raw_path = raw_timestamp.get("path")
+        timestamp_table = cast(dict[str, object], raw_timestamp)
+        _require_only_keys(timestamp_table, {"path", "prefix", "suffix"}, f"{where}.timestamp")
+        raw_path = timestamp_table.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{where}.timestamp.path: expected a string")
         if not raw_path.endswith("/"):
-            raise ConfigurationError(f"{where}.timestamp.path: timestamp output directory path must end with '/'")
-        path = _validate_filesystem_location(raw_path, f"{where}.timestamp.path", label="output directory")
-        prefix = _validate_output_fragment(raw_timestamp.get("prefix"), f"{where}.timestamp.prefix")
-        suffix = _validate_output_fragment(raw_timestamp.get("suffix"), f"{where}.timestamp.suffix")
+            raise ConfigurationError(
+                f"{where}.timestamp.path: timestamp output directory path must end with '/'"
+            )
+        path = _validate_filesystem_location(
+            raw_path, f"{where}.timestamp.path", label="output directory"
+        )
+        prefix = _validate_output_fragment(
+            timestamp_table.get("prefix"), f"{where}.timestamp.prefix"
+        )
+        suffix = _validate_output_fragment(
+            timestamp_table.get("suffix"), f"{where}.timestamp.suffix"
+        )
         return Output(path=path, timestamp=True, prefix=prefix, suffix=suffix)
 
-    raw_path = value.get("path")
+    raw_path = table.get("path")
     if not isinstance(raw_path, str):
         raise ConfigurationError(f"{where}.path: expected a string")
     if raw_path.endswith("/"):
-        raise ConfigurationError(f"{where}.path: fixed output path must include a filename and must not end with '/'")
+        raise ConfigurationError(
+            f"{where}.path: fixed output path must include a filename and must not end with '/'"
+        )
     path = _validate_filesystem_location(raw_path, f"{where}.path", label="output path")
     final_component = raw_path.rsplit("/", 1)[-1]
     if final_component in {".", ".."} or PurePosixPath(path) == PurePosixPath("."):
         raise ConfigurationError(f"{where}.path: output path must name a file")
-    overwrite = value.get("overwrite", False)
+    overwrite = table.get("overwrite", False)
     if not isinstance(overwrite, bool):
         raise ConfigurationError(f"{where}.overwrite: expected a boolean")
     return Output(path=path, overwrite=overwrite)
+
 
 def load_config(path: str | Path = CONFIG_NAME) -> Config:
     """Load one dirpluck Configuration document without resolving its base chain."""
 
     manifest = _lexical_absolute_path(Path(path).expanduser())
     if manifest.suffix != CONFIG_SUFFIX:
-        raise ConfigurationError(
-            f"configuration file must end with {CONFIG_SUFFIX!r}: {manifest}"
-        )
+        raise ConfigurationError(f"configuration file must end with {CONFIG_SUFFIX!r}: {manifest}")
     data = _read_toml(manifest)
-    _require_only_keys(data, {"about", "shared", "pluck", "scope", "always", "namespace", "output"}, str(manifest))
+    _require_only_keys(
+        data, {"about", "shared", "pluck", "scope", "always", "namespace", "output"}, str(manifest)
+    )
 
     about_description, base = _parse_about(data.get("about"), f"{manifest} [about]")
     shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
@@ -353,7 +396,7 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
     if _uses_deprecated_reference_syntax(data):
         _report_configuration_deprecation(
             f"{manifest}: deprecated nested-array Selection reference syntax since 0.14.0; "
-            "it will be removed in 1.0.0; use { shared = \"...\" }, "
-            "or { path = \"...\" } for ignore paths"
+            + 'it will be removed in 1.0.0; use { shared = "..." }, '
+            + 'or { path = "..." } for ignore paths'
         )
     return config

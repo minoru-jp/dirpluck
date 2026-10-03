@@ -1,7 +1,6 @@
-from devdocs.canonical_sources.vocabulary.canonical import TERMS
-from shikumi_devdoc.fields.api_reference import OPERATION, TYPE, VALUE, input, kind, name, output
+from shikumi_devdoc.fields.api_reference import OPERATION, input, kind, name, output
 from shikumi_devdoc.fields.lifecycle import introduced
-from shikumi_devdoc.norms.common import canonical_source, merge, summary
+from shikumi_devdoc.norms.common import canonical_source, summary
 from shikumi_devdoc.norms.document import test_target_field, title
 
 
@@ -15,8 +14,6 @@ archive_mtime_example = test_target_field("archive mtime example")
 
 
 @summary('high-level `run()` entry point と runtime modifier の契約。')
-
-
 @canonical_source('dirpluck.run', filename='run.md', order=10, merge_policy="local", heading="title")
 class API_REFERENCE_PART:
     r"""

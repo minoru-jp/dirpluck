@@ -7,16 +7,21 @@ import sys
 import tempfile
 import venv
 from pathlib import Path
+from typing import Protocol, cast
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 
 
+class _Arguments(Protocol):
+    archive_only: bool
+
+
 def _run(args: list[str | Path]) -> None:
     command = [str(arg) for arg in args]
     print("+", " ".join(command), flush=True)
-    subprocess.run(command, cwd=ROOT, check=True)
+    _ = subprocess.run(command, cwd=ROOT, check=True)
 
 
 def _clean_dist() -> None:
@@ -58,13 +63,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build and locally verify dirpluck release distributions."
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--archive-only",
         action="store_true",
         help="build and inspect wheel/sdist without installing the wheel into a temporary environment",
     )
-    args = parser.parse_args()
+    args = cast(_Arguments, cast(object, parser.parse_args()))
 
+    _run([sys.executable, "-m", "ruff", "format", "--check", "src", "tests", "tools"])
+    _run([sys.executable, "-m", "ruff", "check", "."])
+    _run([sys.executable, "-m", "basedpyright", "--pythonpath", sys.executable])
+    _run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", ".", "-v"])
     _run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"])
     _run([sys.executable, "tools/render_canonical_docs.py", "--check"])
     _clean_dist()

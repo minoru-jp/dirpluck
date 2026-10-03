@@ -53,6 +53,8 @@ canonical_documents/GLOSSARY.md
 canonical_documents/CHANGELOG.md
 canonical_documents/STATUS.md
 canonical_documents/docs/GETTING_STARTED.md
+canonical_documents/docs/changelog/INDEX.md
+canonical_documents/docs/changelog/*.md
 canonical_documents/docs/cli/INDEX.md
 canonical_documents/docs/cli/*.md
 canonical_documents/docs/configuration/INDEX.md
@@ -99,14 +101,16 @@ python tools/render_canonical_docs.py --check
 
 Canonical sources, Japanese canonical documents, and published English documents are all committed so changes can be reviewed across the full source-to-publication path.
 
-`devdocs/` is included in the source distribution so the documentation generation and validation inputs remain available with a release. Canonical sources and canonical documents are not included in the wheel. Instead, the wheel bundles the repository's published `README.md`, `GLOSSARY.md`, `CHANGELOG.md`, `STATUS.md`, and complete `docs/` tree under `dirpluck/_docs/`.
+`devdocs/` is included in the source distribution so the documentation generation and validation inputs remain available with a release. Canonical sources and canonical documents are not included in the wheel. Instead, the wheel bundles the repository's published `README.md`, `GLOSSARY.md`, top-level `CHANGELOG.md`, `STATUS.md`, and complete `docs/` tree, including the changelog archive, under `dirpluck/_docs/`.
 
 The source distribution contains the complete source needed to rebuild and validate the release, while repository-operation-only `.github/` content is excluded. Hatchling is the build backend, and ordinary caches, virtual environments, and build artifacts are left out according to VCS ignore rules.
 
 The `devdocs/` directory layout and canonical implementation are repository-development surfaces, not part of dirpluck's product compatibility contract.
 
-GitHub Actions CI runs on pushes to `main` and pull requests targeting `main`. A Python 3.11 through 3.14 matrix installs `.[test]`, checks canonical-document drift, and runs the test suite. A separate build job builds the wheel and sdist and verifies distribution metadata and contents.
+GitHub Actions centralizes the shared quality gate in reusable `.github/workflows/checks.yml`. Ruff formatting is enforced for `src/`, `tests/`, and `tools/` with `ruff format --check`, while `ruff check .` continues to lint the whole repository including canonical sources. Canonical sources are intentionally outside the formatter scope because they use Python syntax as a documentation DSL and raw document indentation can be meaningful. The same shared checks also run basedpyright, canonical-document drift validation, and the Python 3.11 through 3.14 `unittest` matrix; Python 3.13 additionally verifies compatibility with the legacy `python -m unittest discover -s tests` form.
 
-When a GitHub Release is published, the release workflow checks out the release tag itself, verifies that the tag matches the package version, and reruns the canonical-document check and test suite on Python 3.13. Only after those checks pass does it build and verify the release distributions, smoke-test the built wheel in an isolated environment, and publish that same artifact set to PyPI through Trusted Publishing.
+Normal CI runs on pushes to `main` and pull requests targeting `main`, calls the shared checks, and uses a separate build job to build the wheel and sdist and verify distribution metadata and contents.
 
-Locally, `python tools/check_release.py` reproduces the combined release checks: tests, canonical-document validation, wheel / sdist build, metadata and distribution-content checks, and an installed-wheel CLI smoke test.
+When a GitHub Release is published, the release workflow checks out the release tag itself and verifies that the tag matches the dynamic package version before running the same reusable checks against that tag. Only after those checks pass does it build and verify the release distributions, smoke-test the built wheel in an isolated environment, and publish that same artifact set to PyPI through Trusted Publishing.
+
+Locally, `python tools/check_release.py` reproduces the combined quality and release checks: Ruff formatting and lint, basedpyright, both `unittest` discovery forms, canonical-document validation, wheel / sdist build, metadata and distribution-content checks, and an installed-wheel CLI smoke test.

@@ -8,8 +8,6 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 
 
 @summary('final archive root、entry collision、generated README の planning 規則。')
-
-
 @canonical_source('Archive planning', filename='archive.md', order=90, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_095:

@@ -1,8 +1,8 @@
 from pathlib import Path
 import textwrap
 
-from _config_support import ConfigTestCase
-from _temp import resolved_temporary_directory
+from tests._config_support import ConfigTestCase
+from tests._temp import resolved_temporary_directory
 
 from dirpluck.config import load_config
 from dirpluck.errors import ConfigurationError
@@ -12,21 +12,31 @@ class ConfigSchemaTests(ConfigTestCase):
     def test_about_description_is_optional_and_parsed_when_present(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            without_about = load_config(self._write(root, '''
+            without_about = load_config(
+                self._write(
+                    root,
+                    """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
-            '''))
+            """,
+                )
+            )
             self.assertIsNone(without_about.about_description)
 
-            with_about = load_config(self._write(root, '''
+            with_about = load_config(
+                self._write(
+                    root,
+                    """
                 [about]
                 description = "Materials for reviewing the authentication redesign."
 
                 [pluck]
                 description = "Default."
                 must = ["src/"]
-            '''))
+            """,
+                )
+            )
             self.assertEqual(
                 with_about.about_description,
                 "Materials for reviewing the authentication redesign.",
@@ -34,27 +44,27 @@ class ConfigSchemaTests(ConfigTestCase):
 
     def test_about_rejects_empty_table_blank_description_and_unknown_fields(self):
         bodies = (
-            '''
+            """
             [about]
             [pluck]
             description = "Default."
             must = ["src/"]
-            ''',
-            '''
+            """,
+            """
             [about]
             description = "   "
             [pluck]
             description = "Default."
             must = ["src/"]
-            ''',
-            '''
+            """,
+            """
             [about]
             description = "Summary."
             title = "Not supported"
             [pluck]
             description = "Default."
             must = ["src/"]
-            ''',
+            """,
         )
         for body in bodies:
             with self.subTest(body=body), resolved_temporary_directory() as temp:
@@ -65,7 +75,10 @@ class ConfigSchemaTests(ConfigTestCase):
     def test_namespace_definitions_are_empty_named_tables(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root, '''
+            config = load_config(
+                self._write(
+                    root,
+                    """
                 [namespace.work]
                 [namespace.external]
 
@@ -82,7 +95,9 @@ class ConfigSchemaTests(ConfigTestCase):
                 description = "Docs."
                 may = ["README.md"]
                 allow_empty = true
-            '''))
+            """,
+                )
+            )
             self.assertEqual(set(config.namespaces), {"work", "external"})
             self.assertEqual(config.scopes[None].namespace, "work")
             self.assertEqual(config.always["docs"].namespace, "external")
@@ -91,29 +106,34 @@ class ConfigSchemaTests(ConfigTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             with self.assertRaisesRegex(ConfigurationError, "define at least one"):
-                load_config(self._write(root, """
+                load_config(
+                    self._write(
+                        root,
+                        """
                     [namespace]
 
                     [pluck]
                     description = "Default."
                     must = ["src/"]
-                """))
+                """,
+                    )
+                )
 
     def test_namespace_definition_rejects_attributes_and_nonportable_names(self):
         invalid = (
-            '''
+            """
             [namespace.work]
             directory = "work"
             [pluck]
             description = "Default."
             must = ["src/"]
-            ''',
-            '''
+            """,
+            """
             [namespace."bad/name"]
             [pluck]
             description = "Default."
             must = ["src/"]
-            ''',
+            """,
         )
         for body in invalid:
             with self.subTest(body=body), resolved_temporary_directory() as temp:
@@ -130,12 +150,17 @@ class ConfigSchemaTests(ConfigTestCase):
     def test_always_only_configuration_is_valid(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root, '''
+            config = load_config(
+                self._write(
+                    root,
+                    """
                 [always.documents]
                 path = "documents"
                 description = "Documents."
                 must = ["*.pdf"]
-            '''))
+            """,
+                )
+            )
             self.assertIsNone(config.pluck)
             self.assertEqual(config.always["documents"].path, "documents")
 
@@ -143,19 +168,27 @@ class ConfigSchemaTests(ConfigTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             with self.assertRaises(ConfigurationError):
-                load_config(self._write(root, '''
+                load_config(
+                    self._write(
+                        root,
+                        """
                     [pluck]
                     description = "Default."
                     must = ["src/"]
                     [bundle.review]
                     description = "Old model"
-                '''))
+                """,
+                    )
+                )
 
     def test_unknown_always_key_is_rejected(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             with self.assertRaises(ConfigurationError):
-                load_config(self._write(root, '''
+                load_config(
+                    self._write(
+                        root,
+                        """
                     [pluck]
                     description = "Default."
                     must = ["src/"]
@@ -164,19 +197,24 @@ class ConfigSchemaTests(ConfigTestCase):
                     description = "Framework."
                     must = ["src/"]
                     case = "review"
-                '''))
+                """,
+                    )
+                )
 
     def test_always_path_is_required(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, '''
+            manifest = self._write(
+                root,
+                """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
                 [always.framework]
                 description = "Framework."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
@@ -186,7 +224,10 @@ class ConfigSchemaTests(ConfigTestCase):
             absolute = (root.parent / "framework").as_posix()
             for path in (".", "..", "../framework", absolute):
                 with self.subTest(path=path):
-                    config = load_config(self._write(root, f'''
+                    config = load_config(
+                        self._write(
+                            root,
+                            f"""
                         [pluck]
                         description = "Default."
                         must = ["src/"]
@@ -194,13 +235,17 @@ class ConfigSchemaTests(ConfigTestCase):
                         path = {path!r}
                         description = "Framework."
                         must = ["src/"]
-                    '''))
+                    """,
+                        )
+                    )
                     self.assertEqual(config.always["framework"].path, path)
 
     def test_always_path_must_be_concrete(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, '''
+            manifest = self._write(
+                root,
+                """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
@@ -208,14 +253,17 @@ class ConfigSchemaTests(ConfigTestCase):
                 path = "framework*"
                 description = "Framework."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
     def test_always_path_rejects_backslash_separator(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, r'''
+            manifest = self._write(
+                root,
+                r"""
                 [pluck]
                 description = "Default."
                 must = ["src/"]
@@ -223,39 +271,50 @@ class ConfigSchemaTests(ConfigTestCase):
                 path = 'shared\framework'
                 description = "Framework."
                 must = ["src/"]
-            ''')
+            """,
+            )
             with self.assertRaisesRegex(ConfigurationError, "backslashes"):
                 load_config(manifest)
 
     def test_output_is_optional_when_loading_configuration(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, """
+            manifest = self._write(
+                root,
+                """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
-            """, add_output=False)
+            """,
+                add_output=False,
+            )
             config = load_config(manifest)
             self.assertIsNone(config.output)
 
     def test_legacy_output_if_exists_is_rejected(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, '''
+            manifest = self._write(
+                root,
+                """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
                 [output]
                 path = "out.zip"
                 if_exists = "rename"
-            ''', add_output=False)
+            """,
+                add_output=False,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
     def test_fixed_and_legacy_generated_output_fields_cannot_be_combined(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, """
+            manifest = self._write(
+                root,
+                """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
@@ -264,14 +323,18 @@ class ConfigSchemaTests(ConfigTestCase):
                 overwrite = false
                 directory = "snapshots"
                 timestamp = true
-            """, add_output=False)
+            """,
+                add_output=False,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
     def test_legacy_generated_output_rejects_overwrite(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, """
+            manifest = self._write(
+                root,
+                """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
@@ -279,7 +342,9 @@ class ConfigSchemaTests(ConfigTestCase):
                 directory = "snapshots"
                 timestamp = true
                 overwrite = false
-            """, add_output=False)
+            """,
+                add_output=False,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
@@ -302,37 +367,45 @@ class ConfigSchemaTests(ConfigTestCase):
         for body in bodies:
             with self.subTest(body=body), resolved_temporary_directory() as temp:
                 root = Path(temp)
-                manifest = self._write(root, f"""
+                manifest = self._write(
+                    root,
+                    f"""
                     [pluck]
                     description = "Default."
                     must = ["src/"]
                     {textwrap.dedent(body)}
-                """, add_output=False)
+                """,
+                    add_output=False,
+                )
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
 
     def test_legacy_generated_output_fields_are_rejected(self):
         bad_values = (
-            ('directory', 'snap*shots'),
-            ('directory', r'snap\shots'),
-            ('prefix', 'group/name'),
-            ('suffix', 'review?'),
-            ('prefix', 'bad\nname'),
+            ("directory", "snap*shots"),
+            ("directory", r"snap\shots"),
+            ("prefix", "group/name"),
+            ("suffix", "review?"),
+            ("prefix", "bad\nname"),
         )
         for field, value in bad_values:
             with self.subTest(field=field, value=value), resolved_temporary_directory() as temp:
                 root = Path(temp)
-                extra = f'{field} = {value!r}\n'
-                if field != 'directory':
+                extra = f"{field} = {value!r}\n"
+                if field != "directory":
                     extra = 'directory = "snapshots"\n' + extra
-                manifest = self._write(root, f"""
+                manifest = self._write(
+                    root,
+                    f"""
                     [pluck]
                     description = "Default."
                     must = ["src/"]
                     [output]
                     {extra}
                     timestamp = true
-                """, add_output=False)
+                """,
+                    add_output=False,
+                )
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
 
@@ -340,14 +413,18 @@ class ConfigSchemaTests(ConfigTestCase):
         for path in ("*.zip", ".", r"artifacts\out.zip"):
             with self.subTest(path=path), resolved_temporary_directory() as temp:
                 root = Path(temp)
-                manifest = self._write(root, f'''
+                manifest = self._write(
+                    root,
+                    f"""
                     [pluck]
                     description = "Default."
                     must = ["src/"]
                     [output]
                     path = {path!r}
                     overwrite = false
-                ''', add_output=False)
+                """,
+                    add_output=False,
+                )
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
 
@@ -357,32 +434,48 @@ class ConfigSchemaTests(ConfigTestCase):
             absolute = (root.parent / "out.zip").as_posix()
             for path in ("../out.zip", absolute):
                 with self.subTest(path=path):
-                    config = load_config(self._write(root, f'''
+                    config = load_config(
+                        self._write(
+                            root,
+                            f"""
                         [pluck]
                         description = "Default."
                         must = ["src/"]
                         [output]
                         path = {path!r}
                         overwrite = false
-                    ''', add_output=False))
+                    """,
+                            add_output=False,
+                        )
+                    )
+                    assert config.output is not None
                     self.assertEqual(config.output.path, path)
 
     def test_legacy_import_case_field_is_rejected(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, """
+            manifest = self._write(
+                root,
+                """
                 [import.other]
                 root = ".."
                 configuration = "other/default.dirpluck"
                 case = "release"
-            """)
+            """,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
     def test_legacy_import_fields_are_rejected(self):
         invalid = (
-            ("root = 'C:\\projects\\shikumi'\nconfiguration = \"a.dirpluck\"", "Windows backslash absolute root"),
-            ('root = "C:projects/shikumi"\nconfiguration = "a.dirpluck"', "Windows drive-relative root"),
+            (
+                "root = 'C:\\projects\\shikumi'\nconfiguration = \"a.dirpluck\"",
+                "Windows backslash absolute root",
+            ),
+            (
+                'root = "C:projects/shikumi"\nconfiguration = "a.dirpluck"',
+                "Windows drive-relative root",
+            ),
             ('root = "../*"\nconfiguration = "a.dirpluck"', "glob root"),
             ('root = ".."\nconfiguration = "../a.dirpluck"', "configuration traversal"),
             ('root = ".."\nconfiguration = "./a.dirpluck"', "configuration dot traversal"),
@@ -393,34 +486,43 @@ class ConfigSchemaTests(ConfigTestCase):
         for body, label in invalid:
             with self.subTest(label=label), resolved_temporary_directory() as temp:
                 root = Path(temp)
-                manifest = self._write(root, f'''
+                manifest = self._write(
+                    root,
+                    f"""
                     [import.other]
                     {body}
-                ''')
+                """,
+                )
                 with self.assertRaises(ConfigurationError):
                     load_config(manifest)
 
     def test_legacy_import_targets_key_is_rejected(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, '''
+            manifest = self._write(
+                root,
+                """
                 [import.other]
                 root = ".."
                 configuration = "other/default.dirpluck"
                 targets = ["."]
-            ''')
+            """,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
     def test_legacy_import_key_is_rejected(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            manifest = self._write(root, '''
+            manifest = self._write(
+                root,
+                """
                 [import.other]
                 root = ".."
                 configuration = "other/default.dirpluck"
                 inherit = true
-            ''')
+            """,
+            )
             with self.assertRaises(ConfigurationError):
                 load_config(manifest)
 
@@ -430,39 +532,44 @@ class ConfigSchemaTests(ConfigTestCase):
             with self.subTest(pattern=pattern), resolved_temporary_directory() as temp:
                 root = Path(temp)
                 with self.assertRaises(ConfigurationError):
-                    load_config(self._write(root, f'''
+                    load_config(
+                        self._write(
+                            root,
+                            f"""
                         [pluck]
                         description = "Default."
                         must = ["src/"]
                         skip = [{pattern!r}]
-                    '''))
+                    """,
+                        )
+                    )
 
     def test_scope_names_and_tables_are_strict(self):
         invalid_bodies = (
-            '''            [pluck]
+            """            [pluck]
             description = "Default."
             must = ["src/"]
             [scope."work.dev"]
             path = "projects"
-            ''',
-            '''            [pluck]
+            """,
+            """            [pluck]
             description = "Default."
             must = ["src/"]
             [scope.work]
-            ''',
-            '''            [pluck]
+            """,
+            """            [pluck]
             description = "Default."
             must = ["src/"]
             [scope.work]
             path = "projects"
             extra = true
-            ''',
-            r'''            [pluck]
+            """,
+            r"""            [pluck]
             description = "Default."
             must = ["src/"]
             [scope.work]
             path = 'projects\nested'
-            ''',
+            """,
         )
         for body in invalid_bodies:
             with self.subTest(body=body), resolved_temporary_directory() as temp:
@@ -473,7 +580,10 @@ class ConfigSchemaTests(ConfigTestCase):
     def test_scope_parses_description_and_target_kind_with_directory_default(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            config = load_config(self._write(root, '''
+            config = load_config(
+                self._write(
+                    root,
+                    """
                 [pluck]
                 description = "Default."
                 must = ["src/"]
@@ -485,26 +595,38 @@ class ConfigSchemaTests(ConfigTestCase):
                 path = "returned"
                 description = "Returned archives."
                 target_kind = "file"
-            '''))
+            """,
+                )
+            )
             self.assertEqual(config.scopes[None].description, "Default workspace.")
             self.assertEqual(config.scopes[None].target_kind, "directory")
             self.assertEqual(config.scopes["returned"].description, "Returned archives.")
             self.assertEqual(config.scopes["returned"].target_kind, "file")
 
-            both = load_config(self._write(root, '''
+            both = load_config(
+                self._write(
+                    root,
+                    """
                 [scope.mixed]
                 path = "mixed"
                 target_kind = "both"
-            '''))
+            """,
+                )
+            )
             self.assertEqual(both.scopes["mixed"].target_kind, "both")
 
     def test_scope_target_kind_rejects_unknown_and_non_string_values(self):
-        invalid_values = ('"archive"', 'true', '1')
+        invalid_values = ('"archive"', "true", "1")
         for value in invalid_values:
             with self.subTest(value=value), resolved_temporary_directory() as temp:
                 root = Path(temp)
-                with self.assertRaisesRegex(ConfigurationError, "expected 'directory', 'file', or 'both'"):
-                    load_config(self._write(root, f'''
+                with self.assertRaisesRegex(
+                    ConfigurationError, "expected 'directory', 'file', or 'both'"
+                ):
+                    load_config(
+                        self._write(
+                            root,
+                            f"""
                         [pluck]
                         description = "Default."
                         must = ["src/"]
@@ -512,13 +634,18 @@ class ConfigSchemaTests(ConfigTestCase):
                         [scope.work]
                         path = "work"
                         target_kind = {value}
-                    '''))
+                    """,
+                        )
+                    )
 
     def test_scope_description_must_be_nonempty_string(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             with self.assertRaisesRegex(ConfigurationError, "expected a non-empty string"):
-                load_config(self._write(root, '''
+                load_config(
+                    self._write(
+                        root,
+                        """
                     [pluck]
                     description = "Default."
                     must = ["src/"]
@@ -526,4 +653,6 @@ class ConfigSchemaTests(ConfigTestCase):
                     [scope.work]
                     path = "work"
                     description = "   "
-                '''))
+                """,
+                    )
+                )

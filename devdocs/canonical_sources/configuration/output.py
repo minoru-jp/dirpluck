@@ -7,8 +7,6 @@ example_021 = test_target_field("example 021")
 
 
 @summary('Fixed / timestamp Output と書き込み境界。')
-
-
 @canonical_source('Configuration output', filename='output.md', order=40, merge_policy="local", heading="title")
 class CONFIGURATION_PART:
     r"""

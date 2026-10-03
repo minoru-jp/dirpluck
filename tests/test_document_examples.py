@@ -10,7 +10,7 @@ from pathlib import Path
 import tomllib
 import unittest
 
-from _temp import resolved_temporary_directory
+from tests._temp import resolved_temporary_directory
 
 import dirpluck
 
@@ -114,8 +114,12 @@ class DocumentExampleTests(unittest.TestCase):
                     "diff --git a/src/main.py b/src/main.py\n", encoding="utf-8"
                 )
 
-            (root / "framework-core" / "dist" / "framework_core-2.4.0-py3-none-any.whl").write_bytes(b"wheel")
-            (root / "docs-builder" / "dist" / "docs_builder-1.6.0-py3-none-any.whl").write_bytes(b"wheel")
+            (
+                root / "framework-core" / "dist" / "framework_core-2.4.0-py3-none-any.whl"
+            ).write_bytes(b"wheel")
+            (root / "docs-builder" / "dist" / "docs_builder-1.6.0-py3-none-any.whl").write_bytes(
+                b"wheel"
+            )
             (root / "default.dirpluck").write_text(configuration + "\n", encoding="utf-8")
 
             result = dirpluck.run(
@@ -139,7 +143,9 @@ class DocumentExampleTests(unittest.TestCase):
             self.assertIn("repositories/web-console/README.md", result.archive_entries)
             self.assertNotIn("repositories/worker-jobs/README.md", result.archive_entries)
             self.assertFalse(any(".env" in entry for entry in result.archive_entries))
-            self.assertFalse(any("private/local-notes" in entry for entry in result.archive_entries))
+            self.assertFalse(
+                any("private/local-notes" in entry for entry in result.archive_entries)
+            )
             self.assertFalse(any("/.tmp/" in entry for entry in result.archive_entries))
 
             diff_result = dirpluck.run(
@@ -155,7 +161,9 @@ class DocumentExampleTests(unittest.TestCase):
             self.assertNotIn("repositories/worker-jobs/README.md", diff_result.archive_entries)
             self.assertNotIn("repositories/web-console/README.md", diff_result.archive_entries)
             self.assertFalse(any(".env" in entry for entry in diff_result.archive_entries))
-            self.assertFalse(any("private/local-notes" in entry for entry in diff_result.archive_entries))
+            self.assertFalse(
+                any("private/local-notes" in entry for entry in diff_result.archive_entries)
+            )
             self.assertIn(
                 ".tmp/ に評価してほしい差分が含まれています。",
                 diff_result.archive_readme,
@@ -182,10 +190,12 @@ class DocumentExampleTests(unittest.TestCase):
         self.assertEqual(len(snippets), 1)
         expression = ast.parse(snippets[0]).body[0]
         self.assertIsInstance(expression, ast.Expr)
+        assert isinstance(expression, ast.Expr)
         call = expression.value
         self.assertIsInstance(call, ast.Call)
+        assert isinstance(call, ast.Call)
 
-        documented = []
+        documented: list[str] = []
         for argument in call.args:
             if isinstance(argument, ast.Starred) and isinstance(argument.value, ast.Name):
                 documented.append(argument.value.id)
@@ -206,8 +216,12 @@ class DocumentExampleTests(unittest.TestCase):
         self.assertEqual(len(snippets), 1)
         statement = ast.parse(snippets[0]).body[0]
         self.assertIsInstance(statement, ast.ImportFrom)
+        assert isinstance(statement, ast.ImportFrom)
         names = [alias.name for alias in statement.names]
-        self.assertEqual(names, ["ConfigurationDeprecationWarning", "DirpluckError", "RunResult", "__version__", "run"])
+        self.assertEqual(
+            names,
+            ["ConfigurationDeprecationWarning", "DirpluckError", "RunResult", "__version__", "run"],
+        )
         for name in names:
             self.assertTrue(hasattr(dirpluck, name), name)
 

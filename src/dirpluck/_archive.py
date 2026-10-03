@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from typing import Mapping
+from collections.abc import Mapping
+from typing import TypeAlias
 
 from ._builder_models import (
     ArchivePlan,
@@ -17,6 +18,9 @@ from .config import Config
 from .errors import SelectionError
 from ._effective import _resolve_execution
 from ._selection import select_files
+
+
+_ArchiveTree: TypeAlias = dict[str, "_ArchiveTree"]
 
 
 def _markdown_code_span(value: str) -> str:
@@ -55,7 +59,9 @@ def _render_archive_readme(
         lines.append(f"Files: {selection_counts[source.key]}")
         if request.paths:
             lines.append(f"Source: {_markdown_code_span(source.directory.as_posix())}")
-        target_sources = {target.archive_root: target for target in sources if target.kind == "target"}
+        target_sources = {
+            target.archive_root: target for target in sources if target.kind == "target"
+        }
         for target_root, count in target_overlaps.get(source.key, ()):
             unit = "file" if count == 1 else "files"
             verb = "is" if count == 1 else "are"
@@ -65,7 +71,7 @@ def _render_archive_readme(
                 target = f"{target.rstrip('/')}/"
             lines.append(
                 f"Target overlap: {count} selected {unit} {verb} also included under "
-                f"{_markdown_code_span(target)}."
+                + f"{_markdown_code_span(target)}."
             )
         descriptions = tuple(
             description
@@ -159,25 +165,34 @@ def plan_archive(
             source_resolved = file.resolve()
             previous = archive_entries.get(arcname)
             if previous is not None and previous.resolve() != source_resolved:
-                raise SelectionError(f"multiple files resolve to the same archive path {arcname!r}: {previous} and {file}")
-            conflict_candidates = archive_entries if source.source_kind == "file" else atomic_file_paths
+                raise SelectionError(
+                    f"multiple files resolve to the same archive path {arcname!r}: {previous} and {file}"
+                )
+            conflict_candidates = (
+                archive_entries if source.source_kind == "file" else atomic_file_paths
+            )
             for existing in conflict_candidates:
                 if existing == arcname:
                     continue
                 if existing.startswith(arcname + "/") or arcname.startswith(existing + "/"):
                     raise SelectionError(
                         "archive file/directory path conflict between "
-                        f"{existing!r} and {arcname!r}"
+                        + f"{existing!r} and {arcname!r}"
                     )
             archive_entries[arcname] = file
             if source.source_kind == "file":
                 atomic_file_paths.add(arcname)
 
-    empty_directories = sorted({
-        status.archive_root
-        for status in empty_selections
-        if status.allow_empty and not any(arcname.startswith(f"{status.archive_root}/") for arcname in archive_entries)
-    })
+    empty_directories = sorted(
+        {
+            status.archive_root
+            for status in empty_selections
+            if status.allow_empty
+            and not any(
+                arcname.startswith(f"{status.archive_root}/") for arcname in archive_entries
+            )
+        }
+    )
     targets = tuple(source for source in sources if source.kind == "target")
     target_overlaps: dict[str, tuple[tuple[str, int], ...]] = {}
     for source in sources:
@@ -225,18 +240,22 @@ def render_link_skip_note(count: int, *, preview: bool) -> str:
     outcome = "will not be archived" if preview else "not archived"
     return (
         f"Note: {count} link-like filesystem {unit} "
-        f"(symbolic links or Windows junctions) {verb} skipped and {outcome}."
+        + f"(symbolic links or Windows junctions) {verb} skipped and {outcome}."
     )
 
 
-def render_archive_tree(plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...] | list[str]) -> str:
+def render_archive_tree(
+    plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...] | list[str],
+) -> str:
     """Render archive entry paths as a deterministic tree, marking missing paths."""
 
     if isinstance(plan, ArchivePlan):
         empty_roots = {status.archive_root for status in plan.empty_selections}
         directory_paths = set(plan.empty_directories) | empty_roots
         missing_directory_paths = {path[:-1] for path in plan.missing if path.endswith("/")}
-        optional_missing_directory_paths = {path[:-1] for path in plan.optional_missing if path.endswith("/")}
+        optional_missing_directory_paths = {
+            path[:-1] for path in plan.optional_missing if path.endswith("/")
+        }
         normalized_missing = {path[:-1] if path.endswith("/") else path for path in plan.missing}
         normalized_optional_missing = {
             path[:-1] if path.endswith("/") else path for path in plan.optional_missing
@@ -253,11 +272,11 @@ def render_archive_tree(plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...]
         optional_missing = normalized_optional_missing
     else:
         paths = list(plan.keys()) if isinstance(plan, Mapping) else list(plan)
-        missing = set()
-        optional_missing = set()
-        directory_paths = set()
+        missing: set[str] = set()
+        optional_missing: set[str] = set()
+        directory_paths: set[str] = set()
 
-    tree: dict[str, dict] = {}
+    tree: _ArchiveTree = {}
     for path in sorted(set(paths)):
         node = tree
         for part in PurePosixPath(path).parts:
@@ -267,7 +286,7 @@ def render_archive_tree(plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...]
 
     lines: list[str] = []
 
-    def walk(node: dict[str, dict], prefix: str, parts: tuple[str, ...]) -> None:
+    def walk(node: _ArchiveTree, prefix: str, parts: tuple[str, ...]) -> None:
         items = sorted(node.items())
         for index, (name, children) in enumerate(items):
             last = index == len(items) - 1
@@ -291,7 +310,7 @@ def render_archive_tree(plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...]
             marker = "optional missing" if status.optional else "missing"
             lines.append(
                 f"- {status.source_label} (`{status.archive_root}/`): "
-                f"{status.expression} [{marker}]"
+                + f"{status.expression} [{marker}]"
             )
     if isinstance(plan, ArchivePlan) and plan.empty_selections:
         lines.extend(["", "Empty results:"])

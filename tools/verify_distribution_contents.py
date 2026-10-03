@@ -44,8 +44,7 @@ def public_documents() -> set[str]:
 
 def packaged_document_sources() -> dict[str, Path]:
     return {
-        f"dirpluck/_docs/{relative}": ROOT / relative
-        for relative in sorted(public_documents())
+        f"dirpluck/_docs/{relative}": ROOT / relative for relative in sorted(public_documents())
     }
 
 
@@ -65,13 +64,11 @@ def check_wheel(path: Path) -> None:
             ".github/",
             "dirpluck/docs/",
         )
-        forbidden = sorted(
-            name for name in names if name.startswith(forbidden_prefixes)
-        )
+        forbidden = sorted(name for name in names if name.startswith(forbidden_prefixes))
         if forbidden:
             fail(
                 "wheel contains files outside the wheel distribution boundary: "
-                f"{forbidden[:10]}"
+                + f"{forbidden[:10]}"
             )
 
         for archive_name, source in expected_docs.items():
@@ -79,15 +76,13 @@ def check_wheel(path: Path) -> None:
                 fail(f"wheel document differs from repository source: {archive_name}")
 
         wheel_docs = {
-            name
-            for name in names
-            if name.startswith("dirpluck/_docs/") and name.endswith(".md")
+            name for name in names if name.startswith("dirpluck/_docs/") and name.endswith(".md")
         }
         if wheel_docs != set(expected_docs):
             fail(
                 "wheel documentation set differs from the public documentation set: "
-                f"unexpected={sorted(wheel_docs - set(expected_docs))}, "
-                f"missing={sorted(set(expected_docs) - wheel_docs)}"
+                + f"unexpected={sorted(wheel_docs - set(expected_docs))}, "
+                + f"missing={sorted(set(expected_docs) - wheel_docs)}"
             )
 
 
@@ -133,9 +128,7 @@ def check_sdist(path: Path) -> None:
             ".venv/",
             "venv/",
         )
-        forbidden = sorted(
-            name for name in names if name.startswith(forbidden_prefixes)
-        )
+        forbidden = sorted(name for name in names if name.startswith(forbidden_prefixes))
         if forbidden:
             fail(f"sdist contains repository-operation or generated files: {forbidden[:10]}")
         if "MANIFEST.in" in names:

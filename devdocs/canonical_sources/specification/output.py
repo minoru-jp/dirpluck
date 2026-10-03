@@ -7,8 +7,6 @@ from shikumi_devdoc.norms.document import title
 
 
 @summary('fixed/timestamp/runtime Output、write boundary、collision 規則。')
-
-
 @canonical_source('Output', filename='output.md', order=100, merge_policy="local", heading="identity")
 class SPECIFICATION_PART:
     class SPEC_107:
