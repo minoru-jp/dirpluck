@@ -33,6 +33,8 @@ def validate_filesystem_location(path: str, where: str, *, label: str) -> str:
         raise ConfigurationError(
             f"{where}: absolute-root form is not supported by the host operating system"
         )
+    if windows.drive and windows.root:
+        return windows.as_posix()
     return pure.as_posix()
 
 

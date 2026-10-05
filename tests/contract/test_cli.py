@@ -1451,7 +1451,7 @@ class CliTests(unittest.TestCase):
             with zipfile.ZipFile(root / "result.zip") as archive:
                 readme = archive.read("README.md").decode("utf-8")
             self.assertIn("Source", readme)
-            self.assertIn(str((root / "app").resolve()), readme)
+            self.assertIn((root / "app").resolve().as_posix(), readme)
 
     def test_invocation_template_allows_sequence_runtime_modifier(self):
         with resolved_temporary_directory() as temp:

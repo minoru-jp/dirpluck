@@ -51,6 +51,7 @@ Fixed:
 
 - Archive directory identity の最小 validation から誤って外していた ASCII control character と backslash の拒否を復元する。U+0000..U+001F と U+007F は ZIP entry name の切り詰めや warning / preview 表示崩れを防ぐため拒否し、`\` は `/` と同様に path separator として解釈され得るため1個の Archive directory component に受理しない。これは host OS 固有の予約名を模倣する portable policy ではなく、Archive path の構造と identity を保持するための format-level safety rule とする。
 - Scope 全展開で directory enumeration が `OSError` になった場合と、generated `README.md` / empty-directory entry の ZIP 書き込みが `OSError` になった場合を、他の filesystem / Archive I/O failure と同じ `SelectionError` に正規化する。CLI ではこれらの失敗を traceback ではなく通常の `dirpluck: error:` diagnostic として報告し、未完成の Output / temporary output を残さない。
+- Windows host で drive root filesystem location（例: `C:/`）を正規化した際に trailing root separator を失って `C:` へ変換し、Configuration directory 相対の drive-relative path として扱う場合があった不具合を修正する。Host が受理する Windows absolute drive-root notation は `/` separator のまま root identity を保持する。あわせて Windows CI で全 test suite を実行し、control-document absolute path、source byte newline、generated README の source path 表示、junction inspection の test expectation を host-independent にする。
 
 ## 0.14.1
 

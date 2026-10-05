@@ -33,6 +33,7 @@ Release history for dirpluck from 0.10.0 onward. Earlier releases are available 
 
 - Restore rejection of ASCII control characters and backslashes in Archive directory identities. U+0000 through U+001F and U+007F are rejected to prevent ZIP entry-name truncation and broken warning / preview output, and `\` is rejected alongside `/` because it may be interpreted as a path separator. This is an Archive-path safety rule, not an attempt to emulate host-OS reserved-name policy.
 - Normalize `OSError` from whole-Scope directory enumeration and from writing generated `README.md` / empty-directory ZIP entries into `SelectionError`, matching other filesystem and Archive I/O failures. The CLI reports these failures as normal `dirpluck: error:` diagnostics instead of tracebacks and leaves no incomplete Output or temporary output behind.
+- Fix Windows drive-root filesystem locations such as `C:/` losing their trailing root separator during normalization and becoming `C:`, which could turn them into drive-relative paths anchored from the Configuration directory. Windows absolute drive-root notation accepted by the host now preserves its root identity while retaining `/` separators. Also make the full Windows CI suite host-independent in its expectations for absolute control-document paths, source-file newline bytes, generated README source-path rendering, and simulated junction metadata inspection.
 
 ## 0.14.1
 

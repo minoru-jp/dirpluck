@@ -58,6 +58,8 @@ class CHANGELOG:
 
         fixed @= "Scope 全展開で directory enumeration が `OSError` になった場合と、generated `README.md` / empty-directory entry の ZIP 書き込みが `OSError` になった場合を、他の filesystem / Archive I/O failure と同じ `SelectionError` に正規化する。CLI ではこれらの失敗を traceback ではなく通常の `dirpluck: error:` diagnostic として報告し、未完成の Output / temporary output を残さない。"
 
+        fixed @= "Windows host で drive root filesystem location（例: `C:/`）を正規化した際に trailing root separator を失って `C:` へ変換し、Configuration directory 相対の drive-relative path として扱う場合があった不具合を修正する。Host が受理する Windows absolute drive-root notation は `/` separator のまま root identity を保持する。あわせて Windows CI で全 test suite を実行し、control-document absolute path、source byte newline、generated README の source path 表示、junction inspection の test expectation を host-independent にする。"
+
     class RELEASE_25:
         r"""
         Ruff と basedpyright の既存 static-analysis policy に source tree を適合させる保守 release。Runtime behavior、公式 Python API、CLI、Configuration language、Archive semantics は変更しない。

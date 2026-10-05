@@ -67,7 +67,7 @@ class ConfigPathTests(ConfigTestCase):
             path.parent.mkdir()
             path.write_text('[output]\npath = "out.zip"\n', encoding="utf-8")
             self.assertEqual(
-                resolve_config_path(str(path.with_suffix("")), cwd=root),
+                resolve_config_path(path.with_suffix("").as_posix(), cwd=root),
                 path.resolve(),
             )
 

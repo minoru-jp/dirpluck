@@ -1,5 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 import os
+import stat
 import subprocess
 import unittest
 from unittest.mock import patch
@@ -484,6 +486,11 @@ class SelectionTests(BuilderTestCase):
                     "IO_REPARSE_TAG_MOUNT_POINT",
                     0xA0000003,
                     create=True,
+                ),
+                patch.object(
+                    filesystem_module.os,  # pyright: ignore[reportPrivateLocalImportUsage]
+                    "lstat",
+                    return_value=SimpleNamespace(st_mode=stat.S_IFDIR),
                 ),
             ):
                 with self.assertRaisesRegex(SelectionError, r"st_reparse_tag is unavailable"):

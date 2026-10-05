@@ -63,7 +63,7 @@ class ArchiveTests(BuilderTestCase):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             source = root / "input.txt"
-            source.write_text("payload\n", encoding="utf-8")
+            source.write_bytes(b"payload\n")
             os.utime(source, (0, 0))
             config = self._config(
                 root,

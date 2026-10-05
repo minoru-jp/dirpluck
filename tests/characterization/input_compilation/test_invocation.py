@@ -325,7 +325,7 @@ class InvocationTemplateTests(unittest.TestCase):
             root = Path(temp)
             path = self._write(root / "shared" / "release.dirpluck-inv", "[invocation]\n")
             self.assertEqual(
-                resolve_invocation_path(str(path.with_suffix("")), cwd=root),
+                resolve_invocation_path(path.with_suffix("").as_posix(), cwd=root),
                 path.resolve(),
             )
 
