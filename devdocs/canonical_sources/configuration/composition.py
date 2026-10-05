@@ -5,8 +5,14 @@ from shikumi_devdoc.norms.document import test_target_field, title
 example_019 = test_target_field("example 019")
 
 
-@summary('Base Configuration による再利用と composition。')
-@canonical_source('Configuration composition', filename='composition.md', order=30, merge_policy="local", heading="title")
+@summary("Base Configuration による再利用と composition。")
+@canonical_source(
+    "Configuration composition",
+    filename="composition.md",
+    order=30,
+    merge_policy="local",
+    heading="title",
+)
 class CONFIGURATION_PART:
     r"""
     この文書は、`[about].base` を使った Base Configuration の再利用と filesystem anchor の考え方を説明します。
@@ -31,7 +37,8 @@ class CONFIGURATION_PART:
 
         Pluck、Always、Scope、Shared pattern の composition、description resolution、cycle detection、Output の扱いは `../specification/INDEX.md` に定義します。Base Configuration は Output を省略できます。Output を持たない root Configuration も `--preview` に使用でき、通常 build でも CLI `--here` / `--output` または Python API `output=` で runtime Output を与えれば実行できます。Runtime Output を使わない build では root 自身の fixed または timestamp Output を直接宣言します。
         """
-        title @= 'Base Configuration'
+
+        title @= "Base Configuration"
 
         example_019 @= """
         [about]

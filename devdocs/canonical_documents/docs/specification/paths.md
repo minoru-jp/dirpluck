@@ -38,7 +38,7 @@ level: MUST
 
 ## SPEC_019
 
-Base chain の inner Configuration に記述された relative path は inner Configuration 自身の directory から解決し、outer Configuration の directory へ rebase しない。
+Base Configuration に記述された relative path は、その Configuration 自身の directory から解決し、Root Configuration の directory を基準にはしない。
 
 level: MUST
 
@@ -62,7 +62,7 @@ level: MUST
 
 ## SPEC_023
 
-Configuration / Invocation Template **document 自体を選択または参照する path** は host OS の通常の filesystem semantics に従い、symbolic link / Windows directory junction を含む path を特別に拒否しない。cwd の `default.dirpluck`、`--config PATH`、`-i PATH`、`about.base`、Invocation の `config` のいずれでも、dirpluck は選択・参照した path を symlink target の実体 path へ置き換えず、lexical な absolute document location として保持する。Relative document reference と、その document に記述された relative filesystem location はこの document location の directory を基準にする。Base-chain cycle detection のように file identity が必要な内部判定だけ、実体 path を用いて alias を同一 Configuration と認識する。
+Configuration / Invocation Template **document 自体を選択または参照する path** は host OS の通常の filesystem semantics に従い、symbolic link / Windows directory junction を含む path を特別に拒否しない。cwd の `default.dirpluck`、`--config PATH`、`-i PATH`、`about.base`、Invocation の `config` のいずれでも、relative document reference と、その document に記述された relative filesystem location は **利用者が指定・参照した lexical document path の directory** を基準にする。Symlink / junction の参照先 directory へ暗黙に rebase しない。一方、Base chain が path alias を経由して同じ Configuration file へ戻る場合は同一 file への cycle とみなす。
 
 level: MUST
 

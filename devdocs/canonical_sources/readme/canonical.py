@@ -6,7 +6,7 @@ from shikumi_devdoc.norms.document import test_target_field, title
 readme_llm_context_configuration = test_target_field("README LLM context configuration")
 
 
-@canonical_source('dirpluck', filename='README.md', merge_policy="all", heading="title")
+@canonical_source("dirpluck", filename="README.md", merge_policy="all", heading="title")
 class SECTION_001:
     r"""
     {{TERM_1}} は、複数の場所にある file から必要なものを選び、ひとつの ZIP Archive にまとめるための CLI tool です。
@@ -29,8 +29,11 @@ class SECTION_001:
         ```
 
         {{TERM_1}} には runtime third-party dependency はありません。
+
+        0.14.x から upgrade する場合は、Always Archive layout の breaking change を `docs/migration/0.16.md` で確認してください。
         """
-        title @= 'インストール'
+
+        title @= "インストール"
 
         merge @= TERMS.TERM_1
 
@@ -66,27 +69,24 @@ class SECTION_001:
 
         `always` は Target に関係なく固定資料を加えます。`scope.projects` は runtime に選べる repository の場所を定め、`pluck` は選ばれた directory Target へ同じ Selection を適用します。通常は `.tmp/` を除外し、`diff` Case のときだけ評価対象の差分を含めます。`description` は選択 semantics を変えませんが、生成される Archive README に役割を残すため、受け取った人や LLM が開発対象・基盤・補助 tool を区別できます。
         """
-        title @= '例: LLM に開発 context を渡す'
+
+        title @= "例: LLM に開発 context を渡す"
 
         readme_llm_context_configuration @= """
         [about]
         description = "LLMによる開発作業のためのリポジトリと実行依存物。"
 
-        [namespace.dependencies]
-        [namespace.tools]
         [namespace.repositories]
 
-        [always.framework]
+        [always.dependencies]
         description = "対象リポジトリが利用する基盤フレームワーク。"
-        path = "framework-core"
-        namespace = "dependencies"
-        must = ["dist/*.whl"]
+        path = "framework-core/dist"
+        must = ["*.whl"]
 
-        [always.docs-builder]
+        [always.tools]
         description = "開発文書を構成するためのツール。"
-        path = "docs-builder"
-        namespace = "tools"
-        must = ["dist/*.whl"]
+        path = "docs-builder/dist"
+        must = ["*.whl"]
 
         [scope.projects]
         description = "開発対象として選択できるリポジトリ。"
@@ -114,7 +114,7 @@ class SECTION_001:
             { path = ".tmp/" },
         ]
 
-        [pluck.case.diff]
+        [case.pluck.diff]
         description = "開発対象のリポジトリ。.tmp/ に評価してほしい差分が含まれています。"
         may = ["*", "*/"]
         ignore = [
@@ -137,7 +137,8 @@ class SECTION_001:
 
             `--preview` は ZIP をまだ書き込まず、現在の filesystem から何が選択されるかを表示します。想定していない file が含まれていないか、必要な file が欠けていないかを確認します。
             """
-            title @= 'Preview'
+
+            title @= "Preview"
 
         class SECTION_005:
             r"""
@@ -147,9 +148,10 @@ class SECTION_001:
             dirpluck projects/service-api/ --case diff --preview
             ```
 
-            `--case diff` は `[pluck.case.diff]` の Selection を使用するため、この場合だけ `.tmp/` も Archive の対象になります。生成される Archive README には Case 側の `description` も反映されます。確認後は同じ command から `--preview` を外して build できます。
+            `--case diff` は `[case.pluck.diff]` の Selection を使用するため、この場合だけ `.tmp/` も Archive の対象になります。生成される Archive README には Case 側の `description` も反映されます。確認後は同じ command から `--preview` を外して build できます。
             """
-            title @= 'Case で差分を追加する'
+
+            title @= "Case で差分を追加する"
 
         class SECTION_006:
             r"""
@@ -165,18 +167,14 @@ class SECTION_001:
             develop-target.zip
             ├── README.md
             ├── dependencies/
-            │   └── framework-core/
-            │       └── dist/
-            │           └── framework_core-2.4.0-py3-none-any.whl
+            │   └── framework_core-2.4.0-py3-none-any.whl
             ├── repositories/
             │   ├── service-api/
             │   │   └── ...
             │   └── web-console/
             │       └── ...
             └── tools/
-                └── docs-builder/
-                    └── dist/
-                        └── docs_builder-1.6.0-py3-none-any.whl
+                └── docs_builder-1.6.0-py3-none-any.whl
             ```
 
             別の作業では Target だけを変えます。
@@ -187,7 +185,8 @@ class SECTION_001:
 
             {{TERM_2}}に残した収集 rule と固定資料はそのまま再利用できます。
             """
-            title @= 'Build'
+
+            title @= "Build"
 
             merge @= TERMS.TERM_2
 
@@ -195,7 +194,8 @@ class SECTION_001:
             r"""
             自動的な Target discovery と Selection traversal で見つかった symbolic link や認識済み Windows directory junction は追跡せず、Archive にも含めません。詳細な filesystem boundary は [Trust Model](https://github.com/minoru-jp/dirpluck/blob/main/docs/TRUST.md) を参照してください。
             """
-            title @= 'Filesystem の注意'
+
+            title @= "Filesystem の注意"
 
     class SECTION_007:
         r"""
@@ -211,7 +211,8 @@ class SECTION_001:
 
         詳しい trust boundary と共有時の確認事項は [Trust Model](https://github.com/minoru-jp/dirpluck/blob/main/docs/TRUST.md) を参照してください。
         """
-        title @= 'Archive を共有する前に'
+
+        title @= "Archive を共有する前に"
 
         merge @= TERMS.TERM_1
         merge @= TERMS.TERM_2
@@ -224,7 +225,8 @@ class SECTION_001:
 
         Target だけを入れ替えたり、複数 Target をまとめたり、固定資料を `always` で添えたりできます。
         """
-        title @= 'なぜ dirpluck を使うのか'
+
+        title @= "なぜ dirpluck を使うのか"
 
         merge @= TERMS.TERM_1
         merge @= TERMS.TERM_2
@@ -234,6 +236,7 @@ class SECTION_001:
         この README は、ひとつの利用例を通して基本的な使い方だけを紹介しています。
 
         - [Getting Started](https://github.com/minoru-jp/dirpluck/blob/main/docs/GETTING_STARTED.md): 最小 Configuration から preview / build までの短い walkthrough。
+        - [Recipes](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/INDEX.md): 実際の workspace と目的から TOML / CLI の組み合わせを学ぶ use-case guide。
         - [Glossary](https://github.com/minoru-jp/dirpluck/blob/main/GLOSSARY.md): 文書全体で使う概念の意味。
         - [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Scope、Always、Shared、Case、Base Configuration など Configuration authoring の guide。
         - [CLI Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/cli/INDEX.md): Target 指定、CLI option、Invocation Template の guide。
@@ -243,7 +246,8 @@ class SECTION_001:
         - [Changelog](https://github.com/minoru-jp/dirpluck/blob/main/CHANGELOG.md): release history。
         - [Status](https://github.com/minoru-jp/dirpluck/blob/main/STATUS.md): 現在の開発段階、互換性方針、公開形態。
         """
-        title @= '文書'
+
+        title @= "文書"
 
     class SECTION_010:
         r"""
@@ -251,6 +255,7 @@ class SECTION_001:
 
         詳細は [LICENSE](https://github.com/minoru-jp/dirpluck/blob/main/LICENSE) を参照してください。
         """
-        title @= 'ライセンス'
+
+        title @= "ライセンス"
 
         merge @= TERMS.TERM_1

@@ -116,17 +116,25 @@ dirpluck ./example/
 
 Review package for the example project.
 
-## `example/`
-
-Files: 3
-
-Project files selected for review.
+`Scope: "..."` identifies only the selection range used to find Targets; it does not imply priority, importance, or hierarchy. Any additional meaning is stated in that Scope's description.
 
 ## `review-guidelines/`
 
+Review guidelines shared across projects.
+
 Files: 1
 
-Review guidelines shared across projects.
+## Targets
+
+### Scope: (unnamed)
+
+#### Pluck
+
+Project files selected for review.
+
+##### `example/`
+
+Files: 3
 ```
 
 ## 次に読む

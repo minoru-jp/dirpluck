@@ -6,14 +6,6 @@ A Configuration may omit Output. A Configuration without Output may also be used
 
 level: MUST
 
-## SPEC_108
-
-Within a base chain, only definitions that actually declare Output participate in write-boundary overlap validation. Relative Output paths are always resolved from the directory containing the Configuration file in which that Output is written.
-
-level: MUST
-
-related: [SPEC_036](composition.md#spec_036), [SPEC_018](paths.md#spec_018)
-
 ## SECTION_901
 
 title: Fixed Output
@@ -42,23 +34,19 @@ level: MUST
 
 ### SPEC_112
 
-With `overwrite = false`, `dirpluck` checks that the destination does not exist both before the build and immediately before final placement. If an existing destination is observed at either check, the run fails without modifying that existing output. These existence checks and final placement are not a single atomic no-clobber operation against concurrent writers. If another process creates or replaces the same destination after the final check and before placement, `dirpluck` may replace that file.
+If the effective Output resolves to an existing destination and the effective overwrite policy is false, the build fails without modifying that existing destination.
 
 level: MUST
-
-condition: when the effective overwrite policy is false
 
 ### SPEC_113
 
-With `overwrite = true`, the new ZIP is completed in a temporary file in the output directory before replacing the existing output. The existing destination's file mode is not inherited.
+When overwrite is permitted and the destination already exists, its previous contents remain intact until the new Archive has been completed successfully; the completed Archive then replaces the destination. A failed build must not leave the destination partially replaced by an incomplete Archive.
 
 level: MUST
 
-condition: when the effective overwrite policy is true
-
 ### SPEC_114
 
-The generated Archive file follows the host OS's normal new-file creation semantics. On POSIX, the temporary output is created with the regular-file creation mode `0666` subject to the process `umask`, and that mode is preserved when it is moved into the final destination. New output and overwrite therefore both use a new-file mode derived from the `umask` of that run.
+Creation and replacement of the final Output file follow the host OS's ordinary file-creation and replacement semantics, subject to dirpluck's overwrite policy and safety checks.
 
 level: MUST
 
@@ -113,7 +101,7 @@ level: MUST
 
 ### SPEC_121
 
-The timestamp uses process local time and is determined once at build start. Arbitrary timestamp formats, variable expansion, and naming templates are not provided.
+Timestamp Output uses one timestamp value consistently for the automatic filename generated for a single build.
 
 level: MUST
 
@@ -223,84 +211,9 @@ condition: when both `--archive-mtime` and Invocation `archive_mtime` are omitte
 
 ### SPEC_135
 
-This option fixes entry timestamps so timestamp-driven byte differences can be removed. Source-file permission bits are retained in ZIP `external_attr`, so Archives with identical file contents and timestamps can still differ in bytes when those permissions differ. dirpluck does not normalize permission bits. It also does not guarantee byte-for-byte reproducibility across compressor implementations, runtime versions, platforms, or other ZIP metadata and serialization details. It is also independent of the process-local `YYYYMMDD-HHMMSS` used in timestamp Output filenames and does not change that filename timestamp. In preview mode no Archive is written, so archive mtime has no effect on the preview result.
+This option fixes Archive-entry timestamps so timestamp-driven byte differences can be removed. Source-file permission metadata is not normalized, so Archives with identical file contents and timestamps can still differ in bytes when runtime/platform ZIP metadata differs. dirpluck does not guarantee byte-for-byte reproducibility across compressor implementations, runtime versions, platforms, permission metadata, or other ZIP serialization details. This option is also independent of the process-local `YYYYMMDD-HHMMSS` used in timestamp Output filenames and does not change that filename timestamp. In preview mode no Archive is written, so archive mtime has no effect on the preview result.
 
 level: MUST
-
-## SECTION_903
-
-title: Static writable destination
-
-### SPEC_136
-
-Output naming declared by a Configuration maintains the invariant that the write boundary can be determined statically from the Configuration alone. Runtime Output is supplied per invocation and does not participate in this static write-boundary model.
-
-```text
-fixed [output]
-    -> one resolved complete file path
-
-timestamp [output.timestamp]
-    -> the directory tree rooted at the resolved output directory
-```
-
-level: MUST
-
-### SPEC_137
-
-With fixed Output, the user determines the entire filename and `dirpluck` does not fill in part of it at runtime. With timestamp Output, the user determines the output directory and `dirpluck` determines only a filename directly under that directory. Template modes such as `artifacts/{target}-{timestamp}.zip`, where the writable directory cannot be determined statically from the Configuration, are not provided.
-
-level: MUST NOT
-
-## SECTION_904
-
-title: Base-chain write-boundary overlap
-
-### SPEC_138
-
-The resolved write boundary declared by each Configuration in a base chain must not overlap another Output in that chain. Comparison is performed on paths resolved and normalized using each Configuration file as its anchor, not on the strings written in TOML.
-
-level: MUST
-
-related: [SPEC_036](composition.md#spec_036)
-
-### SPEC_139
-
-Two fixed Outputs conflict only when their complete file paths are identical. Different fixed filenames may share the same directory.
-
-```text
-out/base.zip
-out/derived.zip
-```
-
-level: MUST
-
-### SPEC_140
-
-Two timestamp Outputs conflict when their directory boundaries are equal or one is an ancestor or descendant of the other.
-
-```text
-artifacts/
-artifacts/release/
-```
-
-level: MUST
-
-### SPEC_141
-
-A fixed Output conflicts with a timestamp Output when the fixed Output's complete file path lies within the timestamp Output's directory boundary.
-
-```text
-artifacts/            timestamp boundary
-artifacts/result.zip  fixed output -> conflict
-```
-
-level: MUST
-
-### SPEC_142
-
-This validation is limited to the one base chain currently being resolved. `dirpluck` does not search for or guarantee against unrelated Configuration chains declaring the same filesystem location.
-
-level: MUST NOT
 
 ## SECTION_905
 

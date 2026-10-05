@@ -3,12 +3,14 @@ from shikumi_devdoc.norms.common import canonical_source, merge
 from shikumi_devdoc.norms.document import title
 
 
-@canonical_source('dirpluck Trust Model', filename='TRUST.md', merge_policy="local", heading="title")
+@canonical_source(
+    "dirpluck Trust Model", filename="TRUST.md", merge_policy="local", heading="title"
+)
 class SECTION_001:
     r"""
-    この文書は、{{TERM_1}} の Configuration / Invocation Template と filesystem 操作をどの trust boundary で扱うかを説明します。これは安全性を自動判定する仕様ではなく、利用者が何を確認すべきかを整理する文書です。
+        この文書は、{{TERM_1}} の Configuration / Invocation Template と filesystem 操作をどの trust boundary で扱うかを説明します。これは安全性を自動判定する仕様ではなく、利用者が何を確認すべきかを整理する文書です。
 
-厳密な互換性契約は Specification が定義します。Path resolution は `specification/paths.md`、Selection と filesystem entry は `specification/selection.md` / `specification/filesystem.md`、Output は `specification/output.md`、Archive planning は `specification/archive.md` を参照してください。
+    厳密な互換性契約は Specification が定義します。Path resolution は `specification/paths.md`、Selection と filesystem entry は `specification/selection.md` / `specification/filesystem.md`、Output は `specification/output.md`、Archive planning は `specification/archive.md` を参照してください。
     """
 
     merge @= TERMS.TERM_1
@@ -19,7 +21,8 @@ class SECTION_001:
 
         Configuration を第三者から受け取った場合や、内容を自分で確認していない場合は、実行前に `about.base`、Scope、Always source、selection、Output を確認してください。Configuration は sandbox policy や capability manifest ではなく、dirpluck に渡す実行指示として扱います。
         """
-        title @= 'Configuration は実行指示です'
+
+        title @= "Configuration は実行指示です"
 
         merge @= TERMS.TERM_2
 
@@ -33,7 +36,8 @@ class SECTION_001:
 
         Configuration の Selection では `{ match = "..." }` によって Selection root 配下の root-relative path 全体へ Python-compatible regular expression を適用できます。この form は通常の guided Selection pattern より広く filesystem tree を走査する場合があり、regular expression 自体の backtracking cost も加わり得ます。第三者由来の Configuration では、他の `must` / `may` / `ignore` と同様に `match` の内容も実行指示の一部として確認してください。
         """
-        title @= 'Invocation Template も実行指示です'
+
+        title @= "Invocation Template も実行指示です"
 
         merge @= TERMS.TERM_19
 
@@ -43,19 +47,21 @@ class SECTION_001:
 
         Relative filesystem path は runtime cwd ではなく、その field が記述された Configuration file の directory を基準に解決します。Base chain に含まれる Configuration もそれぞれ独自の anchor を持ちます。
 
-        Source boundary、archive path collision、Configuration schema、Output write-boundary overlap などの structural validation は行います。Configuration / Invocation Template document の参照と、Configuration が明示する named Scope / Always の source root location は host OS の通常の filesystem semantics に従い、alias を利用できます。一方、その明示 root からの Target discovery と Selection traversal では認識した symbolic link / Windows directory junction をたどらず Archive にも含めません。明示 location の resolution と source tree traversal は別の filesystem boundary です。FIFO、socket、device など regular file / regular directory ではない特殊 filesystem entry も Archive 対象にしません。これらは declared filesystem operation の目的や安全性を判定する guard ではありません。
+        Source boundary、archive path collision、Configuration schema などの structural validation は行います。Configuration / Invocation Template document の参照と、Configuration が明示する named Scope / Always の source root location は host OS の通常の filesystem semantics に従い、alias を利用できます。一方、その明示 root からの Target discovery と Selection traversal では認識した symbolic link / Windows directory junction をたどらず Archive にも含めません。明示 location の resolution と source tree traversal は別の filesystem boundary です。FIFO、socket、device など regular file / regular directory ではない特殊 filesystem entry も Archive 対象にしません。これらは declared filesystem operation の目的や安全性を判定する guard ではありません。
         """
-        title @= 'Filesystem permission が実際の権限境界です'
+
+        title @= "Filesystem permission が実際の権限境界です"
 
     class SECTION_004:
         r"""
-        Directory を `must` / `may` で選ぶと、その配下の regular file / directory が収集候補になります。`ignore` は name pattern、Selection root からの structured `{ path = "..." }` concrete relative path、root-relative path 全体へ適用する structured `{ match = "..." }` を使え、dirpluck がその entry を selection 対象として扱わない明示指示として、link-like / special entry の種類による診断より優先します。Directory name ignore、directory path reference、または directory path に一致する structured `match` の subtree は内部へ入る前に枝刈りし、ignored entry は skipped-link count や特殊 entry の diagnostic にも使いません。認識した non-ignored symbolic link / Windows directory junction は選択も traversal もせず Archive に含めません。FIFO、socket、device などその他の non-regular entry も Archive に含めません。`must` がそのような特殊 entry だけに一致した場合は理由付き error、`may` では optional missing とします。Hidden file、repository metadata、environment file、key material などを filename や内容から推論して自動 ignore することはありません。
+        Directory を `must` / `may` で選ぶと、その配下の regular file / directory が収集候補になります。`ignore` は name pattern、Selection root からの structured `{ path = "..." }` concrete relative path、root-relative path 全体へ適用する structured `{ match = "..." }` を使え、dirpluck がその entry を selection 対象として扱わない明示指示として、link-like / special entry の種類による診断より優先します。Directory name ignore、directory path reference、または directory path に一致する structured `match` の subtree は Selection 対象外で、ignored entry は skipped-link count や特殊 entry の diagnostic にも使いません。認識した non-ignored symbolic link / Windows directory junction は選択も traversal もせず Archive に含めません。FIFO、socket、device などその他の non-regular entry も Archive に含めません。`must` がそのような特殊 entry だけに一致した場合は理由付き error、`may` では optional missing とします。Hidden file、repository metadata、environment file、key material などを filename や内容から推論して自動 ignore することはありません。
 
-        Selection traversal 中に non-ignored link-like entry を認識して除外した場合、CLI の `--preview` と通常 build は除外件数を注記します。個々の path は列挙せず、ignored entry と `ignore` で走査前に枝刈りされた subtree 内の entry は count しません。
+        Selection traversal 中に non-ignored link-like entry を認識して除外した場合、CLI の `--preview` と通常 build は除外件数を注記します。個々の path は列挙せず、ignored entry と ignored subtree 内の entry は count しません。
 
         外部へ渡す Archive を作る場合は、Configuration の `must` / `may` / `ignore` と生成内容を、その用途に応じて確認してください。`--preview` は archive-relative な contents plan を確認するために利用できます。
         """
-        title @= 'Selection の内容は利用者が決めます'
+
+        title @= "Selection の内容は利用者が決めます"
 
     class SECTION_045:
         r"""
@@ -65,21 +71,23 @@ class SECTION_001:
 
         また、生成した ZIP を展開するときに entry metadata や filesystem object をどのように解釈・作成するかは、利用する extractor と platform に依存します。dirpluck は第三者の unzip / archive software の展開時挙動を制御・保証しません。
         """
-        title @= 'Link-like entry の検出限界'
+
+        title @= "Link-like entry の検出限界"
 
     class SECTION_005:
         r"""
         Fixed Output の filename extension は ZIP format の判定には使いません。Configuration が指定した output location と `overwrite` policy に従って ZIP Archive を生成します。`overwrite = true` を指定した場合は、その fixed output path に存在する file を置き換える意図を明示したものとして扱います。省略時は `false` です。
 
-        Timestamp Output は Configuration が宣言した output directory の直下だけに dirpluck-generated filename を作ります。Base chain 上では Output の static write boundary が重ならないことを検証しますが、無関係な別 Configuration chain との filesystem ownership を発見・調停する仕組みではありません。
+        Timestamp Output は Configuration が宣言した output directory の直下だけに dirpluck-generated filename を作ります。dirpluck は、無関係な Configuration や別 process が同じ filesystem location を使用しているかを発見・調停する仕組みを提供しません。
 
         dirpluck は同じ output path を使う複数 process の lock や競合調停を行いません。`overwrite = false` や timestamp output の既存 destination check は、別 process に対する atomic な no-clobber guarantee ではありません。並行して実行される可能性がある場合は、呼び出し側で異なる output destination を割り当ててください。
 
-        Output file の permission は temporary-file implementation の固定 mode ではなく、host OS の通常の新規 file creation semantics に従います。POSIX では process `umask` が regular file creation mode に適用されます。`overwrite = true` で既存 file を置き換える場合も、既存 destination の mode を保存・継承せず、その run で新しく作成した Archive の mode を使用します。共有 group 向けなど特定の permission が必要な場合は、実行環境の `umask` や生成後の OS-level permission 設定で管理してください。
+        Output file の permission は host OS の通常の新規 file creation semantics に従います。POSIX では process `umask` が regular file creation mode に適用されます。`overwrite = true` で既存 file を置き換える場合も、既存 destination の mode を保存・継承せず、その run で新しく作成した Archive の mode を使用します。共有 group 向けなど特定の permission が必要な場合は、実行環境の `umask` や生成後の OS-level permission 設定で管理してください。
 
         Output path と existing file の扱いは、実行前に Configuration で確認してください。
         """
-        title @= 'Output は宣言された policy に従います'
+
+        title @= "Output は宣言された policy に従います"
 
     class SECTION_006:
         r"""
@@ -87,7 +95,8 @@ class SECTION_001:
 
         Archive 自体に含まれる file の selection は Configuration に従います。README から source path を隠すことは、Archive contents を検査または sanitize する機能ではありません。
         """
-        title @= 'Archive を外部へ渡すとき'
+
+        title @= "Archive を外部へ渡すとき"
 
         merge @= TERMS.TERM_10
 
@@ -97,5 +106,5 @@ class SECTION_001:
 
         dirpluck 自体が LLM に local filesystem access を与える仕組みではなく、LLM が dirpluck を直接操作することも前提にしません。誰が Configuration を作成した場合でも、実行時の trust boundary は同じです。
         """
-        title @= 'LLM-assisted work での位置付け'
 
+        title @= "LLM-assisted work での位置付け"

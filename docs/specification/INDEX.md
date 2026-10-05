@@ -15,3 +15,4 @@
 | [Output](output.md) | Fixed, timestamp, and runtime Output, write boundaries, and collisions. |
 | [Preview](preview.md) | Preview output and side-effect boundary. |
 | [CLI contract](cli-contract.md) | CLI options, combination constraints, and exit behavior. |
+| [Pre-1.0 compatibility](compatibility.md) | Compatibility inputs and behaviors explicitly scheduled for removal in 1.0.0. |

@@ -13,8 +13,10 @@ invocation_cli_example = test_target_field("Invocation Template CLI equivalent")
 archive_mtime_example = test_target_field("archive mtime example")
 
 
-@summary('high-level `run()` entry point と runtime modifier の契約。')
-@canonical_source('dirpluck.run', filename='run.md', order=10, merge_policy="local", heading="title")
+@summary("high-level `run()` entry point と runtime modifier の契約。")
+@canonical_source(
+    "dirpluck.run", filename="run.md", order=10, merge_policy="local", heading="title"
+)
 class API_REFERENCE_PART:
     r"""
     公式 high-level entry point は次の形です。
@@ -53,7 +55,7 @@ class API_REFERENCE_PART:
     argument_mapping @= """
     targets       positional TARGET
     config        --config PATH
-    case          --case NAME
+    case          --case CASE
     sequence      --sequence N
     invocation    -i / --invocation-template PATH
     entry         -e / --entry NAME
@@ -70,7 +72,7 @@ class API_REFERENCE_PART:
     introduced @= "0.9.0"
     input @= "targets: positional Target references"
     input @= "config: Configuration document path"
-    input @= "case: Case name"
+    input @= "case: Pluck / Always Case selector"
     input @= "sequence: explicit output sequence"
     input @= "invocation: Invocation Template path"
     input @= "entry: named Invocation entry"
@@ -88,9 +90,30 @@ class API_REFERENCE_PART:
 
         Warning location は固定 `stacklevel` に依存せず、dirpluck package 外の最初の caller frame に帰属します。呼び出し側が明示的に制御したい場合は `dirpluck.ConfigurationDeprecationWarning` を category として warning filter に指定できます。この lifecycle diagnostic は planning diagnostic を返す `RunResult.warnings` には含まれません。CLI は同じ診断を収集して簡潔な stderr warning として表示するため、CLI 実行時に追加の Python warning は発行しません。
 
-        旧記法は 1.0.0 で invalid Configuration になります。Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行してください。
+        旧記法は 1.0.0 で invalid Configuration になります。Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行してください。0.16.0 から 1.0.0 未満では legacy `[pluck.case.<name>]` も同じ category で migration notice を報告し、canonical `[case.pluck.<name>]` への移行を案内します。
         """
-        title @= 'Configuration deprecation warning'
+
+        title @= "Configuration deprecation warning"
+
+    class SECTION_036:
+        r"""
+        0.16.0 から 1.0.0 直前まで、`dirpluck.run()` は Always migration を公開 `AlwaysMigrationWarning` として Python の warnings framework へ報告します。0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source にだけ layout migration warning を出します。Warning message には旧 root と新 root を含めます。旧・新 identity が同じ source には layout warning を出しません。
+
+        `[always.<name>].namespace` を使用した場合は、layout 差分とは別に pre-1.0 compatibility warning を必ず報告します。0.16.x では Namespace name が Always name を一時的に置き換えますが、この field は 1.0.0 で削除されます。Archive directory name は `[always.<name>]` に直接記述してください。
+
+        `AlwaysMigrationWarning` は `FutureWarning` subclass で、warning location は dirpluck package 外の最初の caller frame に帰属します。呼び出し側は `dirpluck.AlwaysMigrationWarning` を filter / error 化でき、Archive layout の移行を CI から明示的に検知できます。これらは lifecycle diagnostic なので `RunResult.warnings` には含めません。CLI は同じ public warning を収集して stderr へ表示し、追加の Python warning は発行しません。
+        """
+
+        title @= "Always migration warning"
+
+    class SECTION_037:
+        r"""
+        `dirpluck.run()` は resolved source が0件でも正常に完了できます。Target を渡さず、Always source も解決されない場合、build は generated `README.md` だけを含む Archive を生成し、`preview=True` は `README.md` だけの tree を返します。これは warning / exception ではありません。Generated README には source が0件だったことを informational text として記録し、`RunResult.archive_entries` は `("README.md",)` になります。
+
+        `case=` は CLI `--case CASE` と同じ2軸 selector です。`"audit"` は Pluck Case、`".release"` は Always Case、`"audit.release"` は両方を指定します。各軸の Case name 自体が Configuration 上で有効なら、その適用結果として source が0件でも正常です。指定した軸に存在しない Case name は error です。
+        """
+
+        title @= "README-only Archive"
 
     class SECTION_045:
         r"""
@@ -112,7 +135,8 @@ class API_REFERENCE_PART:
 
         CLI `--here` は Python API に専用 argumentを持たず、`output="./"` が同じ cwd + automatic filename、`output="context.zip"` が cwd + explicit filename に相当します。`output` path は OS にかかわらず `/` separator を使い、backslash を受理しません。
         """
-        title @= 'Runtime Output'
+
+        title @= "Runtime Output"
 
         exact_output_example @= """
         result = dirpluck.run(
@@ -143,7 +167,8 @@ class API_REFERENCE_PART:
 
         Field を持たない Invocation も有効です。その場合、`RunResult.invocation_empty` が `True` になります。CLI はこれを human-readable note として表示しますが、Python API は状態を field で返します。
         """
-        title @= 'Invocation Template'
+
+        title @= "Invocation Template"
 
         invocation_example @= """
         import dirpluck
@@ -169,7 +194,8 @@ class API_REFERENCE_PART:
 
         値を指定すると generated `README.md`、empty directory entry、source file の全 ZIP entry に同じ timestamp を適用します。省略時は source file の filesystem mtime と generated entry の生成時刻を使う従来動作を維持します。固定値は entry timestamp による byte 差を取り除き、reproducible な Archive を作る一助になります。ただし source file の permission bits など他の filesystem metadata は正規化せず、Archive 全体の byte-for-byte reproducibility は保証しません。Timestamp output filename の時刻にも影響しません。`preview=True` でも argument 自体は受理しますが、Archive を書かないため結果には影響しません。
         """
-        title @= 'Archive entry の mtime'
+
+        title @= "Archive entry の mtime"
 
         archive_mtime_example @= """
         result = dirpluck.run(

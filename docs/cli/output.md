@@ -10,7 +10,7 @@ This page covers preview, optional source paths in the generated Archive README,
 dirpluck ./acme/ --preview
 ```
 
-Use it after changing a Configuration or workspace to inspect the result before writing an Archive. The difference from a normal run is the write itself; the main resolution path for the base chain, Scope and Target handling, Cases, selection, and archive planning is shared. `--preview` can be used even when the selected Root Configuration has no Output declaration. Because preview does not resolve or write an Output, it cannot be combined with `--here`, `--output`, `--force`, or `--sequence`. If Selection traversal excludes non-ignored entries recognized as symbolic links or Windows directory junctions, the number skipped is reported as a note after the tree; individual paths are not listed. Entries matched by `ignore` are not included in that count. See [Specification](../specification/INDEX.md) and [Trust model](../TRUST.md) for exact preview and link-like-entry semantics.
+Use it after changing a Configuration or workspace to inspect the result before writing an Archive. With the same Configuration / Target / Case / Selection input, the source selection and Archive placement shown by preview match the result of a normal build. `--preview` can be used even when the selected Root Configuration has no Output declaration. Because preview does not resolve or write an Output destination, it cannot be combined with `--here`, `--output`, `--force`, or `--sequence`. If Selection traversal excludes non-ignored entries recognized as symbolic links or Windows directory junctions, the skipped count is reported as an informational note; individual paths are not listed. Entries matched by `ignore` are not included in that count. See [Specification](../specification/INDEX.md) and [Trust model](../TRUST.md) for exact preview and link-like-entry semantics.
 
 ## Configuration migration warning
 
@@ -18,9 +18,19 @@ From 0.14.0 through releases before 1.0.0, the legacy one-element nested-array S
 
 The warning states that the legacy form will be removed in 1.0.0 and points Shared references to `{ shared = "..." }` and concrete relative `ignore` paths to `{ path = "..." }`. This migration warning does not change the Archive path or preview tree written to stdout and does not change the exit status.
 
+## 0.16 Always migration warning
+
+From 0.16.0 through the release immediately before 1.0.0, the CLI reports public Always migration warnings to stderr. Dirpluck compares the valid 0.14.x Always Archive identity with the 0.16.x effective Always name and emits a layout migration warning only for sources whose Archive root actually changes. The warning includes both the old and new roots. For example, `[always.docs] path = "docs"` has the same old and new identity and does not emit a layout warning.
+
+If an Always source has `namespace`, a separate pre-1.0 compatibility warning is always reported. During the 0.x series from 0.16.x onward, the Namespace name replaces the Always name for Archive placement, but this field is removed in 1.0.0. Write the desired Archive directory name directly in `[always.<name>]`.
+
+These are the same public diagnostics that the official Python API exposes as `AlwaysMigrationWarning`. The CLI collects them and renders them as `dirpluck: warning:` messages instead of also emitting Python warnings. They do not change Archive paths or preview trees written to stdout and do not change the exit status.
+
 ## Source paths in the Archive index
 
-By default, the generated Archive README is a compact index in which each final Archive root is a heading followed by the selected file count and optional `description`. It does not record `dirpluck`-specific resolution information such as Scope, Pluck, Always source, Configuration, or Case, nor does it record source filesystem paths.
+The generated Archive README is a human-facing index of the Archive contents. All Always sources are listed before Targets, and each Always section shows its optional `description` before metadata such as the selected file count. Targets are grouped by Scope; directory Targets are listed by final Archive path under that Scope's Pluck group. The same Scope / Pluck `description` is shown once for the group instead of being repeated for every Target. File Targets do not use Pluck and are shown directly under their Scope.
+
+The `Scope: "..."` note near the beginning of the README makes the intended meaning explicit: a Scope name identifies only the selection range used to find Targets. It does not imply priority, importance, or hierarchy between Targets. If a Scope name carries additional meaning, describe that meaning with `scope.description`. The selected Case name, Configuration path / table, base chain, and similar execution provenance are not recorded.
 
 Specify `--paths` only when source filesystem paths should also appear in each source section.
 
@@ -86,6 +96,6 @@ dirpluck ./example/ --archive-mtime now
 
 ZIP timestamps have two-second precision, so an odd second is rounded down to the preceding even second. The resolved value is applied to generated `README.md`, empty-directory entries, and selected source files alike. When the option is omitted, source files keep their filesystem mtimes while entries generated by dirpluck use their generation time, matching the existing behavior.
 
-A fixed timestamp or `zip-epoch` can remove byte differences caused by entry timestamps and can therefore help produce reproducible archives. Other ZIP metadata still matters: source-file permission bits are stored in ZIP `external_attr` and can change the archive bytes. dirpluck does not normalize those permission bits, and this option does not provide a byte-for-byte reproducibility guarantee across compressor implementations, runtime versions, platforms, or other metadata. `--archive-mtime` does not change the `YYYYMMDD-HHMMSS` used in timestamp Output filenames. It is accepted with `--preview`, but preview writes no Archive, so it does not affect the preview result.
+A fixed timestamp or `zip-epoch` can remove byte differences caused by entry timestamps and can therefore help produce reproducible archives. Other ZIP metadata still matters: source-file permission metadata is not normalized and can change the archive bytes. This option does not provide a byte-for-byte reproducibility guarantee across compressor implementations, runtime versions, platforms, permission metadata, or other serialization details. `--archive-mtime` does not change the `YYYYMMDD-HHMMSS` used in timestamp Output filenames. It is accepted with `--preview`, but preview writes no Archive, so it does not affect the preview result.
 
 An Invocation Template can store the same policy as `archive_mtime = "zip-epoch"`. When both are present, CLI `--archive-mtime` overrides the selected Invocation's value.

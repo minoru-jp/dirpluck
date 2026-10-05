@@ -2,7 +2,7 @@ from pathlib import Path
 import textwrap
 import unittest
 
-from dirpluck.config import load_config
+from dirpluck._config_parser import load_config
 
 
 CONFIG = r"""

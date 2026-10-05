@@ -8,8 +8,10 @@ example_003 = test_target_field("example 003")
 example_017 = test_target_field("example 017")
 
 
-@summary('CLI の基本形、Configuration 選択、help、終了 status。')
-@canonical_source('CLI overview', filename='overview.md', order=0, merge_policy="local", heading="title")
+@summary("CLI の基本形、Configuration 選択、help、終了 status。")
+@canonical_source(
+    "CLI overview", filename="overview.md", order=0, merge_policy="local", heading="title"
+)
 class CLI_PART:
     r"""この文書は `dirpluck` CLI の基本的な呼び出し方、Configuration の選択、help / version、終了 status を説明します。
 
@@ -23,7 +25,7 @@ class CLI_PART:
         {{example_001}}
         ```
 
-        選択した{{TERM_15}}に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
+        選択した{{TERM_15}}に Always source が1個以上あれば、Pluck も定義されている Configuration でも `TARGET` reference を省略し、Always source だけを Archive にできます。Target を指定した場合は従来どおり Pluck を directory Target に適用します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。
 
         ```console
         {{example_002}}
@@ -31,11 +33,12 @@ class CLI_PART:
 
         Target reference は literal reference、Scope expansion、Target selector を使えます。Literal reference は末尾 `/` なしを file、末尾 `/` ありを directory とし、default Scope の directory は `./NAME/`、named Scope では `SCOPE/NAME/` と書きます。`/` / `SCOPE/` は Scope expansion、`:[...]` / `SCOPE:[...]` は typed literal list selector、`:<...>` / `SCOPE:<...>` は regular-expression selector です。どの形式も{{TERM_16}}から{{TERM_3}}を選びます。
         """
-        title @= '基本形'
+
+        title @= "基本形"
 
         example_001 @= """
-        dirpluck [TARGET ...] [--config PATH] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
-        dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+        dirpluck [TARGET ...] [--config PATH] [--case CASE] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+        dirpluck -i PATH [-e NAME] [--case CASE] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
         dirpluck --version
         """
 
@@ -64,7 +67,8 @@ class CLI_PART:
 
         Output は `--preview` には不要です。通常 build では root Configuration 自身の Output declaration、または CLI の runtime Output (`--here` / `--output`) のどちらかを使います。Configuration が `about.base` で参照する Base Configuration は CLI の自動選択対象ではありません。
         """
-        title @= 'Configuration を選ぶ'
+
+        title @= "Configuration を選ぶ"
 
         example_003 @= """
         dirpluck ./example/ --config review
@@ -80,7 +84,8 @@ class CLI_PART:
         {{example_017}}
         ```
         """
-        title @= 'Help と version'
+
+        title @= "Help と version"
 
         example_017 @= """
         dirpluck --help
@@ -93,7 +98,7 @@ class CLI_PART:
         r"""
         正常終了は status 0 です。CLI argument error や dirpluck の validation / build error は status 2 で終了し、`dirpluck: error:` に続けて理由を表示します。
 
-        Archive を生成する通常実行では、成功すると output path を標準出力へ表示します。Selection traversal で symbolic link / Windows directory junction として認識した entry を除外していた場合は、その直後に除外件数を note として表示します。この runtime note は Archive 内の README には書き込みません。
+        Archive を生成する通常実行では、成功すると output path を標準出力へ表示します。Selection traversal で symbolic link / Windows directory junction として認識した entry を除外していた場合は、除外件数も informational note として表示します。この runtime note は Archive 内の README には書き込みません。
         """
-        title @= '終了とエラー'
 
+        title @= "終了とエラー"

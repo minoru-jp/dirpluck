@@ -52,7 +52,7 @@ File と directory の両方になり得る include entry reference では、型
 description = "Reference material used to evaluate the submission."
 ```
 
-`description` は任意です。省略しても selection の抽出意味論は変わりません。記述する場合は空でない string とし、生成される Archive README ではその source の見出しと file 数に続く本文として使われます。複数行の説明も table cell へ圧縮せず、そのまま section body として表示します。
+`description` は任意です。省略しても selection の抽出意味論は変わりません。記述する場合は空でない string とします。Always source の description はその source heading の直下で file 数などの metadata より先に表示します。Pluck description は directory Target ごとに複製せず、Scope 内の Pluck group に1回だけ表示します。複数行の説明も table cell へ圧縮せず、そのまま section body として表示します。
 
 ### `must`
 
@@ -89,7 +89,7 @@ Path separator は OS にかかわらず `/` です。Regular file は `src/main
 
 `must` の `match` は1件以上の non-ignored selectable entry に一致する必要があり、`may` は0件一致を許容します。複数 entry に一致した場合はすべてを選びます。Directory に一致した場合は通常の directory selection と同じく、その subtree を `ignore` に従って収集します。通常 pattern と `match` が最終的に同じ file を選んでも Archive へ重複して収録しません。
 
-`ignore` でも同じ form を使えます。Directory path に一致した `ignore` match はその subtree を prune します。
+`ignore` でも同じ form を使えます。Directory path に一致した `ignore` match はその directory と subtree 全体を Selection 対象から除外します。
 
 ```toml
 ignore = [
@@ -185,22 +185,37 @@ Base chain での name resolution と duplicate validation は `../specification
 
 ## Cases
 
-ケースは、同じ source に別の完全な selection を用意するときに使います。
+ケースは Pluck と Always で役割を分けます。Pluck Case は別の完全な Selection、Always Case は参加する Always source 集合の filter です。
 
 ```toml
 [pluck]
 description = "Normal review."
 must = ["documents/", "metadata.json"]
 
-[pluck.case.audit]
+[case.pluck.audit]
 description = "Audit review."
 must = ["documents/", "metadata.json", "records/"]
+
+[always.guidelines]
+path = "review-guidelines"
+must = ["*.md"]
+
+[always.license]
+path = "legal"
+must = ["LICENSE"]
+
+[case.always.release]
+include = ["guidelines", "license"]
 ```
 
 ```console
 dirpluck ./acme/ --case audit
+dirpluck --case .release
+dirpluck ./acme/ --case audit.release
 ```
 
-Case は base selection への差分ではありません。必要な `must` / `may` / `ignore` / Shared reference / `allow_empty` は Case 自身へ書きます。
+`[case.pluck.audit]` は base `[pluck]` への差分ではありません。必要な `must` / `may` / `ignore` / Shared reference / `allow_empty` は Case 自身へ書きます。0.16.x から 1.0.0 未満では旧 `[pluck.case.audit]` も互換入力として受理しますが、migration notice を報告し、1.0.0 で削除します。
 
-Pluck と Always source が同じ Case 名を持てば、同じ CLI `--case` で対応する variation を選べます。Always source に同名 Case がない場合の fallback など、正確な Case semantics は `../specification/INDEX.md` を参照してください。
+`[case.always.release]` は各 Always source の Selection を変更せず、effective Always 集合から参加 source を選びます。`include` と `exclude` は排他的です。`include = []` は意図的に Always を0件へでき、`exclude = []` は何も除外しません。両方を省略すれば全 Always source が参加します。
+
+Runtime selector は2軸です。`--case audit` は Pluck Case だけ、`--case .release` は Always Case だけ、`--case audit.release` は両方を選びます。Case が定義済みなら、その適用結果として source が0件でも正常です。正確な Case semantics は `../specification/INDEX.md` を参照してください。

@@ -6,8 +6,14 @@ example_004 = test_target_field("example 004")
 example_005 = test_target_field("example 005")
 
 
-@summary('`.dirpluck-inv` Invocation Template の記述と選択。')
-@canonical_source('Invocation Templates', filename='invocation-templates.md', order=10, merge_policy="local", heading="title")
+@summary("`.dirpluck-inv` Invocation Template の記述と選択。")
+@canonical_source(
+    "Invocation Templates",
+    filename="invocation-templates.md",
+    order=10,
+    merge_policy="local",
+    heading="title",
+)
 class CLI_PART:
     r"""この文書は繰り返し使う CLI invocation を `.dirpluck-inv` Invocation Template に保存し、選択・上書きする方法を説明します。
 
@@ -34,13 +40,14 @@ class CLI_PART:
         {{example_005}}
         ```
 
-        Field を1つも持たない Invocation も有効です。その Invocation は保存済みの実行入力を追加せず、CLI から与えた runtime value と通常の defaults を使います。成功した `--preview` または通常 build では、空の Invocation が選ばれたことを note として CLI output に表示します。これは warning ではなく、Always source だけを使う実行などが正当に成立し得る状態です。
+        Field を1つも持たない Invocation も有効です。その Invocation は保存済みの実行入力を追加せず、CLI から与えた runtime value と通常の defaults を使います。成功した `--preview` または通常 build では、空の Invocation が選ばれたことを note として CLI output に表示します。これは warning ではなく、Always-only build や source 0件の README-only build などが正当に成立し得る状態です。
 
-        Invocation Template は保存済み invocation を一般的に差分合成する仕組みではありません。`-i` / `--invocation-template` と positional `TARGET`、`--config` は組み合わせません。`--case NAME` は選択した Invocation の `case` を実行時に上書きでき、`--archive-mtime VALUE` は Invocation の `archive_mtime` を上書きできます。`--here` / `--output` / `--force`、`--preview`、`--sequence`、`--archive-mtime`、`--paths` も、それぞれ通常の組み合わせ制約に従う runtime modifier として使用できます。`-e` / `--entry` は `-i` / `--invocation-template` と一緒にだけ使用できます。
+        Invocation Template は保存済み invocation を一般的に差分合成する仕組みではありません。`-i` / `--invocation-template` と positional `TARGET`、`--config` は組み合わせません。`--case CASE` は選択した Invocation の `case` を実行時に上書きでき、`--archive-mtime VALUE` は Invocation の `archive_mtime` を上書きできます。`--here` / `--output` / `--force`、`--preview`、`--sequence`、`--archive-mtime`、`--paths` も、それぞれ通常の組み合わせ制約に従う runtime modifier として使用できます。`-e` / `--entry` は `-i` / `--invocation-template` と一緒にだけ使用できます。
 
         `.dirpluck-inv` は Configuration ではなく、`about.base` の参照先にもなりません。選択した Invocation の Configuration / Target / Case / Archive mtime 解決後は通常の dirpluck execution と同じ semantics を使います。
         """
-        title @= 'Invocation Template'
+
+        title @= "Invocation Template"
 
         example_004 @= """
         [invocation]

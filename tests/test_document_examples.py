@@ -21,6 +21,7 @@ CLI_SOURCES = ROOT / "devdocs" / "canonical_sources" / "cli"
 CONFIGURATION_SOURCES = ROOT / "devdocs" / "canonical_sources" / "configuration"
 GETTING_STARTED_SOURCE = ROOT / "devdocs" / "canonical_sources" / "getting_started" / "canonical.py"
 README_SOURCE = ROOT / "devdocs" / "canonical_sources" / "readme" / "canonical.py"
+RECIPE_SOURCES = ROOT / "devdocs" / "canonical_sources" / "recipes"
 
 
 def _test_target_fields(path: Path) -> dict[str, tuple[str | None, list[str]]]:
@@ -75,6 +76,7 @@ class DocumentExampleTests(unittest.TestCase):
         checked = 0
         sources = [
             *sorted(CONFIGURATION_SOURCES.glob("*.py")),
+            *sorted(RECIPE_SOURCES.glob("*.py")),
             GETTING_STARTED_SOURCE,
             README_SOURCE,
         ]
@@ -132,11 +134,11 @@ class DocumentExampleTests(unittest.TestCase):
             self.assertIsNone(result.output_path)
             self.assertFalse((root / "develop-target.zip").exists())
             self.assertIn(
-                "dependencies/framework-core/dist/framework_core-2.4.0-py3-none-any.whl",
+                "dependencies/framework_core-2.4.0-py3-none-any.whl",
                 result.archive_entries,
             )
             self.assertIn(
-                "tools/docs-builder/dist/docs_builder-1.6.0-py3-none-any.whl",
+                "tools/docs_builder-1.6.0-py3-none-any.whl",
                 result.archive_entries,
             )
             self.assertIn("repositories/service-api/README.md", result.archive_entries)
@@ -220,7 +222,14 @@ class DocumentExampleTests(unittest.TestCase):
         names = [alias.name for alias in statement.names]
         self.assertEqual(
             names,
-            ["ConfigurationDeprecationWarning", "DirpluckError", "RunResult", "__version__", "run"],
+            [
+                "AlwaysMigrationWarning",
+                "ConfigurationDeprecationWarning",
+                "DirpluckError",
+                "RunResult",
+                "__version__",
+                "run",
+            ],
         )
         for name in names:
             self.assertTrue(hasattr(dirpluck, name), name)

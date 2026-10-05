@@ -7,12 +7,12 @@ Exact document-selection rules are defined in the [document-selection specificat
 ## Basic form
 
 ```text
-dirpluck [TARGET ...] [--config PATH] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
-dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck [TARGET ...] [--config PATH] [--case CASE] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck -i PATH [-e NAME] [--case CASE] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
 dirpluck --version
 ```
 
-If the selected Effective Configuration has a Pluck, continue to supply one or more `TARGET` references. Without a Pluck, positional references may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck. An Always-only Configuration may still run without positional arguments.
+If the selected Effective Configuration contains one or more Always sources, you may omit `TARGET` references even when Pluck is also defined; the resulting run ignores Pluck and archives only the Always sources. If Targets are supplied, directory Targets continue to use Pluck. Without a Pluck, positional references may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck.
 
 ```console
 dirpluck ./example/
@@ -49,4 +49,4 @@ dirpluck --version
 
 Successful execution exits with status 0. CLI argument errors and `dirpluck` validation/build errors exit with status 2 and display the reason after `dirpluck: error:`.
 
-On a successful normal run that creates an Archive, the final output path is printed to standard output.
+On a successful normal run that creates an Archive, the final output path is available on standard output. If Selection traversal excluded entries recognized as symbolic links or Windows directory junctions, the skipped count is also shown as an informational note; this runtime note is not written into the Archive README.

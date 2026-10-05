@@ -18,6 +18,40 @@
 
 dirpluck 0.10.0 以降のリリース履歴。0.9.x 以前の履歴は [Changelog Archive](docs/changelog/INDEX.md) を参照してください。
 
+## 0.16.0
+
+0.15.0 で予定していた公開変更を未公開のまま取り込み、Always / Case / Targetless run の契約更新と、内部実行 pipeline の責務再編をまとめて公開する breaking release。
+
+version: 0.16.0
+
+Changed:
+
+- **Compatibility policy:** 0.10.0 以降に掲げていた「公開 surface の Breaking Change を原則として避ける」という pre-1.0 方針を取り下げる。実運用から 1.0 前に修正すべき中核設計が残っていることが確認されたため、残りの 0.x series は 1.0 の公開契約を収束させる期間とし、必要な Breaking Change を許容する。可能な場合は deprecation、migration warning、Migration Guide を提供するが、旧設計を互換性のためだけに固定しない。1.0.0 で安定した互換性契約へ移行する。
+- **Release numbering:** 0.15.0 は公開せず、そこで予定していた変更を 0.16.0 に統合する。0.14.x からの upgrade は `docs/migration/0.16.md` を基準とし、0.15.0 を経由する必要はない。
+- **Internal architecture:** CLI / Configuration / Invocation の入力解釈と正規化、filesystem からの実体抽出、Archive / message 出力を明確な3段階として再構成する。Base、Shared、Namespace、Case、Target grammar などの入力言語上の概念は正規化段階で可能な限り消費し、抽出層は typed な Target / Selection / fixed source と filesystem semantics に限定する。Archive planning と ZIP writer も分離し、writer は確定済み payload だけを受け取る。Canonical な CLI / Configuration / Invocation grammar と、明示的に変更した項目を除く selection / archive semantics は維持する。
+- **Specification / test structure:** 公開 Specification から内部 object、処理 phase、具体的 algorithm を固定する記述を除き、公開 contract、pre-1.0 compatibility、implementation invariant を分離する。Test suite も public contract、0.x compatibility、内部 characterization、architecture invariant を区別し、内部実装の置換が公開契約を不必要に固定しない構造へ整理する。
+- 異なる Scope が同じ filesystem directory へ解決されること自体は Configuration error としない。Scope は名前によって明示的に選択できるため、重複した physical root は許可し、実際の重複 source や Archive path collision は Target / Archive planning の通常の規則で扱う。
+- Base chain の inactive な Output definition 同士について write-boundary overlap を検証して Configuration 全体を拒否する規則を削除する。実際の run で有効な Output は root Configuration の Output だけとし、その Output と input / Archive の安全性を実行時に検証する。
+- **Breaking:** `[always.<name>]` の `<name>` を Always source の final Archive directory identity とする。`path` は filesystem 上の source directory / Selection root だけを指定し、path の basename や Configuration directory からの relative path は Archive root の決定に使用しない。たとえば `[always.docs] path = "../external/documentation"` は `docs/` の下へ source directory からの relative selected path を配置する。Always name は TOML key として解釈された後、1個の Archive directory component として扱う。dirpluck は host OS 固有の予約名や filename rule を独自判定しない。
+- `[always.<name>].namespace` は 0.16.x 以降の 0.x series では pre-1.0 compatibility として受理し、指定した Namespace name が `<name>` を置き換えた effective Always name として Archive placement に使用される。旧来の `NAMESPACE/SOURCE_ROOT` prefix semantics は Always には適用しない。Always namespace を検出した場合は公開 `AlwaysMigrationWarning`（CLI では同内容の stderr warning）で、この field が 1.0.0 で削除されることと、目的の Archive directory name を `[always.<name>]` に直接記述する移行先を必ず案内する。Unknown Namespace reference は引き続き Configuration error とする。
+- Final Archive root を destination region identity として整理する。Target 同士と Always 同士は引き続き大文字小文字を区別しない比較で一意とする一方、Target と Always が完全に同じ spelling の root を持つ場合は同じ destination region への composition として共有を許可する。Target `App` と Always `app` のように casefold 後だけ一致する別 spelling は曖昧なので error とし、共有 region 内の実 entry collision は Archive planner の通常の collision rule で検出する。
+- Always `path` は concrete directory path であり、解決した directory 自体を Selection boundary とすることを明確化する。Archive identity が Always name から得られるため、source-root name を導出できないことだけを理由に filesystem root を Always source として拒否していた制限は削除する。Selection traversal の link-like entry / special entry handling は変更しない。
+- **Breaking grammar change with migration path:** Pluck Case の canonical syntax を `[pluck.case.<name>]` から `[case.pluck.<name>]` へ移す。0.16.0 から 1.0.0 未満では旧 `[pluck.case.<name>]` も同じ semantics で互換受理し、公開 `ConfigurationDeprecationWarning`（CLI では stderr migration notice）で新構文への移行を案内する。同じ Configuration document で同名 Case を新旧両構文へ重複定義した場合は error とし、1.0.0 で legacy syntax を削除する。
+- Runtime Case selector を Pluck / Always の独立2軸へ変更する。`--case PLUCK` は Pluck Case だけ、`--case .ALWAYS` は Always Case だけ、`--case PLUCK.ALWAYS` は両方を指定する。CLI、`dirpluck.run(case=...)`、Invocation の `case` field は同じ grammar を使用する。Case validity は参加 source 数から独立して判定し、定義済み Case の結果が0 sourceでも README-only Archive として正常に扱う。
+- Archive directory identity の名前検証から host OS 固有の予約名や filename rule を模倣する portable 保証を外し、TOML / Configuration と Archive identity の責務を分離する。Always / Namespace name は1個の Archive directory component として必要な最小条件だけを検証し、OS 間での展開可否は利用者の責任とする。一方、一般的な case-insensitive 展開での衝突を避けるため、Namespace definition、Always effective name、resolved Target archive root の一意性は大文字小文字を区別せず判定し、実際の Archive spelling は保持する。
+- Generated Archive README の情報構造を整理する。Always source はすべて Target より先に表示し、各 source の `description` は `Files` / `Source` / overlap metadata より先に置く。Target は Scope 単位にまとめ、directory Target はその Scope の Pluck group 配下へ final Archive path を列挙することで、同じ Scope / Pluck description を Target ごとに繰り返さない。File Target は Pluck を使わないため Scope 直下に置く。README 冒頭では `Scope: "..."` が Target の選択範囲だけを表し、優先度・重要度・階層関係を意味しないことを明記し、追加の意味がある場合は Scope `description` に記述する。これは人間向け generated README の presentation / context 改善であり、Selection、Archive entry path、CLI / Python API の機械可読 contract は変更しない。
+
+Added:
+
+- Always Case を `[case.always.<name>]` として追加する。Always Case は個々の Always Selection を上書きせず、Base composition 後の effective Always source 集合を `include` または `exclude` で filter する。両 field は同時指定不可、`include = []` は明示的な0件選択、`exclude = []` または両 field 未指定は全 source 参加とする。参照名は TOML 上の Always identifier とし、未定義参照は effective composition 後に Configuration error とする。
+- Positional Target reference を常に0個以上として扱い、resolved source が0件でも正常に build / preview できるようにする。Targetless run では Pluck を source selection に参加させず、Always source があればそれらだけを解決し、Always source もなければ generated `README.md` だけの Archive を生成する。CLI は source 0件を warning ではなく通常の informational output として表示し、Python API は `RunResult.archive_entries == ("README.md",)` と generated README の注記から同じ結果を観測できる。Targetless Pluck-only run では named Pluck Case を指定しても source 0件の正常結果を許可する一方、未定義 Case は引き続き error とする。この変更は従来 error だった入力を新たに受理する後方互換な機能追加とする。
+- 0.16.0 から 1.0.0 直前まで、0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source だけへ公開 `AlwaysMigrationWarning` を報告する。Warning には旧 root と新 root を含め、Python API では標準 warnings framework、CLI では同じ診断を stderr から確認できる。旧・新 identity が一致する Always には layout warning を出さない。Namespace 使用時は layout 差分の有無とは独立して 1.0.0 での削除を案内する compatibility warning を報告する。0.16 migration guide では旧 `path` / Namespace placement と新しい Always-name-based placement の before/after を示す。
+
+Fixed:
+
+- Archive directory identity の最小 validation から誤って外していた ASCII control character と backslash の拒否を復元する。U+0000..U+001F と U+007F は ZIP entry name の切り詰めや warning / preview 表示崩れを防ぐため拒否し、`\` は `/` と同様に path separator として解釈され得るため1個の Archive directory component に受理しない。これは host OS 固有の予約名を模倣する portable policy ではなく、Archive path の構造と identity を保持するための format-level safety rule とする。
+- Scope 全展開で directory enumeration が `OSError` になった場合と、generated `README.md` / empty-directory entry の ZIP 書き込みが `OSError` になった場合を、他の filesystem / Archive I/O failure と同じ `SelectionError` に正規化する。CLI ではこれらの失敗を traceback ではなく通常の `dirpluck: error:` diagnostic として報告し、未完成の Output / temporary output を残さない。
+
 ## 0.14.1
 
 Ruff と basedpyright の既存 static-analysis policy に source tree を適合させる保守 release。Runtime behavior、公式 Python API、CLI、Configuration language、Archive semantics は変更しない。

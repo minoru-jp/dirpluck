@@ -9,95 +9,48 @@ import shutil
 import tempfile
 import zipfile
 
-from ._builder_common import _is_link_like
-from ._builder_models import ArchivePlan, BuildRequest
-from .config import Config
-from .errors import ConfigurationError, SelectionError
+from ._filesystem import safe_is_link_like
+from ._archive_payload import ArchivePayload
+from ._output_models import NormalizedOutput
+from .errors import SelectionError
 
 
 def _current_output_timestamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def _generated_output_filename(config: Config, request: BuildRequest) -> str:
-    """Return one timestamp filename for Configuration or runtime directory output."""
+def _generated_output_filename(output: NormalizedOutput) -> str:
+    """Return one timestamp filename from a normalized output policy."""
 
-    configured = config.output
-    naming = configured if configured is not None and configured.generated else None
     parts: list[str] = []
-    if naming is not None:
-        if naming.prefix is not None:
-            parts.append(naming.prefix)
-    else:
-        parts.append("dirpluck")
+    if output.prefix is not None:
+        parts.append(output.prefix)
     parts.append(_current_output_timestamp())
-    if request.sequence is not None:
-        parts.append(str(request.sequence))
-    if naming is not None and naming.suffix is not None:
-        parts.append(naming.suffix)
+    if output.sequence is not None:
+        parts.append(str(output.sequence))
+    if output.suffix is not None:
+        parts.append(output.suffix)
     return "-".join(parts) + ".zip"
 
 
-def _effective_output_is_generated(config: Config, request: BuildRequest) -> bool:
-    if request.output is not None:
-        return request.output.generated
-    return config.output is not None and config.output.generated
-
-
-def _resolve_output_path(config: Config, request: BuildRequest) -> tuple[Path, bool]:
-    runtime_output = request.output
-    if runtime_output is not None:
-        if runtime_output.generated:
-            candidate = runtime_output.path / _generated_output_filename(config, request)
-        else:
-            candidate = runtime_output.path
-        overwrite = request.force
-    else:
-        output = config.output
-        if output is None:
-            raise ConfigurationError(
-                f"{config.manifest}: the root Configuration must define "
-                + "[output] or [output.timestamp], or the invocation must provide runtime output"
-            )
-        base = config.manifest.parent
-        if output.generated:
-            directory = Path(output.path)
-            if not directory.is_absolute():
-                directory = base / directory
-            candidate = directory / _generated_output_filename(config, request)
-            overwrite = request.force
-        else:
-            candidate = Path(output.path)
-            if not candidate.is_absolute():
-                candidate = base / candidate
-            overwrite = request.force or output.overwrite
-
-    if _is_link_like(candidate):
+def _resolve_output_path(output: NormalizedOutput) -> tuple[Path, bool]:
+    candidate = (
+        output.path / _generated_output_filename(output) if output.generated else output.path
+    )
+    if safe_is_link_like(candidate):
         raise SelectionError(
             f"output path must not be a symbolic link or Windows junction: {candidate}"
         )
     candidate = candidate.resolve(strict=False)
     if candidate.exists() and candidate.is_dir():
         raise SelectionError(f"output path is a directory: {candidate}")
-    return candidate, overwrite
+    return candidate, output.overwrite
 
 
-def _prepare_output(config: Config, request: BuildRequest) -> tuple[Path, bool]:  # pyright: ignore[reportUnusedFunction]
-    """Resolve and validate the effective Output before archive planning begins."""
+def prepare_output(output: NormalizedOutput) -> tuple[Path, bool]:
+    """Resolve and validate one normalized output policy before writing."""
 
-    if not isinstance(request.force, bool):
-        raise SelectionError("output force must be a boolean")
-    if request.sequence is not None:
-        if (
-            isinstance(request.sequence, bool)
-            or not isinstance(request.sequence, int)
-            or request.sequence < 1
-        ):
-            raise SelectionError("output sequence must be an integer greater than or equal to 1")
-        if not _effective_output_is_generated(config, request):
-            raise SelectionError("output sequence can only be used with timestamp output")
-
-    output_path, overwrite = _resolve_output_path(config, request)
+    output_path, overwrite = _resolve_output_path(output)
     if output_path.exists() and not overwrite:
         raise SelectionError(f"output archive already exists: {output_path}")
     return output_path, overwrite
@@ -141,14 +94,33 @@ def _write_source_with_mtime(
         shutil.copyfileobj(src, dest, 1024 * 8)
 
 
-def _write_archive(  # pyright: ignore[reportUnusedFunction]
-    plan: ArchivePlan,
+def _write_generated_entry(
+    archive: zipfile.ZipFile,
+    name: str,
+    data: str | bytes,
+    archive_mtime: datetime | None,
+) -> None:
+    try:
+        if archive_mtime is None:
+            archive.writestr(name, data)
+        else:
+            archive.writestr(
+                _generated_zip_info(name, archive_mtime),
+                data,
+                compress_type=archive.compression,
+            )
+    except OSError as exc:
+        raise SelectionError(f"cannot add generated entry to archive: {name}") from exc
+
+
+def write_archive(
+    payload: ArchivePayload,
     output_path: Path,
     overwrite: bool,
     *,
     archive_mtime: datetime | None = None,
 ) -> Path:
-    archive_entries = plan.entries
+    archive_entries = payload.entries
     output_resolved = output_path.resolve(strict=False)
     if any(path.resolve() == output_resolved for path in archive_entries.values()):
         raise SelectionError(f"output archive is selected as an input file: {output_path}")
@@ -181,24 +153,10 @@ def _write_archive(  # pyright: ignore[reportUnusedFunction]
             compression=zipfile.ZIP_DEFLATED,
             strict_timestamps=False,
         ) as archive:
-            if archive_mtime is None:
-                archive.writestr("README.md", plan.readme)
-            else:
-                archive.writestr(
-                    _generated_zip_info("README.md", archive_mtime),
-                    plan.readme,
-                    compress_type=archive.compression,
-                )
-            for archive_directory in plan.empty_directories:
+            _write_generated_entry(archive, "README.md", payload.readme, archive_mtime)
+            for archive_directory in payload.empty_directories:
                 directory_name = f"{archive_directory.rstrip('/')}/"
-                if archive_mtime is None:
-                    archive.writestr(directory_name, b"")
-                else:
-                    archive.writestr(
-                        _generated_zip_info(directory_name, archive_mtime),
-                        b"",
-                        compress_type=archive.compression,
-                    )
+                _write_generated_entry(archive, directory_name, b"", archive_mtime)
             for arcname, source in archive_entries.items():
                 try:
                     if archive_mtime is None:

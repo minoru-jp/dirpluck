@@ -16,8 +16,14 @@ example_019 = test_target_field("example 019")
 example_020 = test_target_field("example 020")
 
 
-@summary('Selection、Shared patterns、Case の記述方法。')
-@canonical_source('Configuration selection', filename='selection.md', order=20, merge_policy="local", heading="title")
+@summary("Selection、Shared patterns、Case の記述方法。")
+@canonical_source(
+    "Configuration selection",
+    filename="selection.md",
+    order=20,
+    merge_policy="local",
+    heading="title",
+)
 class CONFIGURATION_PART:
     r"""
     この文書は、各 source から何を収集するかを定義する Selection、再利用可能な Shared patterns、Case variation を説明します。
@@ -38,7 +44,8 @@ class CONFIGURATION_PART:
 
         `ignore` は除外側なので意図的に広く扱います。通常の ignore string と structured `{ path = "..." }` は末尾 `/` がなければ matching file / directory の両方を除外し、末尾 `/` がある場合は directory だけに限定します。File だけに限定した除外が必要なら structured `match` を使います。
         """
-        title @= 'Selection'
+
+        title @= "Selection"
 
         merge @= TERMS.TERM_7
 
@@ -50,11 +57,12 @@ class CONFIGURATION_PART:
             {{example_009}}
             ```
 
-            `description` は任意です。省略しても selection の抽出意味論は変わりません。記述する場合は空でない string とし、生成される Archive README ではその source の見出しと file 数に続く本文として使われます。複数行の説明も table cell へ圧縮せず、そのまま section body として表示します。
+            `description` は任意です。省略しても selection の抽出意味論は変わりません。記述する場合は空でない string とします。Always source の description はその source heading の直下で file 数などの metadata より先に表示します。Pluck description は directory Target ごとに複製せず、Scope 内の Pluck group に1回だけ表示します。複数行の説明も table cell へ圧縮せず、そのまま section body として表示します。
             """
-            title @= '`description`'
 
-            example_009 @= "description = \"Reference material used to evaluate the submission.\""
+            title @= "`description`"
+
+            example_009 @= 'description = "Reference material used to evaluate the submission."'
 
             merge @= TERMS.TERM_10
 
@@ -68,9 +76,10 @@ class CONFIGURATION_PART:
 
             Pattern が1件も一致しなければ selection は成立しません。最終 component は末尾 `/` なしなら file、末尾 `/` ありなら directory を要求します。Directory を選ぶ例は `src/` のように明示します。
             """
-            title @= '`must`'
 
-            example_010 @= "must = [\"report.pdf\", \"data/*.csv\"]"
+            title @= "`must`"
+
+            example_010 @= 'must = ["report.pdf", "data/*.csv"]'
 
         class SECTION_008:
             r"""
@@ -82,9 +91,10 @@ class CONFIGURATION_PART:
 
             `must` と `may` は同じ selection で併用できます。最終 component の型表記は `must` と同じです。`may` が期待した型では一致せず、同じ pattern に一致する反対型の entry が存在する場合も optional missing の意味は変えません。この type mismatch は non-fatal diagnostic として source label とともに記録し、CLI は通常 build / `--preview` の両方で warning を stderr へ表示し、Python API は `RunResult.warnings` に返します。その diagnostic 自体は `may` を error に格上げしません。`must` の同じ mismatch は通常 build では従来どおり unsatisfied error ですが、`--preview` では missing 表示に加えて同じ型 marker hint を warning として確認できます。
             """
-            title @= '`may`'
 
-            example_011 @= "may = [\"generated/*.pdf\", \"coverage.xml\"]"
+            title @= "`may`"
+
+            example_011 @= 'may = ["generated/*.pdf", "coverage.xml"]'
 
         class SECTION_008_1:
             r"""
@@ -98,7 +108,7 @@ class CONFIGURATION_PART:
 
             `must` の `match` は1件以上の non-ignored selectable entry に一致する必要があり、`may` は0件一致を許容します。複数 entry に一致した場合はすべてを選びます。Directory に一致した場合は通常の directory selection と同じく、その subtree を `ignore` に従って収集します。通常 pattern と `match` が最終的に同じ file を選んでも Archive へ重複して収録しません。
 
-            `ignore` でも同じ form を使えます。Directory path に一致した `ignore` match はその subtree を prune します。
+            `ignore` でも同じ form を使えます。Directory path に一致した `ignore` match はその directory と subtree 全体を Selection 対象から除外します。
 
             ```toml
             {{example_020}}
@@ -106,6 +116,7 @@ class CONFIGURATION_PART:
 
             `match` は Selection root 配下を広く走査して候補 path を照合する場合があります。通常の guided Selection pattern のように regular expression から効率的な探索経路を推論することは仕様に含めません。単純な path selection には通常の string pattern を使い、必要な場合だけ `match` を使うのが分かりやすい使い分けです。Pattern は non-empty、512 character 以下で、invalid regular expression は Configuration error です。
             """
+
             title @= '`{ match = "..." }`'
 
             example_019 @= r"""
@@ -144,7 +155,8 @@ class CONFIGURATION_PART:
 
             認識した非 ignored symbolic link / Windows directory junction は `must` / `may` の選択対象にも再帰走査の対象にもならず、Archive へも含めません。FIFO、socket、device など regular file / regular directory ではない非 ignored filesystem entry も Archive 対象にしません。`must` がそのような特殊 entry だけに一致した場合は selectable でない理由を示す error とし、`may` では optional missing として扱います。Selection には内容や名前に基づく暗黙の ignore を加えません。Configuration を実行するときの trust boundary と広い selection の扱いは `../TRUST.md` を参照してください。
             """
-            title @= '`ignore`'
+
+            title @= "`ignore`"
 
             example_012 @= """
             ignore = [
@@ -175,7 +187,8 @@ class CONFIGURATION_PART:
 
             既定は `false` です。`allow_empty = true` と `must` は同時に使えません。
             """
-            title @= '`allow_empty`'
+
+            title @= "`allow_empty`"
 
             example_014 @= """
             may = ["generated/*.pdf"]
@@ -202,7 +215,8 @@ class CONFIGURATION_PART:
 
         Base chain での name resolution と duplicate validation は `../specification/INDEX.md` を参照してください。
         """
-        title @= 'Shared patterns'
+
+        title @= "Shared patterns"
 
         example_015 @= """
         [shared.must]
@@ -235,7 +249,7 @@ class CONFIGURATION_PART:
 
     class SECTION_012:
         r"""
-        {{TERM_4}}は、同じ source に別の完全な selection を用意するときに使います。
+        {{TERM_4}}は Pluck と Always で役割を分けます。Pluck Case は別の完全な Selection、Always Case は参加する Always source 集合の filter です。
 
         ```toml
         {{example_017}}
@@ -245,23 +259,41 @@ class CONFIGURATION_PART:
         {{example_018}}
         ```
 
-        Case は base selection への差分ではありません。必要な `must` / `may` / `ignore` / Shared reference / `allow_empty` は Case 自身へ書きます。
+        `[case.pluck.audit]` は base `[pluck]` への差分ではありません。必要な `must` / `may` / `ignore` / Shared reference / `allow_empty` は Case 自身へ書きます。0.16.x から 1.0.0 未満では旧 `[pluck.case.audit]` も互換入力として受理しますが、migration notice を報告し、1.0.0 で削除します。
 
-        Pluck と Always source が同じ Case 名を持てば、同じ CLI `--case` で対応する variation を選べます。Always source に同名 Case がない場合の fallback など、正確な Case semantics は `../specification/INDEX.md` を参照してください。
+        `[case.always.release]` は各 Always source の Selection を変更せず、effective Always 集合から参加 source を選びます。`include` と `exclude` は排他的です。`include = []` は意図的に Always を0件へでき、`exclude = []` は何も除外しません。両方を省略すれば全 Always source が参加します。
+
+        Runtime selector は2軸です。`--case audit` は Pluck Case だけ、`--case .release` は Always Case だけ、`--case audit.release` は両方を選びます。Case が定義済みなら、その適用結果として source が0件でも正常です。正確な Case semantics は `../specification/INDEX.md` を参照してください。
         """
-        title @= 'Cases'
+
+        title @= "Cases"
 
         example_017 @= """
         [pluck]
         description = "Normal review."
         must = ["documents/", "metadata.json"]
 
-        [pluck.case.audit]
+        [case.pluck.audit]
         description = "Audit review."
         must = ["documents/", "metadata.json", "records/"]
+
+        [always.guidelines]
+        path = "review-guidelines"
+        must = ["*.md"]
+
+        [always.license]
+        path = "legal"
+        must = ["LICENSE"]
+
+        [case.always.release]
+        include = ["guidelines", "license"]
         """
 
-        example_018 @= "dirpluck ./acme/ --case audit"
+        example_018 @= """
+        dirpluck ./acme/ --case audit
+        dirpluck --case .release
+        dirpluck ./acme/ --case audit.release
+        """
 
         merge @= TERMS.TERM_1
         merge @= TERMS.TERM_4

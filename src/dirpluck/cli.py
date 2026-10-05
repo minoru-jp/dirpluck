@@ -9,13 +9,13 @@ from typing import Protocol, cast
 from . import __version__
 from ._application import run
 from ._archive import render_link_skip_note
-from ._config_parser import collect_configuration_deprecations
-from .config import CONFIG_NAME
+from ._warnings import collect_dirpluck_warnings
+from ._input_paths import CONFIG_NAME
 from .errors import DirpluckError
 
 
 class _Arguments(Protocol):
-    directories: list[str]
+    targets: list[str]
     case: list[str] | None
     sequence: list[int] | None
     config: str | None
@@ -83,7 +83,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dirpluck")
     _ = parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     _ = parser.add_argument(
-        "directories",
+        "targets",
         nargs="*",
         metavar="TARGET",
         help=(
@@ -91,14 +91,18 @@ def _parser() -> argparse.ArgumentParser:
             + "SCOPE/NAME (named file), SCOPE/NAME/ (named directory), "
             + "/ or SCOPE/ (Scope expansion), :[...] / SCOPE:[...] (literal Target lists), "
             + "or :<REGEX> / SCOPE:<REGEX> (regular-expression Target selectors); "
-            + "one or more required when [pluck] is defined"
+            + "optional; zero Targets may produce an Always-only or README-only Archive; "
+            + "directory Targets require [pluck]"
         ),
     )
     _ = parser.add_argument(
         "--case",
         action="append",
-        metavar="NAME",
-        help="one named Configuration Case",
+        metavar="CASE",
+        help=(
+            "Case selector: PLUCK, .ALWAYS, or PLUCK.ALWAYS; "
+            + "Pluck and Always Case names are independent"
+        ),
     )
     _ = parser.add_argument(
         "--sequence",
@@ -226,14 +230,14 @@ def main(argv: list[str] | None = None) -> int:
     if selected_invocation is not None:
         if args.config is not None:
             parser.error("--config cannot be combined with --invocation-template")
-        if args.directories:
+        if args.targets:
             parser.error("TARGET arguments cannot be combined with --invocation-template")
 
     try:
-        with collect_configuration_deprecations() as configuration_deprecations:
+        with collect_dirpluck_warnings() as public_warnings:
             try:
                 result = run(
-                    *args.directories,
+                    *args.targets,
                     config=args.config,
                     case=selected_case,
                     sequence=selected_sequence,
@@ -246,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
                     force=args.force,
                 )
             finally:
-                for warning in configuration_deprecations:
+                for _, warning in public_warnings:
                     print(f"dirpluck: warning: {warning}", file=sys.stderr)
         for warning in result.warnings:
             print(f"dirpluck: warning: {warning}", file=sys.stderr)
@@ -254,6 +258,8 @@ def main(argv: list[str] | None = None) -> int:
             print(result.preview_text)
         else:
             print(result.output_path)
+        if result.archive_entries == ("README.md",):
+            print("No sources were selected; the Archive contains README.md only.")
         if result.invocation_empty:
             print(
                 "note: selected Invocation provides no config, targets, case, or archive_mtime; "

@@ -36,7 +36,7 @@ dirpluck は、複数の場所にある file から必要なものを選び、�
 
 ## インストール
 
-現在の version は **0.14.1** です。
+現在の version は **0.16.0** です。
 
 Python 3.11 以降を使用します。
 
@@ -46,6 +46,8 @@ dirpluck --version
 ```
 
 dirpluck には runtime third-party dependency はありません。
+
+0.14.x から upgrade する場合は、Always Archive layout の breaking change を `docs/migration/0.16.md` で確認してください。
 
 ## 例: LLM に開発 context を渡す
 
@@ -77,21 +79,17 @@ Workspace root の `default.dirpluck` を次のようにします。
 [about]
 description = "LLMによる開発作業のためのリポジトリと実行依存物。"
 
-[namespace.dependencies]
-[namespace.tools]
 [namespace.repositories]
 
-[always.framework]
+[always.dependencies]
 description = "対象リポジトリが利用する基盤フレームワーク。"
-path = "framework-core"
-namespace = "dependencies"
-must = ["dist/*.whl"]
+path = "framework-core/dist"
+must = ["*.whl"]
 
-[always.docs-builder]
+[always.tools]
 description = "開発文書を構成するためのツール。"
-path = "docs-builder"
-namespace = "tools"
-must = ["dist/*.whl"]
+path = "docs-builder/dist"
+must = ["*.whl"]
 
 [scope.projects]
 description = "開発対象として選択できるリポジトリ。"
@@ -119,7 +117,7 @@ ignore = [
     { path = ".tmp/" },
 ]
 
-[pluck.case.diff]
+[case.pluck.diff]
 description = "開発対象のリポジトリ。.tmp/ に評価してほしい差分が含まれています。"
 may = ["*", "*/"]
 ignore = [
@@ -152,7 +150,7 @@ dirpluck projects/service-api/ projects/web-console/ --preview
 dirpluck projects/service-api/ --case diff --preview
 ```
 
-`--case diff` は `[pluck.case.diff]` の Selection を使用するため、この場合だけ `.tmp/` も Archive の対象になります。生成される Archive README には Case 側の `description` も反映されます。確認後は同じ command から `--preview` を外して build できます。
+`--case diff` は `[case.pluck.diff]` の Selection を使用するため、この場合だけ `.tmp/` も Archive の対象になります。生成される Archive README には Case 側の `description` も反映されます。確認後は同じ command から `--preview` を外して build できます。
 
 ### Build
 
@@ -168,18 +166,14 @@ dirpluck projects/service-api/ projects/web-console/
 develop-target.zip
 ├── README.md
 ├── dependencies/
-│   └── framework-core/
-│       └── dist/
-│           └── framework_core-2.4.0-py3-none-any.whl
+│   └── framework_core-2.4.0-py3-none-any.whl
 ├── repositories/
 │   ├── service-api/
 │   │   └── ...
 │   └── web-console/
 │       └── ...
 └── tools/
-    └── docs-builder/
-        └── dist/
-            └── docs_builder-1.6.0-py3-none-any.whl
+    └── docs_builder-1.6.0-py3-none-any.whl
 ```
 
 別の作業では Target だけを変えます。
@@ -221,6 +215,7 @@ Target だけを入れ替えたり、複数 Target をまとめたり、固定�
 この README は、ひとつの利用例を通して基本的な使い方だけを紹介しています。
 
 - [Getting Started](https://github.com/minoru-jp/dirpluck/blob/main/docs/GETTING_STARTED.md): 最小 Configuration から preview / build までの短い walkthrough。
+- [Recipes](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/INDEX.md): 実際の workspace と目的から TOML / CLI の組み合わせを学ぶ use-case guide。
 - [Glossary](https://github.com/minoru-jp/dirpluck/blob/main/GLOSSARY.md): 文書全体で使う概念の意味。
 - [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Scope、Always、Shared、Case、Base Configuration など Configuration authoring の guide。
 - [CLI Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/cli/INDEX.md): Target 指定、CLI option、Invocation Template の guide。

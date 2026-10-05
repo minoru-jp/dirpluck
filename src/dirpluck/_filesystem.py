@@ -7,6 +7,8 @@ import os
 import stat
 from typing import cast
 
+from .errors import SelectionError
+
 
 class LinkInspectionError(OSError):
     """Raised when link-like filesystem semantics cannot be inspected safely."""
@@ -39,3 +41,12 @@ def is_link_like(path: Path) -> bool:
             f"cannot safely inspect Windows junctions: st_reparse_tag is unavailable for {path}"
         )
     return reparse_tag == junction_tag
+
+
+def safe_is_link_like(path: Path) -> bool:
+    """Return link-like status, failing closed with a dirpluck SelectionError."""
+
+    try:
+        return is_link_like(path)
+    except LinkInspectionError as exc:
+        raise SelectionError(str(exc)) from exc

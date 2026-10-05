@@ -24,18 +24,24 @@ level: MUST
 
 ## SPEC_062
 
-Namespace name はそのまま ZIP 内の directory component になる。空名、`.`、`..`、`/`、backslash、control character、portable filename component として不適切な `< > : " | ? *` を拒否する。Namespace は filesystem path ではなく Archive path の1 component である。
+Namespace name は TOML key として解釈された後、1個の Archive directory component として検証する。空名、`.`、`..`、path separator の `/` と `\`、ASCII control character U+0000..U+001F と U+007F を拒否する。これらは host OS の filename rule ではなく、Archive entry name を安全な1 componentとして保持するための構造上の制約である。dirpluck は host OS ごとの予約名、末尾 dot、その他の filesystem 固有 naming rule を独自に判定しない。Namespace は filesystem path ではなく、source の logical Archive identity を補助する名前付き Configuration concept である。
 
 level: MUST
 
 ## SPEC_063
 
-Scope / Always source の `namespace` field は effective Namespace name を参照する。Namespace を参照した source の final archive root は `NAMESPACE/SOURCE_ROOT` とする。この prefix は他 source との衝突有無にかかわらず常に適用する。Namespace を参照しない source の final archive root は `SOURCE_ROOT` のままとする。
+Scope の `namespace` field は effective Namespace name を参照し、従来どおり Target の final archive root に `NAMESPACE/` prefix を追加する。Scope root、Target discovery、Target entry name は変更しない。Unknown Namespace reference は Configuration error とする。
 
 level: MUST
 
-## SPEC_064
+## SPEC_168
 
-複数 source が同じ Namespace を参照すること自体は有効である。ただし Namespace は自動 collision resolver ではなく、final archive root の一意性は Archive planning の final archive root uniqueness rule で検証する。
+複数 Scope が同じ Namespace definition を参照すること自体は有効である。Namespace definition name は大文字小文字を区別しない比較で一意とする。Scope Namespace 適用後の final archive root は通常の Archive identity / collision rule に従う。実際に Archive へ書き込む spelling は Configuration / Target name の表記を保持する。
 
 level: MAY
+
+## SPEC_169
+
+dirpluck は Archive directory identity について host OS / filesystem 固有の予約名、末尾 dot、Unicode normalization などを再現して cross-platform extraction compatibility を保証しない。別の OS / filesystem へ Archive を移動して展開する場合、その環境で有効かつ意図どおり区別される名前を選ぶ責任は Configuration author にある。大文字小文字を区別しない一意性検証は dirpluck 自身の Archive identity rule として適用する。
+
+level: MUST

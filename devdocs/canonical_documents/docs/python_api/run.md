@@ -40,7 +40,7 @@ run(
 ```text
 targets       positional TARGET
 config        --config PATH
-case          --case NAME
+case          --case CASE
 sequence      --sequence N
 invocation    -i / --invocation-template PATH
 entry         -e / --entry NAME
@@ -62,7 +62,7 @@ kind: Operation
 
 introduced: 0.9.0
 
-input: targets: positional Target references, config: Configuration document path, case: Case name, sequence: explicit output sequence, invocation: Invocation Template path, entry: named Invocation entry, preview: preview mode, paths: include source paths in generated README, archive_mtime: Archive entry timestamp policy, output: runtime Output path, force: overwrite effective Output, cwd: runtime anchor for relative control-document paths
+input: targets: positional Target references, config: Configuration document path, case: Pluck / Always Case selector, sequence: explicit output sequence, invocation: Invocation Template path, entry: named Invocation entry, preview: preview mode, paths: include source paths in generated README, archive_mtime: Archive entry timestamp policy, output: runtime Output path, force: overwrite effective Output, cwd: runtime anchor for relative control-document paths
 
 output: RunResult
 
@@ -72,7 +72,21 @@ output: RunResult
 
 Warning location は固定 `stacklevel` に依存せず、dirpluck package 外の最初の caller frame に帰属します。呼び出し側が明示的に制御したい場合は `dirpluck.ConfigurationDeprecationWarning` を category として warning filter に指定できます。この lifecycle diagnostic は planning diagnostic を返す `RunResult.warnings` には含まれません。CLI は同じ診断を収集して簡潔な stderr warning として表示するため、CLI 実行時に追加の Python warning は発行しません。
 
-旧記法は 1.0.0 で invalid Configuration になります。Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行してください。
+旧記法は 1.0.0 で invalid Configuration になります。Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行してください。0.16.0 から 1.0.0 未満では legacy `[pluck.case.<name>]` も同じ category で migration notice を報告し、canonical `[case.pluck.<name>]` への移行を案内します。
+
+## Always migration warning
+
+0.16.0 から 1.0.0 直前まで、`dirpluck.run()` は Always migration を公開 `AlwaysMigrationWarning` として Python の warnings framework へ報告します。0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source にだけ layout migration warning を出します。Warning message には旧 root と新 root を含めます。旧・新 identity が同じ source には layout warning を出しません。
+
+`[always.<name>].namespace` を使用した場合は、layout 差分とは別に pre-1.0 compatibility warning を必ず報告します。0.16.x では Namespace name が Always name を一時的に置き換えますが、この field は 1.0.0 で削除されます。Archive directory name は `[always.<name>]` に直接記述してください。
+
+`AlwaysMigrationWarning` は `FutureWarning` subclass で、warning location は dirpluck package 外の最初の caller frame に帰属します。呼び出し側は `dirpluck.AlwaysMigrationWarning` を filter / error 化でき、Archive layout の移行を CI から明示的に検知できます。これらは lifecycle diagnostic なので `RunResult.warnings` には含めません。CLI は同じ public warning を収集して stderr へ表示し、追加の Python warning は発行しません。
+
+## README-only Archive
+
+`dirpluck.run()` は resolved source が0件でも正常に完了できます。Target を渡さず、Always source も解決されない場合、build は generated `README.md` だけを含む Archive を生成し、`preview=True` は `README.md` だけの tree を返します。これは warning / exception ではありません。Generated README には source が0件だったことを informational text として記録し、`RunResult.archive_entries` は `("README.md",)` になります。
+
+`case=` は CLI `--case CASE` と同じ2軸 selector です。`"audit"` は Pluck Case、`".release"` は Always Case、`"audit.release"` は両方を指定します。各軸の Case name 自体が Configuration 上で有効なら、その適用結果として source が0件でも正常です。指定した軸に存在しない Case name は error です。
 
 ## Runtime Output
 

@@ -6,8 +6,14 @@ example_022 = test_target_field("example 022")
 example_023 = test_target_field("example 023")
 
 
-@summary('Configuration 全体を組み合わせた complete example。')
-@canonical_source('Configuration examples', filename='examples.md', order=50, merge_policy="local", heading="title")
+@summary("Configuration 全体を組み合わせた complete example。")
+@canonical_source(
+    "Configuration examples",
+    filename="examples.md",
+    order=50,
+    merge_policy="local",
+    heading="title",
+)
 class CONFIGURATION_PART:
     r"""
     この文書は、主要な Configuration 要素を組み合わせた complete example を示します。
@@ -30,7 +36,8 @@ class CONFIGURATION_PART:
 
         CLI の全 option と Configuration / Invocation Template の選択方法は `../cli/INDEX.md`、この Configuration が正確にどう解決・検証されるかは `../specification/INDEX.md` を参照してください。
         """
-        title @= 'Complete example'
+
+        title @= "Complete example"
 
         example_022 @= """
         [about]
@@ -51,7 +58,7 @@ class CONFIGURATION_PART:
         ignore = [{ shared = "python-dev" }]
         allow_empty = true
 
-        [pluck.case.full]
+        [case.pluck.full]
         description = "The project with all review material."
         may = ["README.md", "src/", "tests/", "docs/"]
         ignore = [{ shared = "python-dev" }]

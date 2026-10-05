@@ -43,10 +43,11 @@
 | [Filesystem path notation](paths.md) | Configuration と runtime input で使用する filesystem path notation。 |
 | [Base chain and composition](composition.md) | Base chain、cycle detection、definition composition、Output の扱い。 |
 | [Runtime Target, Scope, and Case](runtime-targets.md) | Scope、Target reference、expansion、Always source、Case の解決規則。 |
-| [Namespace](namespace.md) | Archive placement に使用する Namespace の定義と制約。 |
+| [Namespace](namespace.md) | Archive placement に使用する Namespace の canonical semantics。 |
 | [Selection and shared patterns](selection.md) | Selection、Shared pattern、include/ignore pattern grammar。 |
 | [Filesystem boundary and entry types](filesystem.md) | filesystem boundary、link-like entry、non-regular entry の扱い。 |
 | [Archive planning](archive.md) | final archive root、entry collision、generated README の planning 規則。 |
-| [Output](output.md) | fixed/timestamp/runtime Output、write boundary、collision 規則。 |
+| [Output](output.md) | fixed/timestamp/runtime Output、overwrite、collision 規則。 |
 | [Preview](preview.md) | preview mode の出力と副作用境界。 |
 | [CLI contract](cli-contract.md) | CLI options、組み合わせ制約、exit behavior の契約。 |
+| [Pre-1.0 compatibility](compatibility.md) | 1.0.0 で削除することが確定している pre-1.0 compatibility input / behavior。 |

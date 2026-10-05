@@ -11,8 +11,10 @@ example_011 = test_target_field("example 011")
 example_012 = test_target_field("example 012")
 
 
-@summary('Target reference、Scope expansion、Case の CLI 操作。')
-@canonical_source('Targets and Cases', filename='targets.md', order=20, merge_policy="local", heading="title")
+@summary("Target reference、Scope expansion、Case の CLI 操作。")
+@canonical_source(
+    "Targets and Cases", filename="targets.md", order=20, merge_policy="local", heading="title"
+)
 class CLI_PART:
     r"""この文書は positional Target reference、Scope expansion、Case selection を CLI から指定する方法を説明します。
 
@@ -69,7 +71,7 @@ class CLI_PART:
 
         `./` 単独、`/acme`、`work/team/acme`、absolute filesystem path は Target reference として受理しません。`./acme` と `./acme/` はそれぞれ default Scope の file / directory Target を明示する有効な形式です。
 
-        Pluck がない Configuration でも file-capable Scope (`target_kind = "file"` / `"both"`) から file Target は選べます。Directory Target は Pluck を必要とします。Target を指定しない Always-only 実行も従来どおり有効です。
+        Target reference は0個でも実行できます。Targetを指定しないrunでは Pluck は source selection に使用せず、Always source があればそれらだけを抽出します。Always source もなければ source 0件の正常な run となり、生成するArchiveは `README.md` だけを含みます。Pluck がない Configuration でも file-capable Scope (`target_kind = "file"` / `"both"`) から file Target は選べます。Directory Target は Pluck を必要とします。
 
         ```console
         {{example_009}}
@@ -77,7 +79,8 @@ class CLI_PART:
 
         Scope と `ignore` の定義方法は `configuration/INDEX.md`、Target reference、boundary、archive path の厳密な規則は `specification/INDEX.md` を参照してください。
         """
-        title @= 'Target の指定'
+
+        title @= "Target の指定"
 
         example_006 @= "dirpluck ./acme/ ./contoso/"
 
@@ -98,17 +101,22 @@ class CLI_PART:
 
     class SECTION_005:
         r"""
-        名前付き{{TERM_4}}を選ぶには `--case NAME` を使います。
+        名前付き{{TERM_4}}は `--case CASE` で選びます。Case selector は Pluck と Always の2軸です。`PLUCK` は Pluck Case だけ、`.ALWAYS` は Always Case だけ、`PLUCK.ALWAYS` は両方を指定します。
 
         ```console
         {{example_010}}
         ```
 
-        1回の実行で指定する Case は1個です。Pluck と Always source が Case をどう選ぶかは `specification/INDEX.md` に定義しています。
+        2軸は独立して検証します。定義済み Case の適用結果として source が0件でも正常です。Pluck Case と Always Case の Configuration semantics は `specification/INDEX.md` に定義しています。
         """
-        title @= 'Case'
 
-        example_010 @= "dirpluck ./acme/ --case audit"
+        title @= "Case"
+
+        example_010 @= """
+        dirpluck ./acme/ --case audit
+        dirpluck --case .release
+        dirpluck ./acme/ --case audit.release
+        """
 
         merge @= TERMS.TERM_1
         merge @= TERMS.TERM_4

@@ -44,15 +44,15 @@ related: [SPEC_050](runtime-targets.md#spec_050), [SPEC_052](runtime-targets.md#
 
 ## SPEC_092
 
-Python 3.11 でも Windows directory junction を判定できるよう、Windows では `lstat` が返す reparse tag を利用する。判定はひとつの内部 helper に集約し、Target discovery、Selection traversal、link-like entry を拒否する runtime filesystem check で同じ判定を使用する。Control document path の resolution にはこの link-like 判定を適用しない。対応対象の Windows runtime で junction 判定に必要な reparse-tag 定数または stat metadata を取得できない場合は、通常 directory とみなして traversal を続けず、safety boundary を確立できない error とする。これは既知の symbolic link / directory junction を扱うための safety boundary であり、platform に存在し得るすべての reparse point や未知の redirecting mechanism の完全な検出を保証しない。
+Windows runtime では、directory junction として認識した entry を symbolic link と同じ link-like entry として扱い、自動走査しない。対応環境で安全な junction 判定を成立させられない場合は、通常 directory とみなして traversal を続けず error とする。この boundary は認識可能な symbolic link / directory junction を対象とし、platform に存在し得る未知の redirecting mechanism の完全な検出を保証しない。
 
 level: MUST
 
-condition: Windows runtime で directory junction を判定する場合
+condition: Windows runtime で directory entry を自動走査する場合
 
 ## SPEC_093
 
-Selection traversal で認識して除外した **non-ignored** link-like entry は、同じ path を複数 pattern から観測しても1件として数える。`--preview` は contents tree の後に、通常 build は output path の後に、除外した総件数を CLI note として表示する。個々の link path は表示せず、Archive `README.md` にもこの runtime note を記録しない。`ignore` に一致した link-like entry と、directory `ignore` によって内部へ入る前に枝刈りされた subtree の entry は skipped-link count に含めない。
+Selection traversal で認識して除外した **non-ignored** link-like entry は、同じ path を複数 pattern から観測しても1件として数える。`--preview` と通常 build は、除外した総件数を informational CLI note として表示する。Note の表示位置や exact wording は互換性契約に含めない。個々の link path は表示せず、Archive `README.md` にもこの runtime note を記録しない。`ignore` に一致した link-like entry と、directory `ignore` によって除外された subtree 内の entry は skipped-link count に含めない。
 
 level: MUST
 

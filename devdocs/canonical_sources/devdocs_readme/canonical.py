@@ -3,7 +3,9 @@ from shikumi_devdoc.norms.common import canonical_source, merge
 from shikumi_devdoc.norms.document import title
 
 
-@canonical_source('dirpluck development documents', filename='README.md', merge_policy="local", heading="title")
+@canonical_source(
+    "dirpluck development documents", filename="README.md", merge_policy="local", heading="title"
+)
 class SECTION_001:
     r"""
     `devdocs/` は、{{TERM_1}} の公開文書を作成・検証するための repository workspace です。ここにある canonical source と日本語 canonical document は repository 上で公開しますが、{{TERM_1}} の runtime API、Configuration interface、または互換性保証対象の product interface ではありません。
@@ -31,7 +33,8 @@ class SECTION_001:
 
         `devdocs/README.md` 自身も例外ではなく、`canonical_sources/devdocs_readme/canonical.py` を正本として同じ pipeline で管理します。
         """
-        title @= '構成'
+
+        title @= "構成"
 
     class SECTION_003:
         r"""
@@ -45,7 +48,8 @@ class SECTION_001:
 
         Repository root を Python import root とし、module 名は `devdocs.canonical_sources.vocabulary.canonical` や `devdocs.canonical_sources.readme.canonical` の形で扱います。
         """
-        title @= 'Canonical sources'
+
+        title @= "Canonical sources"
 
         merge @= TERMS.TERM_1
 
@@ -58,7 +62,8 @@ class SECTION_001:
 
         これらの配置や filename は repository convention です。shikumi-devdoc 側の dotted canonical module、`-o`、`--context`、`--notice`、`--translation-source` という interface 自体は、この workspace の都合で再定義しません。
         """
-        title @= 'Configuration'
+
+        title @= "Configuration"
 
     class SECTION_005:
         r"""
@@ -88,7 +93,8 @@ class SECTION_001:
 
         Wheel 用に別の canonical artifact は生成しません。Repository へ公開する英語 Markdown がそのまま wheel に同梱されるため、canonical document も repository publication path に対応する1系統だけを保持します。
         """
-        title @= 'Canonical documents'
+
+        title @= "Canonical documents"
 
     class SECTION_006:
         r"""
@@ -118,7 +124,8 @@ class SECTION_001:
 
         `--check` は commit 済み canonical document を一時生成結果と比較し、正本との drift を検出します。
         """
-        title @= '生成と翻訳'
+
+        title @= "生成と翻訳"
 
     class SECTION_007:
         r"""
@@ -138,6 +145,7 @@ class SECTION_001:
 
         Local では `python tools/check_release.py` により、Ruff format / lint、basedpyright、両方の `unittest` discovery 形式、canonical document check、wheel / sdist build、metadata / distribution contents、installed wheel の CLI smoke test をまとめて再現できます。
         """
-        title @= 'Version control と distribution'
+
+        title @= "Version control と distribution"
 
         merge @= TERMS.TERM_1

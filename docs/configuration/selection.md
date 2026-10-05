@@ -22,7 +22,7 @@ Describe the role the source plays in the extraction intent. In the generated Ar
 description = "Reference material used to evaluate the submission."
 ```
 
-`description` is optional. Omitting it does not change Selection semantics. When present, it must be a non-empty string and appears as the body of that source's section in the generated Archive README, after the source heading and file count. Multi-line descriptions are kept as section content rather than being compressed into a table cell.
+`description` is optional. Omitting it does not change Selection semantics. When present, it must be a non-empty string. An Always source description appears directly below that source heading, before metadata such as the file count. A Pluck description is not duplicated for every directory Target; it appears once in the Pluck group within each Scope. Multi-line descriptions remain section content rather than being compressed into a table cell.
 
 ### `must`
 
@@ -153,22 +153,37 @@ From 0.14.0 through releases before 1.0.0, the legacy one-element nested-array f
 See [Specification](../specification/INDEX.md) for name resolution and duplicate validation along a base chain.
 ## Cases
 
-Use a Case to provide another complete Selection for the same source.
+Cases have different jobs for Pluck and Always. A Pluck Case is another complete Selection. An Always Case filters which Always sources participate.
 
 ```toml
 [pluck]
 description = "Normal review."
 must = ["documents/", "metadata.json"]
 
-[pluck.case.audit]
+[case.pluck.audit]
 description = "Audit review."
 must = ["documents/", "metadata.json", "records/"]
+
+[always.guidelines]
+path = "review-guidelines"
+must = ["*.md"]
+
+[always.license]
+path = "legal"
+must = ["LICENSE"]
+
+[case.always.release]
+include = ["guidelines", "license"]
 ```
 
 ```console
 dirpluck ./acme/ --case audit
+dirpluck --case .release
+dirpluck ./acme/ --case audit.release
 ```
 
-A Case is not a delta applied to the base Selection. Write all required `must`, `may`, `ignore`, Shared references, and `allow_empty` values in the Case itself.
+`[case.pluck.audit]` is not a delta from `[pluck]`. Write every required `must`, `may`, `ignore`, Shared reference, and `allow_empty` value in the Case itself. From 0.16.x through releases before 1.0.0, legacy `[pluck.case.audit]` remains accepted as compatibility input, reports a migration notice, and is removed in 1.0.0.
 
-If Pluck and an Always source both have the same Case name, the same CLI `--case` selects the corresponding variation. See [Specification](../specification/INDEX.md) for exact Case semantics, including fallback when an Always source does not define the selected Case.
+`[case.always.release]` does not change any Always source Selection. It filters the effective Always-source set. `include` and `exclude` are mutually exclusive. `include = []` explicitly selects no Always sources; `exclude = []` excludes none; omitting both includes every Always source.
+
+The runtime selector has two independent axes. `--case audit` selects only the Pluck Case, `--case .release` selects only the Always Case, and `--case audit.release` selects both. A defined Case may validly result in zero sources. See [Specification](../specification/INDEX.md) for the normative Case rules.

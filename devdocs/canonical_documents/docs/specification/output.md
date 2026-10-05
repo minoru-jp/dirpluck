@@ -22,14 +22,6 @@ Configuration は Output を省略できる。Output を持たない Configurati
 
 level: MUST
 
-## SPEC_108
-
-Base chain では、実際に Output を宣言している definition だけが書き込み境界の overlap validation に参加する。Output path の relative resolution は常にその Output を記述した Configuration file の directory を基準とする。
-
-level: MUST
-
-related: [SPEC_036](composition.md#spec_036), [SPEC_018](paths.md#spec_018)
-
 ## SECTION_901
 
 title: Fixed output
@@ -58,7 +50,7 @@ level: MUST
 
 ### SPEC_112
 
-`overwrite = false` では build 前と最終配置直前に destination が存在しないことを確認する。いずれかの確認時点で existing destination を認識した場合は、その existing output を変更せず失敗する。ただし、この存在確認と最終配置は concurrent writer に対する atomic な no-clobber operation ではない。最終確認後から配置までの間に別 process が同じ destination を作成または置換した場合、その file を dirpluck が置換し得る。
+`overwrite = false` では existing destination を認識した場合、その existing output を変更せず失敗する。
 
 level: MUST
 
@@ -66,7 +58,7 @@ condition: effective overwrite policy が false の場合
 
 ### SPEC_113
 
-`overwrite = true` では output directory の temporary file へ新しい ZIP を完成させた後で existing output を置換する。既存 destination の file mode は継承しない。
+`overwrite = true` で existing destination がある場合、新しい Archive が完成するまでは既存内容を保持し、successful build の final Archive で destination を置換する。既存 destination の file mode は継承しない。
 
 level: MUST
 
@@ -74,7 +66,7 @@ condition: effective overwrite policy が true の場合
 
 ### SPEC_114
 
-生成する Archive file は host OS の通常の新規 file creation semantics に従う。POSIX では通常の regular file creation mode `0666` に process `umask` を適用した mode で temporary output を作成し、その mode のまま final destination へ置換する。したがって new output と overwrite のどちらも、その run の `umask` に基づく新規 file mode になる。
+生成後の Archive file mode は host OS の通常の新規 file creation semantics に従う。POSIX では通常の regular file creation mode `0666` に process `umask` を適用した mode とし、new output と overwrite のどちらも既存 destination の mode を継承しない。
 
 level: MUST
 
@@ -129,7 +121,7 @@ level: MUST
 
 ### SPEC_121
 
-Timestamp は process local time を使い、build 開始時に一度だけ確定する。自由な timestamp format、variable expansion、naming template は提供しない。
+Timestamp は process local time を使い、1回の build では同じ1値を filename 生成に使用する。自由な timestamp format、variable expansion、naming template は提供しない。
 
 level: MUST
 
@@ -231,7 +223,7 @@ level: MUST
 
 ### SPEC_134
 
-`--archive-mtime` / Invocation `archive_mtime` を省略した場合は既存 semantics を維持し、selected source file は filesystem mtime を使用し、Dirpluck が `writestr` 相当で生成する entry は生成時刻を使用する。
+`--archive-mtime` / Invocation `archive_mtime` を省略した場合は、selected source file は filesystem mtime を使用し、generated `README.md` など dirpluck が生成する entry は生成時刻を使用する。
 
 level: MUST
 
@@ -239,84 +231,9 @@ condition: `--archive-mtime` / Invocation `archive_mtime` を省略した場合
 
 ### SPEC_135
 
-この option は entry timestamp を固定し、timestamp に起因する byte 差を取り除くための機構である。Source file の permission bits は ZIP `external_attr` に保持されるため、file content と timestamp が同じでも permission が異なれば Archive byte 列は異なり得る。Dirpluck は permission bits を正規化しない。Compressor implementation、runtime version、platform 由来の ZIP metadata / serialization detail も含め、Archive 全体の byte-for-byte reproducibility は保証しない。また timestamp output の filename に使う process-local `YYYYMMDD-HHMMSS` とは独立し、その filename timestamp を変更しない。`--preview` では Archive を書かないため archive mtime は出力結果へ影響しない。
+この option は entry timestamp を固定し、timestamp に起因する byte 差を取り除くための機構である。Source file の permission bits は正規化しないため、file content と timestamp が同じでも permission が異なれば Archive byte 列は異なり得る。Runtime / platform に依存する ZIP metadata や serialization detail も含め、Archive 全体の byte-for-byte reproducibility は保証しない。また timestamp output の filename に使う process-local `YYYYMMDD-HHMMSS` とは独立し、その filename timestamp を変更しない。`--preview` では Archive を書かないため archive mtime は出力結果へ影響しない。
 
 level: MUST
-
-## SECTION_903
-
-title: Static writable destination
-
-### SPEC_136
-
-Configuration が宣言する Output naming は、Configuration だけから書き込み境界を静的に確定できることを不変条件とする。Runtime Output は invocation ごとに与えるため、この static write-boundary model には参加しない。
-
-```text
-fixed [output]
-    -> resolved complete file path 1個
-
-timestamp [output.timestamp]
-    -> resolved output directory を root とする directory tree
-```
-
-level: MUST
-
-### SPEC_137
-
-Fixed output では user が filename 全体を決定し、dirpluck は runtime にその一部を補完しない。Timestamp output では user が output directory を決定し、dirpluck がその directory 直下の filename だけを決定する。`artifacts/{target}-{timestamp}.zip` のように Configuration から書き込み先 directory を静的に確定できない template mode は提供しない。
-
-level: MUST NOT
-
-## SECTION_904
-
-title: Base chain write-boundary overlap
-
-### SPEC_138
-
-Base chain 上の各 Configuration が宣言する resolved書き込み境界は、chain 内の別 Output と overlap してはならない。比較は Configuration に書かれた文字列ではなく、各 Configuration file を anchor として resolve / normalize した path で行う。
-
-level: MUST
-
-related: [SPEC_036](composition.md#spec_036)
-
-### SPEC_139
-
-Fixed output 同士は、完全 file path が同一の場合だけ conflict とする。同じ directory に別 filename の fixed output を置くことはできる。
-
-```text
-out/base.zip
-out/derived.zip
-```
-
-level: MUST
-
-### SPEC_140
-
-Timestamp output 同士は、directory boundary が同一、祖先、子孫のいずれかなら conflict とする。
-
-```text
-artifacts/
-artifacts/release/
-```
-
-level: MUST
-
-### SPEC_141
-
-Fixed output と timestamp output では、fixed output の完全 file path が timestamp output の directory boundary 内に入る場合を conflict とする。
-
-```text
-artifacts/            timestamp boundary
-artifacts/result.zip  fixed output -> conflict
-```
-
-level: MUST
-
-### SPEC_142
-
-この validation は現在解決している1本の base chain 内だけで行う。無関係な別 Configuration chain が同じ filesystem location を宣言しているかどうかは探索・保証しない。
-
-level: MUST NOT
 
 ## SECTION_905
 

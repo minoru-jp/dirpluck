@@ -23,10 +23,10 @@ CLI が受理する主な form は次とする。
 ```console
 dirpluck TARGET [TARGET ...]
 dirpluck --config PATH
-dirpluck TARGET [TARGET ...] --case NAME
-dirpluck --config PATH --case NAME
-dirpluck -i PATH [-e NAME] [--case NAME]
-dirpluck --invocation-template PATH [--entry NAME] [--case NAME]
+dirpluck TARGET [TARGET ...] --case CASE
+dirpluck --config PATH --case CASE
+dirpluck -i PATH [-e NAME] [--case CASE]
+dirpluck --invocation-template PATH [--entry NAME] [--case CASE]
 dirpluck ... --preview
 dirpluck ... --paths
 dirpluck ... --sequence N
@@ -43,11 +43,11 @@ level: MUST
 
 ## SPEC_149
 
-Positional argument は Runtime Target, Scope, and Case の CLI Target reference rules で解決する。Effective Configuration に Pluck がある場合は1個以上の Target reference を必要とする。Pluck がない場合も `target_kind = "file"` / `"both"` の Scope から file Target reference は受理するが、directory Target は受理しない。Always-only run は positional argument なしで実行できる。
+Positional argument は Runtime Target, Scope, and Case の CLI Target reference rules で解決する。Positional Target reference は常に0個以上を受理する。0個の場合は Pluck を source selection に使用せず、Always source があればそれらだけを解決し、Always source もなければ resolved source 0件の README-only Archive として正常に実行する。Target reference を指定した場合、Pluck がない Configuration でも `target_kind = "file"` / `"both"` の Scope から file Target reference は受理するが、directory Target は受理しない。
 
 level: MUST
 
-condition: Effective Configuration に Pluck がある場合またはない場合
+condition: positional Target reference を0個または1個以上指定する場合
 
 related: [SPEC_037](runtime-targets.md#spec_037)
 
@@ -61,7 +61,7 @@ related: [SPEC_009](document-selection.md#spec_009), [SPEC_122](output.md#spec_1
 
 ## SPEC_151
 
-Argument parse error と dirpluck の Configuration / build error は status 2 で終了する。Successful build と informational command は status 0 とする。通常 build の成功時は final output path を標準出力へ表示する。Field を1つも持たない Invocation を選択した成功実行では、通常 build は output path の後、`--preview` は tree の後に、保存済み実行入力がなく CLI runtime value と normal defaults を使うことを note として表示する。
+Argument parse error と dirpluck の Configuration / build error は status 2 で終了する。Successful build と informational command は status 0 とする。通常 build の成功時は final output path を標準出力から取得できるようにする。Resolved source が0件なら、通常 build / `--preview` のどちらでも `README.md` だけの Archive plan になったことを informational output として扱い、warning semantics は与えない。Field を1つも持たない Invocation を選択した成功実行では、保存済み実行入力がなく CLI runtime value と normal defaults を使うことを informational note として示す。これらの人間向け文言と表示順序の細部は互換性契約に含めない。
 
 level: MUST
 
@@ -73,4 +73,4 @@ Base chain 用の追加 CLI path や layer ごとの Case option は提供しな
 
 level: MUST NOT
 
-related: [SPEC_025](composition.md#spec_025), [SPEC_028](composition.md#spec_028)
+related: [SPEC_025](composition.md#spec_025), [SPEC_030](composition.md#spec_030)

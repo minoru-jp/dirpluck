@@ -55,7 +55,7 @@ may = ["README.md", "src/", "tests/"]
 ignore = [{ shared = "python-dev" }]
 allow_empty = true
 
-[pluck.case.full]
+[case.pluck.full]
 description = "The project with all review material."
 may = ["README.md", "src/", "tests/", "docs/"]
 ignore = [{ shared = "python-dev" }]

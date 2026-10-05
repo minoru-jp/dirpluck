@@ -11,7 +11,12 @@ build_command = test_target_field("build command")
 archive_readme = test_target_field("archive README")
 
 
-@canonical_source('Getting started with dirpluck', filename='GETTING_STARTED.md', merge_policy="local", heading="title")
+@canonical_source(
+    "Getting started with dirpluck",
+    filename="GETTING_STARTED.md",
+    merge_policy="local",
+    heading="title",
+)
 class SECTION_001:
     r"""
     この文書では、最小構成から {{TERM_1}} を試し、preview で内容を確認してから Archive を生成するまでを通して説明します。
@@ -31,7 +36,8 @@ class SECTION_001:
 
         `pluck` は実行時に選ぶ Target から収集する内容、`always.guidelines` は毎回一緒に収集する固定 source、`output` は生成先を定義しています。
         """
-        title @= '1. Configuration を作る'
+
+        title @= "1. Configuration を作る"
 
         configuration_example @= """
         [about]
@@ -63,7 +69,8 @@ class SECTION_001:
 
         `example/` が実行時に選ぶ {{TERM_3}}、`review-guidelines/` が Configuration に固定した Always source です。
         """
-        title @= '2. 対象を用意する'
+
+        title @= "2. 対象を用意する"
 
         workspace_example @= """
         .
@@ -96,7 +103,8 @@ class SECTION_001:
 
         先頭の `README.md` は、{{TERM_1}} が Archive の内容を説明するために生成する file です。
         """
-        title @= '3. Preview で確認する'
+
+        title @= "3. Preview で確認する"
 
         preview_command @= "dirpluck ./example/ --preview"
         preview_output @= """
@@ -127,7 +135,8 @@ class SECTION_001:
         {{archive_readme}}
         ```
         """
-        title @= '4. Archive を作る'
+
+        title @= "4. Archive を作る"
 
         build_command @= "dirpluck ./example/"
         archive_readme @= """
@@ -135,17 +144,25 @@ class SECTION_001:
 
         Review package for the example project.
 
-        ## `example/`
-
-        Files: 3
-
-        Project files selected for review.
+        `Scope: "..."` identifies only the selection range used to find Targets; it does not imply priority, importance, or hierarchy. Any additional meaning is stated in that Scope's description.
 
         ## `review-guidelines/`
 
+        Review guidelines shared across projects.
+
         Files: 1
 
-        Review guidelines shared across projects.
+        ## Targets
+
+        ### Scope: (unnamed)
+
+        #### Pluck
+
+        Project files selected for review.
+
+        ##### `example/`
+
+        Files: 3
         """
 
     class SECTION_006:
@@ -156,5 +173,5 @@ class SECTION_001:
 
         外部へ渡す Archive を扱う場合は、広い selection や機密 file の扱いを `TRUST.md` で確認してください。
         """
-        title @= '次に読む'
 
+        title @= "次に読む"

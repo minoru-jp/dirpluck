@@ -2,124 +2,53 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator, Mapping
-from contextlib import contextmanager
-from contextvars import ContextVar
-import inspect
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 import tomllib
 from typing import cast
-import warnings
 
-from ._config_models import Always, Config, Namespace, Output, Scope, TargetIgnorePattern
+from ._config_models import (
+    Always,
+    AlwaysCase,
+    Config,
+    Output,
+    Scope,
+    SelectionDefinition,
+)
 from ._config_values import (
-    CONFIG_NAME,
-    CONFIG_SUFFIX,
-    _lexical_absolute_path,
+    _array,
     _parse_cases,
     _parse_namespace_reference,
     _parse_pluck,
     _parse_selection,
     _parse_shared,
-    _require_name,
     _require_only_keys,
+    _require_name,
+    _validate_always_name,
     _validate_base_path,
-    _validate_filesystem_location,
     _validate_output_fragment,
     _validate_namespace_name,
     _validate_scope_name,
     _validated_description,
     _validated_target_ignores,
 )
-from .errors import ConfigurationError
-from ._warnings import ConfigurationDeprecationWarning
-
-
-_CONFIGURATION_DEPRECATIONS: ContextVar[list[str] | None] = ContextVar(
-    "dirpluck_configuration_deprecations",
-    default=None,
+from ._input_paths import (
+    CONFIG_NAME,
+    CONFIG_SUFFIX,
+    lexical_absolute_path,
+    validate_filesystem_location,
 )
-
-
-@contextmanager
-def collect_configuration_deprecations() -> Generator[list[str], None, None]:
-    """Collect deprecated Configuration syntax diagnostics for one caller."""
-
-    messages: list[str] = []
-    token = _CONFIGURATION_DEPRECATIONS.set(messages)
-    try:
-        yield messages
-    finally:
-        _CONFIGURATION_DEPRECATIONS.reset(token)
-
-
-def _report_configuration_deprecation(message: str) -> None:
-    messages = _CONFIGURATION_DEPRECATIONS.get()
-    if messages is not None:
-        if message not in messages:
-            messages.append(message)
-        return
-
-    # Attribute API warnings to the first caller outside dirpluck rather than to
-    # an internal parser/effective-resolution frame.  The root Configuration
-    # and base-chain paths have different depths, so a fixed stacklevel is not
-    # a stable API contract.
-    stacklevel = 1
-    frame = inspect.currentframe()
-    try:
-        while frame is not None:
-            module_name = cast(str, frame.f_globals.get("__name__", ""))
-            if module_name != "dirpluck" and not module_name.startswith("dirpluck."):
-                break
-            stacklevel += 1
-            frame = frame.f_back
-    finally:
-        del frame
-
-    warnings.warn(
-        message,
-        ConfigurationDeprecationWarning,
-        stacklevel=stacklevel,
-    )
-
-
-def _selection_uses_deprecated_reference_syntax(value: object) -> bool:
-    """Return whether one Selection table contains a valid legacy nested reference."""
-
-    if not isinstance(value, dict):
-        return False
-    table = cast(dict[str, object], value)
-    for field in ("must", "may", "ignore"):
-        entries = table.get(field)
-        if not isinstance(entries, list):
-            continue
-        for entry in cast(list[object], entries):
-            if isinstance(entry, list):
-                legacy = cast(list[object], entry)
-                if len(legacy) == 1 and isinstance(legacy[0], str) and bool(legacy[0].strip()):
-                    return True
-    cases = table.get("case")
-    if isinstance(cases, dict):
-        return any(
-            _selection_uses_deprecated_reference_syntax(case)
-            for case in cast(dict[str, object], cases).values()
-        )
-    return False
-
-
-def _uses_deprecated_reference_syntax(data: Mapping[str, object]) -> bool:
-    """Return whether this Configuration uses a legacy nested Selection reference."""
-
-    if _selection_uses_deprecated_reference_syntax(data.get("pluck")):
-        return True
-    always = data.get("always")
-    if isinstance(always, dict):
-        return any(
-            _selection_uses_deprecated_reference_syntax(source)
-            for source in cast(dict[str, object], always).values()
-        )
-    return False
+from ._target_models import TargetKind
+from .errors import ConfigurationError
+from ._compatibility import (
+    split_always_namespace,
+    split_legacy_pluck_table,
+    uses_legacy_selection_reference,
+    warn_always_namespace,
+    warn_legacy_pluck_cases,
+    warn_legacy_selection_references,
+)
 
 
 def _read_toml(path: Path) -> dict[str, object]:
@@ -135,61 +64,91 @@ def _read_toml(path: Path) -> dict[str, object]:
     return cast(dict[str, object], raw_data)
 
 
-def _parse_namespaces(value: object, where: str) -> Mapping[str, Namespace]:
-    if value is None:
-        return MappingProxyType({})
+def _table(value: object, where: str, *, none_as_empty: bool = False) -> dict[str, object]:
+    if value is None and none_as_empty:
+        return {}
     if not isinstance(value, dict):
         raise ConfigurationError(f"{where}: expected a table")
-    table = cast(dict[str, object], value)
+    return cast(dict[str, object], value)
+
+
+def _description(table: Mapping[str, object], where: str) -> str | None:
+    if "description" not in table:
+        return None
+    return _validated_description(table["description"], f"{where}.description")
+
+
+def _require_distinct_casefold(
+    name: str,
+    seen: dict[str, str],
+    where: str,
+    *,
+    label: str,
+) -> None:
+    key = name.casefold()
+    previous = seen.get(key)
+    if previous is not None:
+        raise ConfigurationError(
+            f"{where}: {label} must be distinct ignoring case: {previous!r} and {name!r}"
+        )
+    seen[key] = name
+
+
+def _parse_namespaces(value: object, where: str) -> frozenset[str]:
+    table = _table(value, where, none_as_empty=True)
     if not table:
+        if value is None:
+            return frozenset()
         raise ConfigurationError(f"{where}: define at least one [namespace.<name>]")
-    namespaces: dict[str, Namespace] = {}
+    namespaces: set[str] = set()
+    namespace_names: dict[str, str] = {}
     for raw_name, raw_namespace in table.items():
         name = _validate_namespace_name(raw_name, where)
+        _require_distinct_casefold(name, namespace_names, where, label="Namespace names")
         namespace_where = f"{where}.{name}"
-        if not isinstance(raw_namespace, dict):
-            raise ConfigurationError(f"{namespace_where}: expected a table")
-        _require_only_keys(cast(dict[str, object], raw_namespace), set(), namespace_where)
-        namespaces[name] = Namespace(name=name)
-    return MappingProxyType(namespaces)
+        _require_only_keys(_table(raw_namespace, namespace_where), set(), namespace_where)
+        namespaces.add(name)
+    return frozenset(namespaces)
 
 
-def _parse_scope_target_kind(value: object, where: str) -> str:
+def _parse_scope_target_kind(value: object, where: str) -> TargetKind:
     if value is None:
         return "directory"
-    if not isinstance(value, str):
+    if not isinstance(value, str) or value not in {"directory", "file", "both"}:
         raise ConfigurationError(f"{where}: expected 'directory', 'file', or 'both'")
-    if value not in {"directory", "file", "both"}:
-        raise ConfigurationError(f"{where}: expected 'directory', 'file', or 'both'")
-    return value
+    return cast(TargetKind, value)
+
+
+def _parse_scope(table: dict[str, object], where: str, *, name: str | None) -> Scope:
+    allowed = {"description", "target_kind", "ignore", "namespace"}
+    if name is not None:
+        allowed.add("path")
+    _require_only_keys(table, allowed, where)
+
+    path = None
+    if name is not None:
+        raw_path = table.get("path")
+        if not isinstance(raw_path, str):
+            raise ConfigurationError(f"{where}.path: expected a string")
+        path = validate_filesystem_location(raw_path, f"{where}.path", label="Scope path")
+    return Scope(
+        path=path,
+        description=_description(table, where),
+        target_kind=_parse_scope_target_kind(table.get("target_kind"), f"{where}.target_kind"),
+        ignore=_validated_target_ignores(table.get("ignore"), f"{where}.ignore"),
+        namespace=_parse_namespace_reference(table.get("namespace"), f"{where}.namespace"),
+    )
 
 
 def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
-    if value is None:
-        table: dict[str, object] = {}
-    else:
-        if not isinstance(value, dict):
-            raise ConfigurationError(f"{where}: expected a table")
-        table = cast(dict[str, object], value)
-
+    table = _table(value, where, none_as_empty=True)
     scopes: dict[str | None, Scope] = {}
-    unnamed_description: str | None = None
-    unnamed_target_kind = "directory"
-    unnamed_ignore: tuple[TargetIgnorePattern, ...] = ()
-    unnamed_namespace: str | None = None
+    default: dict[str, object] = {}
+    default_fields = {"description", "target_kind", "ignore", "namespace"}
 
     for raw_key, raw_value in table.items():
-        if raw_key == "description" and not isinstance(raw_value, dict):
-            unnamed_description = _validated_description(raw_value, f"{where}.description")
-            continue
-        if raw_key == "target_kind" and not isinstance(raw_value, dict):
-            unnamed_target_kind = _parse_scope_target_kind(raw_value, f"{where}.target_kind")
-            continue
-        if raw_key == "ignore" and not isinstance(raw_value, dict):
-            unnamed_ignore = _validated_target_ignores(raw_value, f"{where}.ignore")
-            continue
-        if raw_key == "namespace" and not isinstance(raw_value, dict):
-            unnamed_namespace = _parse_namespace_reference(raw_value, f"{where}.namespace")
+        if raw_key in default_fields and not isinstance(raw_value, dict):
+            default[raw_key] = raw_value
             continue
         if not isinstance(raw_value, dict):
             if raw_key == "path":
@@ -198,121 +157,129 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
 
         name = _validate_scope_name(raw_key, where)
         scope_where = f"{where}.{name}"
-        scope_table = cast(dict[str, object], raw_value)
-        _require_only_keys(
-            scope_table,
-            {"path", "description", "target_kind", "ignore", "namespace"},
-            scope_where,
-        )
-        raw_path = scope_table.get("path")
-        if not isinstance(raw_path, str):
-            raise ConfigurationError(f"{scope_where}.path: expected a string")
-        path = _validate_filesystem_location(raw_path, f"{scope_where}.path", label="Scope path")
-        description = None
-        if "description" in scope_table:
-            description = _validated_description(
-                scope_table["description"], f"{scope_where}.description"
-            )
-        target_kind = _parse_scope_target_kind(
-            scope_table.get("target_kind"), f"{scope_where}.target_kind"
-        )
-        ignore = _validated_target_ignores(scope_table.get("ignore"), f"{scope_where}.ignore")
-        namespace = _parse_namespace_reference(
-            scope_table.get("namespace"), f"{scope_where}.namespace"
-        )
-        scopes[name] = Scope(
-            name=name,
-            path=path,
-            description=description,
-            target_kind=target_kind,
-            ignore=ignore,
-            namespace=namespace,
-        )
+        scopes[name] = _parse_scope(cast(dict[str, object], raw_value), scope_where, name=name)
 
-    # The unnamed/default Scope always exists.  [scope] configures its optional
-    # metadata, Target kind, ignore policy, and archive namespace; an empty
-    # [scope] preserves the historical directory-Target defaults.
-    scopes[None] = Scope(
-        name=None,
-        path=None,
-        description=unnamed_description,
-        target_kind=unnamed_target_kind,
-        ignore=unnamed_ignore,
-        namespace=unnamed_namespace,
-    )
+    scopes[None] = _parse_scope(default, where, name=None)
     return MappingProxyType(scopes)
 
 
 def _parse_always(value: object, where: str) -> Mapping[str, Always]:
     if value is None:
         return MappingProxyType({})
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"{where}: expected a table")
-    table = cast(dict[str, object], value)
+    table = _table(value, where)
     always: dict[str, Always] = {}
+    always_names: dict[str, str] = {}
     for raw_name, raw_source in table.items():
-        name = _require_name(raw_name, where)
+        name = _validate_always_name(raw_name, where)
+        _require_distinct_casefold(name, always_names, where, label="Always source names")
         source_where = f"{where}.{name}"
-        if not isinstance(raw_source, dict):
-            raise ConfigurationError(f"{source_where}: expected a table")
-        source_table = cast(dict[str, object], raw_source)
+        source_table, raw_namespace, uses_legacy_namespace = split_always_namespace(
+            _table(raw_source, source_where)
+        )
         _require_only_keys(
             source_table,
-            {"path", "description", "must", "may", "ignore", "allow_empty", "case", "namespace"},
+            {"path", "description", "must", "may", "ignore", "allow_empty"},
             source_where,
         )
         raw_path = source_table.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{source_where}.path: expected a string")
-        path = _validate_filesystem_location(
+        path = validate_filesystem_location(
             raw_path, f"{source_where}.path", label="Always source path"
         )
         selection = _parse_selection(
-            {
-                key: item
-                for key, item in source_table.items()
-                if key not in {"path", "case", "namespace"}
-            },
+            {key: item for key, item in source_table.items() if key != "path"},
             source_where,
         )
-        cases = _parse_cases(source_table.get("case"), f"{source_where}.case")
-        namespace = _parse_namespace_reference(
-            source_table.get("namespace"), f"{source_where}.namespace"
+        namespace = (
+            _parse_namespace_reference(raw_namespace, f"{source_where}.namespace")
+            if uses_legacy_namespace
+            else None
         )
+        if namespace is not None:
+            warn_always_namespace(source_where, namespace=namespace, source_name=name)
         always[name] = Always(
-            name=name,
             path=path,
             selection=selection,
-            cases=cases,
-            namespace=namespace,
+            compatibility_namespace=namespace,
         )
     return MappingProxyType(always)
+
+
+def _parse_always_case_names(value: object, where: str) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    try:
+        items = _array(value, where)
+    except ConfigurationError as exc:
+        raise ConfigurationError(f"{where}: expected an array of Always source names") from exc
+    names: list[str] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigurationError(f"{where}[{index}]: expected a non-empty string")
+        names.append(item)
+    if len(set(names)) != len(names):
+        raise ConfigurationError(f"{where}: duplicate Always source names are not allowed")
+    return tuple(names)
+
+
+def _parse_always_cases(value: object, where: str) -> Mapping[str, AlwaysCase]:
+    if value is None:
+        return MappingProxyType({})
+    table = _table(value, where)
+    if not table:
+        raise ConfigurationError(f"{where}: define at least one named case")
+
+    cases: dict[str, AlwaysCase] = {}
+    for raw_name, raw_case in table.items():
+        name = _require_name(raw_name, where)
+        if "." in name:
+            raise ConfigurationError(
+                f"{where}: case names must be flat and must not contain '.': {name!r}"
+            )
+        case_where = f"{where}.{name}"
+        case_table = _table(raw_case, case_where)
+        _require_only_keys(case_table, {"description", "include", "exclude"}, case_where)
+        if "include" in case_table and "exclude" in case_table:
+            raise ConfigurationError(f"{case_where}: include and exclude are mutually exclusive")
+        description = _description(case_table, case_where)
+        include = _parse_always_case_names(case_table.get("include"), f"{case_where}.include")
+        exclude = _parse_always_case_names(case_table.get("exclude"), f"{case_where}.exclude")
+        cases[name] = AlwaysCase(description=description, include=include, exclude=exclude)
+    return MappingProxyType(cases)
+
+
+def _parse_case_table(
+    value: object, where: str
+) -> tuple[Mapping[str, SelectionDefinition], Mapping[str, AlwaysCase]]:
+    if value is None:
+        return MappingProxyType({}), MappingProxyType({})
+    table = _table(value, where)
+    _require_only_keys(table, {"pluck", "always"}, where)
+    if not table:
+        raise ConfigurationError(f"{where}: define [case.pluck.<name>] and/or [case.always.<name>]")
+    return (
+        _parse_cases(table.get("pluck"), f"{where}.pluck"),
+        _parse_always_cases(table.get("always"), f"{where}.always"),
+    )
 
 
 def _parse_about(value: object, where: str) -> tuple[str | None, str | None]:
     if value is None:
         return None, None
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"{where}: expected a table")
-    table = cast(dict[str, object], value)
+    table = _table(value, where)
     _require_only_keys(table, {"description", "base"}, where)
     if not table:
         raise ConfigurationError(f"{where}: define description and/or base")
-    description = None
-    if "description" in table:
-        description = _validated_description(table["description"], f"{where}.description")
-    base = None
-    if "base" in table:
-        base = _validate_base_path(table["base"], f"{where}.base")
+    description = _description(table, where)
+    base = _validate_base_path(table["base"], f"{where}.base") if "base" in table else None
     return description, base
 
 
 def _parse_output(value: object, where: str) -> Output | None:
     if value is None:
         return None
-    if not isinstance(value, dict):
-        raise ConfigurationError(f"{where}: expected a table")
-    table = cast(dict[str, object], value)
+    table = _table(value, where)
     _require_only_keys(table, {"path", "overwrite", "timestamp"}, where)
 
     if "timestamp" in table:
@@ -321,9 +288,7 @@ def _parse_output(value: object, where: str) -> Output | None:
                 f"{where}: fixed output fields and [output.timestamp] are mutually exclusive"
             )
         raw_timestamp = table["timestamp"]
-        if not isinstance(raw_timestamp, dict):
-            raise ConfigurationError(f"{where}.timestamp: expected a table")
-        timestamp_table = cast(dict[str, object], raw_timestamp)
+        timestamp_table = _table(raw_timestamp, f"{where}.timestamp")
         _require_only_keys(timestamp_table, {"path", "prefix", "suffix"}, f"{where}.timestamp")
         raw_path = timestamp_table.get("path")
         if not isinstance(raw_path, str):
@@ -332,7 +297,7 @@ def _parse_output(value: object, where: str) -> Output | None:
             raise ConfigurationError(
                 f"{where}.timestamp.path: timestamp output directory path must end with '/'"
             )
-        path = _validate_filesystem_location(
+        path = validate_filesystem_location(
             raw_path, f"{where}.timestamp.path", label="output directory"
         )
         prefix = _validate_output_fragment(
@@ -350,7 +315,7 @@ def _parse_output(value: object, where: str) -> Output | None:
         raise ConfigurationError(
             f"{where}.path: fixed output path must include a filename and must not end with '/'"
         )
-    path = _validate_filesystem_location(raw_path, f"{where}.path", label="output path")
+    path = validate_filesystem_location(raw_path, f"{where}.path", label="output path")
     final_component = raw_path.rsplit("/", 1)[-1]
     if final_component in {".", ".."} or PurePosixPath(path) == PurePosixPath("."):
         raise ConfigurationError(f"{where}.path: output path must name a file")
@@ -363,17 +328,36 @@ def _parse_output(value: object, where: str) -> Output | None:
 def load_config(path: str | Path = CONFIG_NAME) -> Config:
     """Load one dirpluck Configuration document without resolving its base chain."""
 
-    manifest = _lexical_absolute_path(Path(path).expanduser())
+    manifest = lexical_absolute_path(Path(path).expanduser())
     if manifest.suffix != CONFIG_SUFFIX:
         raise ConfigurationError(f"configuration file must end with {CONFIG_SUFFIX!r}: {manifest}")
     data = _read_toml(manifest)
     _require_only_keys(
-        data, {"about", "shared", "pluck", "scope", "always", "namespace", "output"}, str(manifest)
+        data,
+        {"about", "shared", "pluck", "case", "scope", "always", "namespace", "output"},
+        str(manifest),
     )
 
     about_description, base = _parse_about(data.get("about"), f"{manifest} [about]")
     shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
-    pluck = _parse_pluck(data.get("pluck"), f"{manifest} [pluck]")
+    raw_pluck, raw_legacy_cases, uses_legacy_pluck = split_legacy_pluck_table(data.get("pluck"))
+    pluck = _parse_pluck(raw_pluck, f"{manifest} [pluck]")
+    canonical_pluck_cases, always_cases = _parse_case_table(data.get("case"), f"{manifest} [case]")
+    legacy_pluck_cases = _parse_cases(raw_legacy_cases, f"{manifest} [pluck].case")
+    conflicts = sorted(set(legacy_pluck_cases) & set(canonical_pluck_cases))
+    if conflicts:
+        listed = ", ".join(repr(name) for name in conflicts)
+        raise ConfigurationError(
+            f"{manifest}: Pluck Case(s) are defined using both [pluck.case.<name>] and "
+            + f"[case.pluck.<name>]: {listed}; use only [case.pluck.<name>]"
+        )
+    merged_pluck_cases = dict(legacy_pluck_cases)
+    merged_pluck_cases.update(canonical_pluck_cases)
+    if data.get("pluck") is not None and pluck is None and not merged_pluck_cases:
+        raise ConfigurationError(
+            f"{manifest} [pluck]: define the default pluck or at least one [case.pluck.<name>]"
+        )
+    pluck_cases = MappingProxyType(merged_pluck_cases)
     scopes = _parse_scopes(
         data.get("scope"),
         f"{manifest} [scope]",
@@ -388,15 +372,15 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
         base=base,
         shared=shared,
         pluck=pluck,
+        pluck_cases=pluck_cases,
         scopes=scopes,
         always=always,
+        always_cases=always_cases,
         namespaces=namespaces,
         output=output,
     )
-    if _uses_deprecated_reference_syntax(data):
-        _report_configuration_deprecation(
-            f"{manifest}: deprecated nested-array Selection reference syntax since 0.14.0; "
-            + 'it will be removed in 1.0.0; use { shared = "..." }, '
-            + 'or { path = "..." } for ignore paths'
-        )
+    if uses_legacy_pluck:
+        warn_legacy_pluck_cases(manifest)
+    if uses_legacy_selection_reference(data):
+        warn_legacy_selection_references(manifest)
     return config

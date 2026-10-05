@@ -67,7 +67,7 @@ jobs:
         run: python tools/render_canonical_docs.py --check
 
   test:
-    name: Test (Python ${{ matrix.python-version }})
+    name: Test on Ubuntu (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -96,3 +96,26 @@ jobs:
       - name: Check legacy unittest discovery compatibility
         if: matrix.python-version == '3.13'
         run: python -m unittest discover -s tests -v
+
+  windows-test:
+    name: Test on Windows (Python 3.13)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -t . -v

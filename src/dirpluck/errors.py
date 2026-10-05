@@ -14,7 +14,7 @@ class ConfigurationError(DirpluckError):
 
 
 class SelectionError(DirpluckError):
-    """Raised when configured directories cannot be resolved or extracted."""
+    """Raised when normalized sources cannot be resolved, selected, or extracted."""
 
 
 class InvocationError(DirpluckError):

@@ -40,7 +40,7 @@ must = ["*.md"]
 path = "artifacts/review.zip"
 ```
 
-`[pluck]` is the Pluck applied to directory Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for and where `target_kind` is chosen, and `[always.<name>]` defines Always sources. When same-named source roots need to remain distinct in the Archive, a Namespace can be used. Add Shared patterns, Cases, and a Base Configuration as needed.
+`[pluck]` is the Pluck applied to directory Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for and where `target_kind` is chosen, and `[always.<name>]` defines Always sources. A Target and an Always source may intentionally compose into the same exactly spelled Archive root; case-only root differences remain invalid. Add Shared patterns, Pluck/Always Cases, Namespaces, and a Base Configuration as needed.
 ## About
 
 `[about]` declares information about the Configuration itself. It may contain `description` and `base`.

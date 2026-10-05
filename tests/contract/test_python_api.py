@@ -1,0 +1,399 @@
+from __future__ import annotations
+
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+from typing import cast
+import os
+import textwrap
+import unittest
+from unittest.mock import patch
+import zipfile
+
+from tests._temp import resolved_temporary_directory
+
+import dirpluck
+from dirpluck.cli import main
+
+
+CONFIG = """
+[pluck]
+must = ["src/"]
+
+[always.guidelines]
+path = "guidelines"
+must = ["*.md"]
+
+[output]
+path = "result.zip"
+overwrite = true
+"""
+
+
+class PythonApiTests(unittest.TestCase):
+    def _workspace(self, root: Path) -> None:
+        (root / "app" / "src").mkdir(parents=True)
+        (root / "guidelines").mkdir()
+        (root / "app" / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
+        (root / "guidelines" / "review.md").write_text("Review\n", encoding="utf-8")
+        (root / "default.dirpluck").write_text(textwrap.dedent(CONFIG), encoding="utf-8")
+
+    def test_package_root_exposes_the_core_python_surface(self):
+        core = {"DirpluckError", "RunResult", "__version__", "run"}
+        self.assertTrue(core.issubset(dirpluck.__all__))
+        for name in core:
+            with self.subTest(name=name):
+                self.assertTrue(hasattr(dirpluck, name))
+
+        for name in (
+            "ArchivePlan",
+            "BuildRequest",
+            "Config",
+            "InvocationTemplate",
+            "build_archive",
+            "load_config",
+            "load_invocation",
+            "plan_archive",
+            "resolve_sources",
+        ):
+            with self.subTest(private=name):
+                self.assertFalse(hasattr(dirpluck, name))
+
+    def test_run_builds_the_same_archive_as_a_direct_cli_invocation(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+
+            result = dirpluck.run("./app/", cwd=root)
+            self.assertEqual(result.output_path, root / "result.zip")
+            self.assertEqual(
+                result.archive_entries,
+                ("README.md", "app/src/app.py", "guidelines/review.md"),
+            )
+            self.assertIn("├── app/", result.preview_text)
+            self.assertIn("## `app/`", result.archive_readme)
+            self.assertEqual(result.skipped_link_count, 0)
+            self.assertFalse(result.invocation_empty)
+
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                self.assertEqual(
+                    tuple(sorted(archive.namelist())), tuple(sorted(result.archive_entries))
+                )
+
+    def test_run_without_targets_uses_always_sources_when_pluck_is_defined(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+
+            result = dirpluck.run(cwd=root)
+
+            self.assertEqual(result.output_path, root / "result.zip")
+            self.assertEqual(result.archive_entries, ("README.md", "guidelines/review.md"))
+            self.assertNotIn("app/src/app.py", result.archive_entries)
+
+    def test_run_without_resolved_sources_returns_readme_only_archive(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [about]
+                    description = "Metadata-only archive."
+
+                    [output]
+                    path = "result.zip"
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run(cwd=root)
+
+            self.assertEqual(result.output_path, root / "result.zip")
+            self.assertEqual(result.archive_entries, ("README.md",))
+            self.assertIn("Metadata-only archive.", result.archive_readme)
+            self.assertIn("No sources were selected.", result.archive_readme)
+            self.assertEqual(result.preview_text, "└── README.md")
+            with zipfile.ZipFile(root / "result.zip") as archive:
+                self.assertEqual(archive.namelist(), ["README.md"])
+
+    def test_targetless_pluck_case_may_produce_readme_only_archive(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [case.pluck.metadata]
+                    description = "Metadata case."
+                    must = ["src/"]
+
+                    [output]
+                    path = "result.zip"
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run(case="metadata", cwd=root)
+
+            self.assertEqual(result.archive_entries, ("README.md",))
+            self.assertIn("No sources were selected.", result.archive_readme)
+
+    def test_source_less_run_still_rejects_unknown_case(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [output]
+                    path = "result.zip"
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(dirpluck.DirpluckError, "case 'missing' is not defined"):
+                dirpluck.run(case="missing", cwd=root)
+
+    def test_preview_returns_cli_equivalent_tree_without_writing_archive(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+
+            result = dirpluck.run("./app/", preview=True, cwd=root)
+            self.assertIsNone(result.output_path)
+            self.assertFalse((root / "result.zip").exists())
+
+            previous = Path.cwd()
+            output = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stdout(output):
+                    code = main(["./app/", "--preview"])
+            finally:
+                os.chdir(previous)
+            self.assertEqual(code, 0)
+            self.assertEqual(output.getvalue().rstrip("\n"), result.preview_text)
+
+    def test_run_returns_wrong_type_warnings_without_changing_may_semantics(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "README.md").write_text("readme", encoding="utf-8")
+            (root / "app" / "src" / "main.py").write_text("x", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [pluck]
+                    must = ["README.md"]
+                    may = ["src"]
+
+                    [output]
+                    path = "result.zip"
+                    overwrite = true
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run("./app/", cwd=root)
+
+            self.assertEqual(result.archive_entries, ("README.md", "app/README.md"))
+            self.assertEqual(len(result.warnings), 1)
+            self.assertIn("target: optional file pattern 'src' did not match", result.warnings[0])
+            self.assertIn("directory 'src/' exists", result.warnings[0])
+
+    def test_run_keeps_wrong_type_warnings_distinct_per_target(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            for name in ("projA", "projB"):
+                (root / name / "src").mkdir(parents=True)
+                (root / name / "README.md").write_text(name, encoding="utf-8")
+                (root / name / "src" / "main.py").write_text(name, encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [pluck]
+                    must = ["README.md"]
+                    may = ["src"]
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run("./projA/", "./projB/", preview=True, cwd=root)
+
+            self.assertEqual(len(result.warnings), 2)
+            self.assertTrue(any("target 'projA':" in warning for warning in result.warnings))
+            self.assertTrue(any("target 'projB':" in warning for warning in result.warnings))
+
+    def test_preview_rejects_runtime_output_and_force(self):
+        with self.assertRaises(dirpluck.DirpluckError) as output_error:
+            dirpluck.run(preview=True, output="out.zip")
+        self.assertIn("output cannot be combined with preview", str(output_error.exception))
+
+        with self.assertRaises(dirpluck.DirpluckError) as force_error:
+            dirpluck.run(preview=True, force=True)
+        self.assertIn("force cannot be combined with preview", str(force_error.exception))
+
+    def test_run_supports_runtime_output_and_force(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            output = root / "runtime.zip"
+            output.write_bytes(b"old")
+
+            result = dirpluck.run(
+                "./app/",
+                output="runtime.zip",
+                force=True,
+                cwd=root,
+            )
+            self.assertEqual(result.output_path, output)
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("app/src/app.py", archive.namelist())
+
+    def test_run_runtime_output_directory_uses_configuration_timestamp_naming(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._workspace(root)
+            config = root / "default.dirpluck"
+            config.write_text(
+                config.read_text(encoding="utf-8").split("[output]", 1)[0]
+                + textwrap.dedent(
+                    """
+                    [output.timestamp]
+                    path = "configured/"
+                    prefix = "api"
+                    suffix = "snapshot"
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dirpluck._output._current_output_timestamp",
+                return_value="20260923-022000",
+            ):
+                result = dirpluck.run(
+                    "./app/",
+                    output="runtime/",
+                    sequence=2,
+                    cwd=root,
+                )
+            self.assertEqual(
+                result.output_path,
+                root / "runtime" / "api-20260923-022000-2-snapshot.zip",
+            )
+
+    def test_run_supports_invocation_entry_and_cli_case_override(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "app" / "src").mkdir(parents=True)
+            (root / "app" / "tests").mkdir()
+            (root / "app" / "src" / "app.py").write_text("APP = 1\n", encoding="utf-8")
+            (root / "app" / "tests" / "test_app.py").write_text("TEST = 1\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [pluck]
+                    must = ["src/"]
+
+                    [case.pluck.audit]
+                    must = ["tests/"]
+
+                    [output]
+                    path = "result.zip"
+                    overwrite = true
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (root / "calls.dirpluck-inv").write_text(
+                textwrap.dedent(
+                    """
+                    [invocation.review]
+                    targets = ["./app/"]
+                    case = "missing-on-purpose"
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run(
+                invocation="calls",
+                entry="review",
+                case="audit",
+                preview=True,
+                cwd=root,
+            )
+            self.assertIn("tests/", result.preview_text)
+            self.assertIn("test_app.py", result.preview_text)
+            self.assertNotIn("src/", result.preview_text)
+
+    def test_invocation_template_targets_accept_file_selectors(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            returned = root / "returned"
+            returned.mkdir()
+            (returned / "repo-a.zip").write_bytes(b"a")
+            (returned / "repo-b.zip").write_bytes(b"b")
+            (returned / "notes.txt").write_text("notes\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                    [scope.returned]
+                    path = "returned"
+                    target_kind = "file"
+
+                    [output]
+                    path = "result.zip"
+                    overwrite = true
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (root / "calls.dirpluck-inv").write_text(
+                textwrap.dedent(
+                    r"""
+                    [invocation]
+                    targets = ["returned:<.*\\.zip>"]
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            result = dirpluck.run(invocation="calls", preview=True, cwd=root)
+            self.assertEqual(
+                set(result.archive_entries),
+                {"README.md", "repo-a.zip", "repo-b.zip"},
+            )
+            self.assertNotIn("notes.txt", result.archive_entries)
+
+    def test_run_rejects_invalid_cli_style_argument_combinations(self):
+        cases = (
+            (
+                lambda: dirpluck.run(config="review", invocation="calls"),
+                "config cannot be combined",
+            ),
+            (lambda: dirpluck.run(entry="review"), "entry requires invocation"),
+            (lambda: dirpluck.run(preview=True, sequence=1), "sequence cannot be combined"),
+            (lambda: dirpluck.run(output=r"bad\path.zip"), "backslashes are not allowed"),
+            (
+                lambda: dirpluck.run(force=cast(bool, cast(object, "yes"))),
+                "force must be a boolean",
+            ),
+        )
+        for call, message in cases:
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(dirpluck.DirpluckError, message),
+            ):
+                call()
+
+        with self.assertRaisesRegex(dirpluck.DirpluckError, "targets cannot be combined"):
+            dirpluck.run("./app/", invocation="calls")
+
+
+if __name__ == "__main__":
+    unittest.main()

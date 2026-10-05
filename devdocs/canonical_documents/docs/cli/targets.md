@@ -81,7 +81,7 @@ Shell から使用する場合、`[]`、`<>`、regular-expression metacharacter 
 
 `./` 単独、`/acme`、`work/team/acme`、absolute filesystem path は Target reference として受理しません。`./acme` と `./acme/` はそれぞれ default Scope の file / directory Target を明示する有効な形式です。
 
-Pluck がない Configuration でも file-capable Scope (`target_kind = "file"` / `"both"`) から file Target は選べます。Directory Target は Pluck を必要とします。Target を指定しない Always-only 実行も従来どおり有効です。
+Target reference は0個でも実行できます。Targetを指定しないrunでは Pluck は source selection に使用せず、Always source があればそれらだけを抽出します。Always source もなければ source 0件の正常な run となり、生成するArchiveは `README.md` だけを含みます。Pluck がない Configuration でも file-capable Scope (`target_kind = "file"` / `"both"`) から file Target は選べます。Directory Target は Pluck を必要とします。
 
 ```console
 dirpluck --config project-snapshot
@@ -91,10 +91,12 @@ Scope と `ignore` の定義方法は `configuration/INDEX.md`、Target referenc
 
 ## Case
 
-名前付きケースを選ぶには `--case NAME` を使います。
+名前付きケースは `--case CASE` で選びます。Case selector は Pluck と Always の2軸です。`PLUCK` は Pluck Case だけ、`.ALWAYS` は Always Case だけ、`PLUCK.ALWAYS` は両方を指定します。
 
 ```console
 dirpluck ./acme/ --case audit
+dirpluck --case .release
+dirpluck ./acme/ --case audit.release
 ```
 
-1回の実行で指定する Case は1個です。Pluck と Always source が Case をどう選ぶかは `specification/INDEX.md` に定義しています。
+2軸は独立して検証します。定義済み Case の適用結果として source が0件でも正常です。Pluck Case と Always Case の Configuration semantics は `specification/INDEX.md` に定義しています。

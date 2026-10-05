@@ -37,6 +37,8 @@
 
 dirpluck の CLI、`.dirpluck` 設定ファイル形式、`.dirpluck-inv` Invocation Template形式について、互換性対象となる厳密な動作意味論を定義する。両 document の内容は TOML syntax を使用する。 Python package root の公式 API surface と `run()` の呼び出し契約は `../python_api/INDEX.md` に定義し、`run()` が実行する Configuration / Target / Case / Invocation / Archive semantics はこの仕様と共通とする。用途は `../../README.md`、用語の意味は `../../GLOSSARY.md`、Configuration の書き方は `../configuration/INDEX.md`、CLI の操作方法は `../cli/INDEX.md`、Configuration / Invocation Template と filesystem 操作の trust boundary は `../TRUST.md` を参照する。
 
+1.0.0 で削除することが確定した pre-1.0 の互換入力・互換挙動は `compatibility.md` に分離する。通常の Specification 本文は 1.0 contract 候補となる canonical semantics だけを記述する。`compatibility.md` で 1.0.0 削除を明示したものを除き、現在の canonical CLI / Configuration / Invocation Template の記述形式と grammar は 1.0 contract 候補として維持する。
+
 ## SECTION_001
 
 title: 公開面

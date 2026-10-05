@@ -6,8 +6,10 @@ example_001 = test_target_field("example 001")
 example_002 = test_target_field("example 002")
 
 
-@summary('Configuration document の形式、基本形、metadata、path notation。')
-@canonical_source('Configuration overview', filename='overview.md', order=0, merge_policy="local", heading="title")
+@summary("Configuration document の形式、基本形、metadata、path notation。")
+@canonical_source(
+    "Configuration overview", filename="overview.md", order=0, merge_policy="local", heading="title"
+)
 class CONFIGURATION_PART:
     r"""
     この文書は、{{TERM_2}} の基本的な文書形式、metadata、path notation を説明します。Source、Selection、Base、Output はそれぞれ collection 内の専用文書に分けています。
@@ -32,7 +34,8 @@ class CONFIGURATION_PART:
 
         `.dirpluck-inv` は Configuration ではなく、CLI invocation を保存する別 document type です。Configuration の schema や base chain には参加しません。Invocation Template の書き方と選択方法は `../cli/INDEX.md` を参照してください。
         """
-        title @= 'Configuration document'
+
+        title @= "Configuration document"
 
     class SECTION_002:
         r"""
@@ -44,7 +47,8 @@ class CONFIGURATION_PART:
 
         `[pluck]` は directory {{TERM_3}}へ適用する{{TERM_11}}、`[scope]` / `[scope.<name>]` は Target を探し `target_kind` を決める{{TERM_16}}、`[always.<name>]` は{{TERM_5}}です。Archive 上で同名の source root を区別する必要がある場合は{{TERM_18}}を使えます。必要に応じて{{TERM_12}}、{{TERM_4}}、{{TERM_13}}を使って構成を広げます。
         """
-        title @= '基本形'
+
+        title @= "基本形"
 
         example_001 @= """
         [pluck]
@@ -88,7 +92,8 @@ class CONFIGURATION_PART:
 
         Base chain の composition と cycle detection は `../specification/INDEX.md` を参照してください。
         """
-        title @= 'About'
+
+        title @= "About"
 
         example_002 @= """
         [about]
@@ -126,5 +131,5 @@ class CONFIGURATION_PART:
 
         この基準は少なくとも `about.base`、`scope.<name>.path`、`always.<name>.path`、`output.path`、`output.timestamp.path` に共通です。Configuration document 自体を参照する `about.base` だけでなく、named Scope / Always のように明示した source root location も host OS の通常の filesystem semantics に従い、symbolic link / Windows directory junction を含む location を利用できます。明示 root の alias を解決して source root とすることと、その root からの自動 traversal で link-like entry を選択しないことは別です。Pattern や CLI Target reference のように filesystem location ではない値は、それぞれの規則に従います。厳密な validation は `../specification/INDEX.md` を参照してください。
         """
-        title @= 'Path notation'
 
+        title @= "Path notation"

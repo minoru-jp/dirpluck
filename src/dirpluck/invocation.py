@@ -10,10 +10,11 @@ import tomllib
 from typing import cast
 
 from ._archive_mtime import validate_archive_mtime_spec
-from ._config_values import (
+from ._case import CaseSelection, parse_case_selection
+from ._input_paths import (
     CONFIG_SUFFIX,
-    _lexical_absolute_path,
-    _validate_filesystem_location,
+    lexical_absolute_path,
+    validate_filesystem_location,
 )
 from .errors import ConfigurationError, InvocationError
 
@@ -30,7 +31,7 @@ def _invocation_reference(reference: str) -> str:
     if raw.endswith("/") or raw.rsplit("/", 1)[-1] in {".", ".."}:
         raise InvocationError("invocation template path must name one Invocation Template file")
     try:
-        path = _validate_filesystem_location(
+        path = validate_filesystem_location(
             raw,
             "--invocation-template",
             label="Invocation Template path",
@@ -46,7 +47,7 @@ def resolve_invocation_path(reference: str, *, cwd: Path | None = None) -> Path:
     """Resolve one explicitly supplied Invocation Template document path."""
 
     normalized = _invocation_reference(reference)
-    candidate = _lexical_absolute_path(normalized, cwd=cwd)
+    candidate = lexical_absolute_path(normalized, cwd=cwd)
     if not candidate.is_file():
         raise InvocationError(f"invocation template file was not found: {candidate}")
     return candidate
@@ -59,7 +60,7 @@ class Invocation:
     manifest: Path
     config: str | None
     targets: tuple[str, ...]
-    case: str | None
+    case: CaseSelection | None
     archive_mtime: str | None
 
     def config_path(self) -> Path | None:
@@ -67,7 +68,7 @@ class Invocation:
 
         if self.config is None:
             return None
-        return _lexical_absolute_path(self.config, cwd=self.manifest.parent)
+        return lexical_absolute_path(self.config, cwd=self.manifest.parent)
 
     @property
     def is_empty(self) -> bool:
@@ -116,7 +117,7 @@ def _parse_optional_config(value: object, where: str) -> str | None:
     if value.endswith("/"):
         raise InvocationError(f"{where}: config must name one Configuration file")
     try:
-        path = _validate_filesystem_location(
+        path = validate_filesystem_location(
             value,
             where,
             label="Configuration path",
@@ -143,12 +144,15 @@ def _parse_targets(value: object, where: str) -> tuple[str, ...]:
     return tuple(targets)
 
 
-def _parse_optional_case(value: object, where: str) -> str | None:
+def _parse_optional_case(value: object, where: str) -> CaseSelection | None:
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
         raise InvocationError(f"{where}: expected a non-empty string")
-    return value
+    try:
+        return parse_case_selection(value)
+    except ValueError as exc:
+        raise InvocationError(f"{where}: {exc}") from exc
 
 
 def _parse_optional_archive_mtime(value: object, where: str) -> str | None:
@@ -182,7 +186,7 @@ def _parse_invocation(
 def load_invocation(path: str | Path) -> InvocationTemplate:
     """Load one Invocation Template document."""
 
-    manifest = _lexical_absolute_path(Path(path).expanduser())
+    manifest = lexical_absolute_path(Path(path).expanduser())
     if manifest.suffix != INVOCATION_SUFFIX:
         raise InvocationError(
             f"invocation template file must end with {INVOCATION_SUFFIX!r}: {manifest}"

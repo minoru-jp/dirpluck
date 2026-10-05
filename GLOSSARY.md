@@ -66,13 +66,9 @@ The Configuration used for one run after resolving the Root Configuration and it
 
 A range in the filesystem where Targets are searched for at runtime.
 
-## Write boundary
-
-A boundary that can be determined statically from the Configuration as the range in the filesystem within which one Output definition may write an Archive.
-
 ## Namespace
 
-An Archive-only namespace added outside a source root to distinguish where sources are placed within an Archive.
+An Archive-only namespace added outside a Target archive root to distinguish Targets resolved from a Scope within an Archive.
 
 ## Invocation Template
 

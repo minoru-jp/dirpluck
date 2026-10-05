@@ -51,7 +51,7 @@ When invoking dirpluck from a shell, quote the entire selector reference so the 
 
 `./` by itself, `/acme`, `work/team/acme`, and absolute filesystem paths are not accepted as Target references. `./acme` and `./acme/` are valid explicit default-Scope file and directory forms, respectively.
 
-A Configuration without a Pluck may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck. An Always-only Configuration can continue to run without positional Target arguments.
+Target references may be omitted entirely. A targetless run does not use Pluck for source selection; if Always sources exist, it archives only those sources. If no Always source exists, the run is still valid and produces a README-only Archive. A Configuration without a Pluck may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck.
 
 ```console
 dirpluck --config project-snapshot
@@ -61,10 +61,12 @@ For Scope and `ignore` definitions, see [Configuration guide](../configuration/I
 
 ## Case
 
-Select a named Case with `--case NAME`.
+Select Cases with `--case CASE`. The selector has independent Pluck and Always axes: `PLUCK` selects only a Pluck Case, `.ALWAYS` selects only an Always Case, and `PLUCK.ALWAYS` selects both.
 
 ```console
 dirpluck ./acme/ --case audit
+dirpluck --case .release
+dirpluck ./acme/ --case audit.release
 ```
 
-Only one Case can be selected per run. [Specification](../specification/INDEX.md) defines how Pluck and Always sources select Cases.
+The two axes are validated independently. A defined Case may validly result in zero sources. [Specification](../specification/INDEX.md) defines the Configuration semantics for Pluck and Always Cases.

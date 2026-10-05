@@ -6,13 +6,15 @@ example_020 = test_target_field("example 020")
 example_021 = test_target_field("example 021")
 
 
-@summary('Fixed / timestamp Output と書き込み境界。')
-@canonical_source('Configuration output', filename='output.md', order=40, merge_policy="local", heading="title")
+@summary("Fixed / timestamp Output の指定方法。")
+@canonical_source(
+    "Configuration output", filename="output.md", order=40, merge_policy="local", heading="title"
+)
 class CONFIGURATION_PART:
     r"""
-    この文書は、Configuration が宣言する Output、fixed / timestamp mode、書き込み境界を説明します。
+    この文書は、Configuration が宣言する Output と fixed / timestamp mode を説明します。
 
-    この guide は Configuration 側の Output authoring を説明し、fixed / timestamp / runtime Output と書き込み境界の厳密な契約は `../specification/output.md` が定義します。CLI runtime Output は `../cli/output.md`、trust boundary は `../TRUST.md` を参照してください。
+    この guide は Configuration 側の Output authoring を説明し、fixed / timestamp / runtime Output の厳密な契約は `../specification/output.md` が定義します。CLI runtime Output は `../cli/output.md`、trust boundary は `../TRUST.md` を参照してください。
     """
 
     merge @= TERMS.TERM_1
@@ -22,7 +24,8 @@ class CONFIGURATION_PART:
         r"""
         {{TERM_9}}は optional です。共通 definition を提供する Base Configurationだけでなく、`--preview` や runtime Output を使う root Configuration でも Output を省略できます。Runtime Output を指定しない通常 build では、root Configuration 自身に fixed mode または timestamp mode のどちらか一方を直接宣言します。Base の Output は継承されません。
         """
-        title @= 'Output'
+
+        title @= "Output"
 
         merge @= TERMS.TERM_9
 
@@ -36,7 +39,8 @@ class CONFIGURATION_PART:
 
             `overwrite` は existing output を置き換えてよいかを表し、既定は `false` です。Output file は毎回通常の新規 file creation と同じ permission semantics で作られ、POSIX では process `umask` が適用されます。`overwrite = true` でも置き換える前の file mode は継承しません。`prefix` / `suffix` は fixed mode では使いません。
             """
-            title @= 'Fixed output'
+
+            title @= "Fixed output"
 
             example_020 @= """
             [output]
@@ -60,7 +64,8 @@ class CONFIGURATION_PART:
 
             `prefix` と `suffix` は timestamp mode 専用です。同じ秒に複数 run を意図的に区別したい場合は CLI `--sequence N` を使えます。CLI `--here` や末尾 `/` の `--output PATH`、Python API の末尾 `/` の `output=` で runtime directory Output を指定した場合も、root Configuration が `[output.timestamp]` を持てば `prefix` / `suffix` は automatic filename の naming rule として再利用されます。Configured `path` は runtime destination には使いません。ZIP entry 自体の mtime を統一する policy は Configuration field ではなく、CLI / Invocation Template の `--archive-mtime` / `archive_mtime` で指定します。
             """
-            title @= 'Timestamp output'
+
+            title @= "Timestamp output"
 
             example_021 @= """
             [output.timestamp]
@@ -68,13 +73,3 @@ class CONFIGURATION_PART:
             prefix = "project"
             suffix = "review"
             """
-
-        class SECTION_160:
-            r"""
-            Output は、Configuration だけから{{TERM_17}}を静的に確定できる形に限定します。Fixed output では指定した完全 file path、timestamp output では指定した directory tree が書き込み境界です。
-
-            Base chain 上の Output definitions は互いの書き込み境界へ介入できません。Fixed / timestamp の組み合わせごとの overlap 判定は `../specification/INDEX.md` を参照してください。
-            """
-            title @= 'Writable destination'
-
-            merge @= TERMS.TERM_17

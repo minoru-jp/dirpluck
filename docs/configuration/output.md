@@ -2,7 +2,7 @@
 
 Fixed and timestamp Output declarations and their write boundaries.
 
-This guide explains Configuration-side Output authoring. Exact fixed, timestamp, runtime Output, and write-boundary rules are defined in the [Output specification](../specification/output.md). For runtime Output controls, see [Preview and runtime Output](../cli/output.md); for the trust boundary, see the [Trust model](../TRUST.md).
+This guide explains Configuration-side Output authoring. Exact fixed, timestamp, and runtime Output rules are defined in the [Output specification](../specification/output.md). For runtime Output controls, see [Preview and runtime Output](../cli/output.md); for the trust boundary, see the [Trust model](../TRUST.md).
 
 ## Output
 
@@ -39,8 +39,3 @@ The filename is generated in this form:
 
 `prefix` and `suffix` are specific to timestamp mode. Use CLI `--sequence N` when multiple runs in the same second need to be distinguished intentionally. When CLI `--here`, trailing-`/` `--output`, or Python `output=` requests automatic Runtime Output, these `prefix` / `suffix` values are reused as the naming rule, but the configured timestamp-output directory is not. A policy that gives every ZIP entry the same mtime is not a Configuration field; set it at runtime with CLI `--archive-mtime` or Invocation Template `archive_mtime`.
 
-### Writable destination
-
-Output forms are limited so that the write boundary can be determined statically from the Configuration alone. For fixed Output, the boundary is the exact file path. For timestamp Output, it is the specified directory tree.
-
-Output definitions in the same base chain cannot intrude on one another's write boundaries. See [Specification](../specification/INDEX.md) for overlap rules for each fixed/timestamp combination.

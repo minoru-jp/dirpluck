@@ -28,7 +28,7 @@ related: [SPEC_050](runtime-targets.md#spec_050), [SPEC_052](runtime-targets.md#
 
 ## SPEC_092
 
-To recognize Windows directory junctions while retaining Python 3.11 support, `dirpluck` uses the reparse tag returned by `lstat` on Windows. The decision is centralized in one internal helper used by Target discovery, Selection traversal, and other runtime filesystem checks that reject link-like entries. Control-document path resolution does not use this link-like test. If a supported Windows runtime cannot provide the reparse-tag constant or stat metadata required to distinguish junctions safely, `dirpluck` fails instead of treating the entry as an ordinary directory and continuing traversal. This is a safety boundary for known symbolic links and directory junctions; it does not guarantee complete detection of every possible reparse point or unknown redirection mechanism available on a platform.
+Windows directory junctions are treated as link-like entries and are not followed during automatic Target discovery or Selection traversal. Runtime filesystem checks must distinguish known junctions safely enough to preserve that boundary. If the supported runtime cannot make that determination safely, dirpluck fails rather than treating the entry as an ordinary directory and continuing traversal. This safety boundary covers known symbolic links and directory junctions; it does not claim complete detection of every possible reparse point or unknown redirection mechanism available on a platform.
 
 level: MUST
 
@@ -36,7 +36,7 @@ condition: when detecting directory junctions on Windows
 
 ## SPEC_093
 
-Recognized **non-ignored** link-like entries excluded during Selection traversal are counted once per path even if the same path is observed through multiple patterns. `--preview` reports the total after the contents tree, and a normal build reports it after the output path. Individual link paths are not displayed, and the runtime note is not written to the Archive `README.md`. Link-like entries that match `ignore`, and entries inside a subtree pruned by directory `ignore`, are not included in the skipped-link count.
+Recognized non-ignored link-like entries excluded during Selection traversal are counted once per path even if the same path is encountered through multiple patterns. Preview and normal build expose the total as an informational skipped-link note. Individual link paths are not displayed, and the runtime note is not written to the Archive `README.md`. Link-like entries excluded by `ignore`, including those within an ignored directory subtree, are not included in the skipped-link count. The exact position and wording of the informational note are presentation details rather than a compatibility contract.
 
 level: MUST
 

@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
-from types import MappingProxyType
-from collections.abc import Mapping
+from pathlib import PurePosixPath
 from typing import TypeAlias
 
-from ._builder_models import (
-    ArchivePlan,
-    BuildRequest,
-    EmptySelectionStatus,
-    MissingSelectionStatus,
-    ResolvedSource,
+from ._archive_models import ArchivePlan
+from ._output_models import ArchivePresentation
+from ._archive_payload import ArchivePayload
+from ._extraction_models import (
+    ExtractedSource,
+    ExtractionResult,
+    SelectionTypeMismatchStatus,
 )
-from .config import Config
-from .errors import SelectionError
-from ._effective import _resolve_execution
-from ._selection import select_files
 
 
 _ArchiveTree: TypeAlias = dict[str, "_ArchiveTree"]
@@ -40,195 +35,200 @@ def _markdown_code_span(value: str) -> str:
     return f"{fence}{value}{fence}"
 
 
+def _render_source_metadata(
+    source: ExtractedSource,
+    *,
+    heading_level: int,
+    presentation: ArchivePresentation,
+    include_description: bool = True,
+) -> list[str]:
+    archive_root = source.archive_root
+    if source.source_kind == "directory":
+        archive_root = f"{archive_root.rstrip('/')}/"
+    lines = [f"{'#' * heading_level} {_markdown_code_span(archive_root)}", ""]
+    if include_description and source.description is not None:
+        lines.extend([source.description, ""])
+    lines.append(f"Files: {source.selected_count}")
+    if presentation.show_source_paths:
+        lines.append(f"Source: {_markdown_code_span(source.source_path.as_posix())}")
+    for overlap in source.target_overlaps:
+        unit = "file" if overlap.count == 1 else "files"
+        verb = "is" if overlap.count == 1 else "are"
+        target = overlap.archive_root
+        if overlap.source_kind == "directory":
+            target = f"{target.rstrip('/')}/"
+        lines.append(
+            f"Target overlap: {overlap.count} selected {unit} {verb} also included under "
+            + f"{_markdown_code_span(target)}."
+        )
+    lines.append("")
+    return lines
+
+
+def _scope_heading(name: str | None) -> str:
+    if name is None:
+        return "### Scope: (unnamed)"
+    return f"### Scope: {_markdown_code_span(name)}"
+
+
+def _render_target_sources(
+    presentation: ArchivePresentation,
+    sources: tuple[ExtractedSource, ...],
+) -> list[str]:
+    lines = ["## Targets", ""]
+    scopes: dict[str | None, list[ExtractedSource]] = {}
+    for source in sources:
+        scopes.setdefault(source.scope_name, []).append(source)
+
+    for scope_name, scope_sources in scopes.items():
+        lines.extend([_scope_heading(scope_name), ""])
+        scope_description = next(
+            (
+                source.scope_description
+                for source in scope_sources
+                if source.scope_description is not None
+            ),
+            None,
+        )
+        if scope_description is not None:
+            lines.extend([scope_description, ""])
+
+        directory_targets = tuple(
+            sorted(
+                (source for source in scope_sources if source.source_kind == "directory"),
+                key=lambda item: (item.archive_root, item.key),
+            )
+        )
+        file_targets = tuple(
+            sorted(
+                (source for source in scope_sources if source.source_kind == "file"),
+                key=lambda item: (item.archive_root, item.key),
+            )
+        )
+
+        if directory_targets:
+            lines.extend(["#### Pluck", ""])
+            pluck_description = next(
+                (
+                    source.description
+                    for source in directory_targets
+                    if source.description is not None
+                ),
+                None,
+            )
+            if pluck_description is not None:
+                lines.extend([pluck_description, ""])
+            for source in directory_targets:
+                lines.extend(
+                    _render_source_metadata(
+                        source,
+                        heading_level=5,
+                        presentation=presentation,
+                        include_description=False,
+                    )
+                )
+
+        for source in file_targets:
+            lines.extend(
+                _render_source_metadata(
+                    source,
+                    heading_level=4,
+                    presentation=presentation,
+                    include_description=False,
+                )
+            )
+    return lines
+
+
 def _render_archive_readme(
-    request: BuildRequest,
-    about_description: str | None,
-    sources: tuple[ResolvedSource, ...],
-    selection_counts: Mapping[str, int],
-    target_overlaps: Mapping[str, tuple[tuple[str, int], ...]],
+    presentation: ArchivePresentation,
+    sources: tuple[ExtractedSource, ...],
 ) -> str:
     lines = ["# Archive contents", ""]
-    if about_description is not None:
-        lines.extend([about_description, ""])
+    if presentation.about_description is not None:
+        lines.extend([presentation.about_description, ""])
 
-    for source in sorted(sources, key=lambda item: (item.archive_root, item.key)):
-        archive_root = source.archive_root
-        if source.source_kind == "directory":
-            archive_root = f"{archive_root.rstrip('/')}/"
-        lines.extend([f"## {_markdown_code_span(archive_root)}", ""])
-        lines.append(f"Files: {selection_counts[source.key]}")
-        if request.paths:
-            lines.append(f"Source: {_markdown_code_span(source.directory.as_posix())}")
-        target_sources = {
-            target.archive_root: target for target in sources if target.kind == "target"
-        }
-        for target_root, count in target_overlaps.get(source.key, ()):
-            unit = "file" if count == 1 else "files"
-            verb = "is" if count == 1 else "are"
-            target = target_root
-            target_source = target_sources.get(target_root)
-            if target_source is None or target_source.source_kind == "directory":
-                target = f"{target.rstrip('/')}/"
-            lines.append(
-                f"Target overlap: {count} selected {unit} {verb} also included under "
-                + f"{_markdown_code_span(target)}."
-            )
-        descriptions = tuple(
-            description
-            for description in (source.scope_description, source.description)
-            if description is not None
+    if not sources:
+        lines.extend(["No sources were selected. This Archive contains only `README.md`.", ""])
+        return "\n".join(lines).rstrip() + "\n"
+
+    fixed_sources = tuple(
+        sorted(
+            (source for source in sources if source.role == "fixed"),
+            key=lambda item: (item.archive_root, item.key),
         )
-        if descriptions:
-            lines.extend(["", "\n\n".join(descriptions)])
-        lines.append("")
+    )
+    target_sources = tuple(source for source in sources if source.role == "target")
+
+    if target_sources:
+        scope_note = (
+            '`Scope: "..."` identifies only the selection range used to find Targets; '
+            + "it does not imply priority, importance, or hierarchy. Any additional meaning "
+            + "is stated in that Scope's description."
+        )
+        lines.extend(
+            [
+                scope_note,
+                "",
+            ]
+        )
+
+    for source in fixed_sources:
+        lines.extend(
+            _render_source_metadata(
+                source,
+                heading_level=2,
+                presentation=presentation,
+            )
+        )
+
+    if target_sources:
+        lines.extend(_render_target_sources(presentation, target_sources))
+
     return "\n".join(lines).rstrip() + "\n"
 
 
-def plan_archive(
-    config: Config,
-    request: BuildRequest,
-    *,
-    allow_missing: bool = False,
+def _render_type_mismatch(status: SelectionTypeMismatchStatus) -> str:
+    expected_directory = status.expected_kind == "directory"
+    expected = "directory" if expected_directory else "file"
+    actual = "file" if expected_directory else "directory"
+    listed = ", ".join(repr(name) for name in status.actual_names)
+    role = "optional " if status.optional else ""
+    if expected_directory:
+        hint = f"remove the trailing '/' from {status.pattern!r} if the {actual} was intended"
+    else:
+        hint = f"add a trailing '/' to {status.pattern!r} if the {actual} was intended"
+    noun = (
+        actual
+        if len(status.actual_names) == 1
+        else ("directories" if actual == "directory" else "files")
+    )
+    verb = "exists" if len(status.actual_names) == 1 else "exist"
+    return (
+        f"{status.source_label}: {role}{expected} pattern {status.pattern!r} did not match, "
+        + f"but matching {noun} {listed} {verb}; {hint}"
+    )
+
+
+def create_archive_plan(
+    extraction: ExtractionResult,
+    presentation: ArchivePresentation,
 ) -> ArchivePlan:
-    """Resolve archive entries without writing an archive."""
-
-    effective, sources = _resolve_execution(config, request)
-
-    archive_entries: dict[str, Path] = {}
-    atomic_file_paths: set[str] = set()
-    selected_physical_entries: dict[str, set[Path]] = {}
-    missing_entries: list[str] = []
-    optional_missing_entries: list[str] = []
-    empty_selections: list[EmptySelectionStatus] = []
-    missing_selections: list[MissingSelectionStatus] = []
-    diagnostics: list[str] = []
-    selection_counts: dict[str, int] = {}
-    skipped_links: set[Path] = set()
-
-    for source in sources:
-        result = select_files(source, allow_missing=allow_missing)
-        skipped_links.update(result.skipped_links)
-        diagnostics.extend(result.diagnostics)
-        selection_counts[source.key] = len(result.files)
-        selected_physical_entries[source.key] = {file.resolve() for file in result.files}
-        opaque_missing = set(result.opaque_missing)
-        opaque_optional_missing = set(result.opaque_optional_missing)
-        missing_entries.extend(
-            f"{source.archive_root}/{relative}"
-            for relative in result.missing
-            if relative not in opaque_missing
-        )
-        optional_missing_entries.extend(
-            f"{source.archive_root}/{relative}"
-            for relative in result.optional_missing
-            if relative not in opaque_optional_missing
-        )
-        missing_selections.extend(
-            MissingSelectionStatus(
-                source_label=source.label,
-                archive_root=source.archive_root,
-                expression=expression,
-                optional=False,
-            )
-            for expression in result.opaque_missing
-        )
-        missing_selections.extend(
-            MissingSelectionStatus(
-                source_label=source.label,
-                archive_root=source.archive_root,
-                expression=expression,
-                optional=True,
-            )
-            for expression in result.opaque_optional_missing
-        )
-
-        if not result.files:
-            if source.selection is None:
-                raise AssertionError(f"atomic file source selected no file: {source.label}")
-            empty_selections.append(
-                EmptySelectionStatus(
-                    key=source.key,
-                    label=source.label,
-                    archive_root=source.archive_root,
-                    allow_empty=source.selection.allow_empty,
-                )
-            )
-            if not source.selection.allow_empty and not allow_missing:
-                raise SelectionError(f"{source.label} selected no files and allow_empty is false")
-
-        for file in result.files:
-            if source.source_kind == "file":
-                arcname = source.archive_root
-            else:
-                relative = file.relative_to(source.directory).as_posix()
-                arcname = f"{source.archive_root}/{relative}"
-            source_resolved = file.resolve()
-            previous = archive_entries.get(arcname)
-            if previous is not None and previous.resolve() != source_resolved:
-                raise SelectionError(
-                    f"multiple files resolve to the same archive path {arcname!r}: {previous} and {file}"
-                )
-            conflict_candidates = (
-                archive_entries if source.source_kind == "file" else atomic_file_paths
-            )
-            for existing in conflict_candidates:
-                if existing == arcname:
-                    continue
-                if existing.startswith(arcname + "/") or arcname.startswith(existing + "/"):
-                    raise SelectionError(
-                        "archive file/directory path conflict between "
-                        + f"{existing!r} and {arcname!r}"
-                    )
-            archive_entries[arcname] = file
-            if source.source_kind == "file":
-                atomic_file_paths.add(arcname)
-
-    empty_directories = sorted(
-        {
-            status.archive_root
-            for status in empty_selections
-            if status.allow_empty
-            and not any(
-                arcname.startswith(f"{status.archive_root}/") for arcname in archive_entries
-            )
-        }
-    )
-    targets = tuple(source for source in sources if source.kind == "target")
-    target_overlaps: dict[str, tuple[tuple[str, int], ...]] = {}
-    for source in sources:
-        if source.kind != "always":
-            continue
-        overlaps: list[tuple[str, int]] = []
-        source_entries = selected_physical_entries[source.key]
-        for target in targets:
-            count = len(source_entries & selected_physical_entries[target.key])
-            if count:
-                overlaps.append((target.archive_root, count))
-        if overlaps:
-            target_overlaps[source.key] = tuple(sorted(overlaps))
-
-    readme = _render_archive_readme(
-        request,
-        effective.about_description,
-        sources,
-        selection_counts,
-        target_overlaps,
-    )
+    readme = _render_archive_readme(presentation, extraction.sources)
     return ArchivePlan(
-        entries=MappingProxyType(dict(sorted(archive_entries.items()))),
-        readme=readme,
-        missing=tuple(sorted(set(missing_entries))),
-        optional_missing=tuple(sorted(set(optional_missing_entries))),
-        empty_directories=tuple(empty_directories),
-        empty_selections=tuple(sorted(empty_selections, key=lambda item: item.key)),
-        missing_selections=tuple(
-            sorted(
-                missing_selections,
-                key=lambda item: (item.archive_root, item.optional, item.expression),
-            )
+        payload=ArchivePayload(
+            entries=extraction.entries,
+            readme=readme,
+            empty_directories=extraction.empty_directories,
         ),
-        diagnostics=tuple(sorted(set(diagnostics))),
-        skipped_link_count=len(skipped_links),
+        missing=extraction.missing,
+        optional_missing=extraction.optional_missing,
+        empty_selections=extraction.empty_selections,
+        missing_selections=extraction.missing_selections,
+        diagnostics=tuple(
+            sorted({_render_type_mismatch(status) for status in extraction.type_mismatches})
+        ),
+        skipped_link_count=extraction.skipped_link_count,
     )
 
 
@@ -244,37 +244,25 @@ def render_link_skip_note(count: int, *, preview: bool) -> str:
     )
 
 
-def render_archive_tree(
-    plan: ArchivePlan | Mapping[str, Path] | tuple[str, ...] | list[str],
-) -> str:
-    """Render archive entry paths as a deterministic tree, marking missing paths."""
+def render_archive_tree(plan: ArchivePlan) -> str:
+    """Render one archive plan as a deterministic preview tree."""
 
-    if isinstance(plan, ArchivePlan):
-        empty_roots = {status.archive_root for status in plan.empty_selections}
-        directory_paths = set(plan.empty_directories) | empty_roots
-        missing_directory_paths = {path[:-1] for path in plan.missing if path.endswith("/")}
-        optional_missing_directory_paths = {
-            path[:-1] for path in plan.optional_missing if path.endswith("/")
-        }
-        normalized_missing = {path[:-1] if path.endswith("/") else path for path in plan.missing}
-        normalized_optional_missing = {
-            path[:-1] if path.endswith("/") else path for path in plan.optional_missing
-        }
-        directory_paths |= missing_directory_paths | optional_missing_directory_paths
-        paths = [
-            "README.md",
-            *plan.entries.keys(),
-            *normalized_missing,
-            *normalized_optional_missing,
-            *directory_paths,
-        ]
-        missing = normalized_missing
-        optional_missing = normalized_optional_missing
-    else:
-        paths = list(plan.keys()) if isinstance(plan, Mapping) else list(plan)
-        missing: set[str] = set()
-        optional_missing: set[str] = set()
-        directory_paths: set[str] = set()
+    empty_roots = {status.archive_root for status in plan.empty_selections}
+    directory_paths = set(plan.empty_directories) | empty_roots
+    missing_directory_paths = {path[:-1] for path in plan.missing if path.endswith("/")}
+    optional_missing_directory_paths = {
+        path[:-1] for path in plan.optional_missing if path.endswith("/")
+    }
+    missing = {path[:-1] if path.endswith("/") else path for path in plan.missing}
+    optional_missing = {path[:-1] if path.endswith("/") else path for path in plan.optional_missing}
+    directory_paths |= missing_directory_paths | optional_missing_directory_paths
+    paths = [
+        "README.md",
+        *plan.entries.keys(),
+        *missing,
+        *optional_missing,
+        *directory_paths,
+    ]
 
     tree: _ArchiveTree = {}
     for path in sorted(set(paths)):
@@ -304,7 +292,7 @@ def render_archive_tree(
                 walk(children, prefix + ("    " if last else "│   "), current_parts)
 
     walk(tree, "", ())
-    if isinstance(plan, ArchivePlan) and plan.missing_selections:
+    if plan.missing_selections:
         lines.extend(["", "Unmatched selection entries:"])
         for status in plan.missing_selections:
             marker = "optional missing" if status.optional else "missing"
@@ -312,11 +300,11 @@ def render_archive_tree(
                 f"- {status.source_label} (`{status.archive_root}/`): "
                 + f"{status.expression} [{marker}]"
             )
-    if isinstance(plan, ArchivePlan) and plan.empty_selections:
+    if plan.empty_selections:
         lines.extend(["", "Empty results:"])
         for status in plan.empty_selections:
             outcome = "allowed" if status.allow_empty else "would error"
             lines.append(f"- {status.label} (`{status.archive_root}/`): empty, {outcome}")
-    if isinstance(plan, ArchivePlan) and plan.skipped_link_count:
+    if plan.skipped_link_count:
         lines.extend(["", render_link_skip_note(plan.skipped_link_count, preview=True)])
     return "\n".join(lines)

@@ -24,7 +24,7 @@ The arguments map to CLI inputs as follows:
 ```text
 targets       positional TARGET
 config        --config PATH
-case          --case NAME
+case          --case CASE
 sequence      --sequence N
 invocation    -i / --invocation-template PATH
 entry         -e / --entry NAME
@@ -38,7 +38,7 @@ cwd           Python API only: runtime anchor for relative control-document path
 
 When `invocation` is used, positional `targets` and `config` are not supplied at the same time. `entry` is valid only together with `invocation`. Because `preview=True` does not resolve or write an Output, it cannot be combined with `sequence`, `output`, or `force=True`. `sequence` must be an integer greater than or equal to 1. `output` uses the same `/`-separator path syntax as CLI `--output`, relative to `cwd`, and `force` is boolean.
 
-When an Invocation Template is selected, the `case` argument overrides the stored Case and `archive_mtime` overrides the stored `archive_mtime`, following the same rules as the corresponding CLI options. If the Invocation omits `config`, dirpluck uses `cwd/default.dirpluck`; if it omits `targets`, the run has no Targets; if it omits `case`, normal default Case semantics apply; if it omits `archive_mtime`, the normal per-entry timestamp behavior applies.
+When an Invocation Template is selected, the `case` argument overrides the stored Case and `archive_mtime` overrides the stored `archive_mtime`, following the same rules as the corresponding CLI options. `case` uses the same two-axis grammar: `"audit"` selects a Pluck Case, `".release"` selects an Always Case, and `"audit.release"` selects both. If the Invocation omits `config`, dirpluck uses `cwd/default.dirpluck`; if it omits `targets`, the run has no Targets; if it omits `case`, normal default Case semantics apply; if it omits `archive_mtime`, the normal per-entry timestamp behavior applies.
 
 ## Configuration deprecation warning
 
@@ -46,7 +46,21 @@ From 0.14.0 through releases before 1.0.0, if a loaded Configuration uses a depr
 
 The warning location is attributed to the first caller frame outside the dirpluck package rather than to a fixed `stacklevel`. Callers that need explicit control can filter or promote `dirpluck.ConfigurationDeprecationWarning`. This is a Configuration-syntax lifecycle diagnostic, so it is not included in `RunResult.warnings`, which is reserved for planning diagnostics. The CLI collects the same diagnostic and renders its concise stderr warning instead of emitting an additional Python warning.
 
-The legacy syntax becomes invalid in 1.0.0. Migrate Shared references to `{ shared = "..." }` and concrete relative `ignore` paths to `{ path = "..." }`.
+The legacy syntax becomes invalid in 1.0.0. Migrate Shared references to `{ shared = "..." }` and concrete relative `ignore` paths to `{ path = "..." }`. From 0.16.0 through releases before 1.0.0, legacy `[pluck.case.<name>]` reports the same warning category and should be migrated to canonical `[case.pluck.<name>]`.
+
+## Always migration warning
+
+From 0.16.0 through the release immediately before 1.0.0, `dirpluck.run()` reports Always migration through the public `AlwaysMigrationWarning` category in Python's warnings framework. Dirpluck compares the valid 0.14.x Always Archive identity with the 0.16.x effective Always name and emits a layout migration warning only for sources whose Archive root actually changes. The warning includes both the old and new roots. No layout warning is emitted when the old and new identities are the same.
+
+Using `[always.<name>].namespace` always reports a separate pre-1.0 compatibility warning, independent of the layout comparison. In 0.16.x the Namespace name temporarily replaces the Always name for Archive placement, but the field is removed in 1.0.0. Write the desired Archive directory name directly in `[always.<name>]`.
+
+`AlwaysMigrationWarning` is a `FutureWarning` subclass. Its location is attributed to the first caller frame outside the dirpluck package, and callers may filter or promote `dirpluck.AlwaysMigrationWarning` to an error when migration-sensitive automation must detect layout changes explicitly. These lifecycle diagnostics are not included in `RunResult.warnings`. The CLI collects the same public warnings and renders them to stderr rather than emitting an additional Python warning.
+
+## README-only Archive
+
+`dirpluck.run()` may complete successfully with zero resolved sources. With no Target references and no Always sources, a build creates an Archive containing only the generated `README.md`; `preview=True` returns a tree containing only `README.md`. This is a normal result, not a warning or exception. The generated README records that no sources were selected, and `RunResult.archive_entries` is `("README.md",)`.
+
+A valid Case may also produce a zero-source result. Case names that are not defined by the applicable Configuration rules remain errors.
 
 ## Runtime Output
 
@@ -110,4 +124,4 @@ result = dirpluck.run(
 
 Accepted values are `YYYY-MM-DDTHH:MM:SS`, `"now"`, and `"zip-epoch"`. An explicit timestamp must be within ZIP's range from `1980-01-01T00:00:00` through `2107-12-31T23:59:59`; it is treated as a timezone-free literal and is not converted between time zones. `now` samples local current time once for a `run()` call. ZIP timestamps have two-second precision, so odd seconds are rounded down to the preceding even second.
 
-When supplied, the resolved timestamp is applied uniformly to generated `README.md`, empty-directory entries, and selected source files. When omitted, source files keep their filesystem mtimes and generated entries use their generation time, preserving the existing behavior. A fixed value can remove byte differences caused by entry timestamps and can therefore help produce reproducible archives. Source-file permission bits are stored in ZIP `external_attr` and can still change the archive bytes; dirpluck does not normalize them and does not guarantee byte-for-byte reproducibility of the Archive as a whole. It also does not change the timestamp used in timestamp Output filenames. `preview=True` accepts the argument but writes no Archive, so the preview result is unaffected.
+When supplied, the resolved timestamp is applied uniformly to generated `README.md`, empty-directory entries, and selected source files. When omitted, source files keep their filesystem mtimes and generated entries use their generation time, preserving the existing behavior. A fixed value can remove byte differences caused by entry timestamps and can therefore help produce reproducible archives. Source-file permission metadata is not normalized and can still change the archive bytes; dirpluck does not guarantee byte-for-byte reproducibility of the Archive as a whole across runtime, platform, compressor, permission metadata, or other serialization differences. It also does not change the timestamp used in timestamp Output filenames. `preview=True` accepts the argument but writes no Archive, so the preview result is unaffected.

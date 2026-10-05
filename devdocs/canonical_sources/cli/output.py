@@ -10,8 +10,14 @@ example_015 = test_target_field("example 015")
 example_016 = test_target_field("example 016")
 
 
-@summary('Preview、Archive README path、runtime Output、sequence、entry mtime。')
-@canonical_source('Preview and runtime output', filename='output.md', order=30, merge_policy="local", heading="title")
+@summary("Preview、Archive README path、runtime Output、sequence、entry mtime。")
+@canonical_source(
+    "Preview and runtime output",
+    filename="output.md",
+    order=30,
+    merge_policy="local",
+    heading="title",
+)
 class CLI_PART:
     r"""この文書は preview、Archive README への source path 記録、runtime Output、sequence、Archive entry mtime を説明します。
 
@@ -28,11 +34,12 @@ class CLI_PART:
         {{example_011}}
         ```
 
-        Configuration や workspace を変更した後、実際に Archive を書き込む前の確認に使えます。通常実行との差分は書き込みで、base chain、Scope / Target、Case、selection、archive planning の主要な解決処理は共通です。`--preview` は root Configuration に Output declaration がなくても使用できます。Output を解決・書き込みしないため、`--here` / `--output` / `--force` / `--sequence` とは組み合わせません。
+        Configuration や workspace を変更した後、実際に Archive を書き込む前の確認に使えます。同じ Configuration / Target / Case / Selection 入力なら、preview が示す source selection と Archive 内配置は通常 build の結果と一致します。`--preview` は root Configuration に Output declaration がなくても使用でき、Output destination を解決・書き込みしないため、`--here` / `--output` / `--force` / `--sequence` とは組み合わせません。
 
-        Selection traversal で non-ignored symbolic link / Windows directory junction として認識した entry を除外した場合は、tree の後に除外件数を note として表示します。個々の path は列挙しません。正確な preview semantics と link-like entry の扱いは `specification/INDEX.md` / `TRUST.md` を参照してください。
+        Selection traversal で non-ignored symbolic link / Windows directory junction として認識した entry を除外した場合は、除外件数を informational note として表示します。個々の path は列挙しません。正確な preview semantics と link-like entry の扱いは `specification/INDEX.md` / `TRUST.md` を参照してください。
         """
-        title @= 'Preview'
+
+        title @= "Preview"
 
         example_011 @= "dirpluck ./acme/ --preview"
 
@@ -44,13 +51,29 @@ class CLI_PART:
 
         Warning は 1.0.0 で旧記法が削除されることを示し、Shared reference は `{ shared = "..." }`、`ignore` の concrete relative path は `{ path = "..." }` へ移行するよう案内します。この migration warning は stdout の archive path / preview tree を変えず、exit status も変更しません。
         """
-        title @= 'Configuration migration warning'
+
+        title @= "Configuration migration warning"
+
+        merge @= TERMS.TERM_1
+
+    class SECTION_077:
+        r"""
+        0.16.0 から 1.0.0 直前まで、CLI は Always migration を public warning として stderr へ表示します。0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source だけに layout migration warning を出します。Warning には旧 root と新 root を含めます。`[always.docs] path = "docs"` のように旧・新 identity が同じ場合、この layout warning は出ません。
+
+        Always source に `namespace` がある場合は、layout 差分とは別に pre-1.0 compatibility warning を必ず報告します。0.16.x 以降の 0.x series では Namespace name が Always name を置き換えて Archive placement に使われますが、この field は 1.0.0 で削除されます。Archive directory name は `[always.<name>]` に直接記述してください。
+
+        CLI が表示するこれらの warning は、公式 Python API が `AlwaysMigrationWarning` として報告するものと同じ診断です。CLI は Python warning を重ねて発行せず、収集した message を `dirpluck: warning:` として stderr へ表示します。Warning は stdout の Archive path / preview tree と exit status を変更しません。
+        """
+
+        title @= "0.16 Always migration warning"
 
         merge @= TERMS.TERM_1
 
     class SECTION_065:
         r"""
-        生成される{{TERM_10}}は、既定では各 final archive root を見出しとして、その source の選択 file 数と任意の `description` を示す簡潔な index です。Scope / Pluck / Always、Configuration、Case など dirpluck 固有の resolution 情報や、source filesystem path は記録しません。
+        生成される{{TERM_10}}は Archive contents の人間向け index です。Always source はすべて Target より先に並び、各 Always section では任意の `description` を先に示してから selected file 数などの metadata を続けます。Target は Scope ごとにまとめ、directory Target はその Scope の Pluck group 配下に final Archive path を並べます。同じ Scope / Pluck の `description` は Target ごとに繰り返さず、その group に1回だけ表示します。File Target は Pluck を使わないため Scope 直下に表示します。
+
+        README 冒頭の `Scope: "..."` の説明は、Scope 名が Target を探した選択範囲の識別子にすぎず、Target 間の優先度・重要度・階層関係を表さないことを明示します。Scope 名に追加の意味を持たせる場合は `scope.description` に記述します。選択した Case 名、Configuration path / table、base chain などの実行 provenance は記録しません。
 
         Source filesystem path も各 source section へ含めたい場合だけ `--paths` を指定します。
 
@@ -60,7 +83,8 @@ class CLI_PART:
 
         `--paths` は各 source section に解決済み source filesystem path を追加します。Directory source では directory path、file Target では file path を表示します。Absolute path を含む local filesystem 情報を Archive に残し得るため、外部へ配布する Archive では必要性を確認して使用してください。
         """
-        title @= 'Archive index の source path'
+
+        title @= "Archive index の source path"
 
         example_012 @= "dirpluck ./acme/ --paths"
 
@@ -93,7 +117,8 @@ class CLI_PART:
 
         `--here` と `--output` は同時に指定できません。Output declaration を持たない root Configuration でも、runtime Output を指定すれば通常 build を実行できます。
         """
-        title @= 'Runtime Output'
+
+        title @= "Runtime Output"
 
         example_013 @= """
         dirpluck ./acme/ --here
@@ -117,7 +142,8 @@ class CLI_PART:
 
         `--sequence` は自動採番ではありません。Configuration の fixed output、`--here=FILENAME`、末尾 `/` を持たない `--output PATH` では使えません。Filename の正確な配置と collision rules は `specification/INDEX.md` を参照してください。
         """
-        title @= 'Timestamp output の sequence'
+
+        title @= "Timestamp output の sequence"
 
         example_015 @= "dirpluck --config project-snapshot --sequence 2"
 
@@ -143,7 +169,8 @@ class CLI_PART:
 
         Invocation Template では `archive_mtime = "zip-epoch"` のように保存できます。CLI で `--archive-mtime` を指定した場合は、選択した Invocation の値より CLI を優先します。
         """
-        title @= 'Archive entry の mtime'
+
+        title @= "Archive entry の mtime"
 
         example_016 @= """
         dirpluck ./example/ --archive-mtime 2026-01-01T00:00:00

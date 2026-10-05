@@ -18,7 +18,7 @@
 
 ## SPEC_065
 
-Pluck / Always source の base または Case selection は、`must` / `may` の candidate を少なくとも1個必要とする。Candidate は direct string pattern、structured `match` entry、または Shared reference で記述できる。`description` は任意で、記述する場合だけ空でない string を必要とする。
+Pluck の base / Pluck Case Selection と、Always source の base Selection は、`must` / `may` の candidate を少なくとも1個必要とする。Candidate は direct string pattern、structured `match` entry、または Shared reference で記述できる。`description` は任意で、記述する場合だけ空でない string を必要とする。Always Case は Selection ではなく effective Always source 集合の membership filter なので、この Selection grammar を持たない。
 
 level: MUST
 
@@ -48,12 +48,6 @@ level: MUST
 
 level: MUST
 
-## SPEC_068
-
-0.14.0 から 1.0.0 未満では、従来の1要素 nested array Shared reference (`["name"]`) と、`ignore` で `./` から始まる1要素 nested array path reference (`["./path"]`) を互換入力として受理するが、これらは非推奨とする。新規 Configuration は `{ shared = "..." }` / `{ path = "..." }` を使用する。CLI は実行時に読み込んだ各 Configuration file について、有効な deprecated nested-array reference が1個以上あればその file につき1回だけ stderr へ warning を表示し、1.0.0 で削除されることと replacement syntax を案内する。公式 Python API の `dirpluck.run()` は、読み込んだ各 Configuration file について同じ診断を Python の warnings framework に公開 `ConfigurationDeprecationWarning` (`FutureWarning` subclass) として1回報告し、`RunResult.warnings` には含めない。この warning は Python の既定 filter で表示対象とし、warning location は固定 `stacklevel` ではなく dirpluck package 外の最初の caller frame に帰属させる。Base chain の Configuration も読み込まれた layer として同じ扱いにする。CLI は同じ診断を stderr 表示用に収集するため、追加の `ConfigurationDeprecationWarning` は発行しない。これらの warning は CLI の stdout と exit status を変更しない。1.0.0 では deprecated nested-array reference を Configuration syntax から削除し、invalid Configuration とする。Nested array は互換期間中も要素数ちょうど1の non-empty string だけを互換入力として認め、`[]`、`["foo", "bar"]`、`[123]` は error とする。
-
-level: MUST
-
 ## SPEC_069
 
 Shared reference namespace は field から一意に決まる。
@@ -74,7 +68,7 @@ level: MUST
 
 ## SPEC_071
 
-Base composition 後の effective shared namespace に対して Shared reference を解決する。Unknown reference は Configuration error とする。Selection array の順序を保って Shared reference をその pattern set へ展開する。Path reference は Shared namespace を参照せず、その Selection の source root を基準に解釈する。
+Shared reference は Base composition 後の effective shared namespace を参照し、対応する pattern set と同じ意味を持つ。Unknown reference は Configuration error とする。Path reference は Shared namespace を参照せず、その Selection の source root を基準に解釈する。
 
 level: MUST
 
@@ -196,19 +190,19 @@ level: MUST
 
 ### SPEC_084
 
-`path` は Selection root の内側だけを指し、空 path、`.` / `./` 自体、`..` component、absolute path、glob、backslash を拒否する。Path separator は `/` とする。`.` component は正規化し、たとえば `./src/./generated/` と `src/generated/` は同じ concrete path として扱う。末尾 `/` の有無にかかわらず、実体が directory として一致した場合は subtree を traversal する前に prune する。末尾 `/` なしは同じ path の regular file にも一致するが、末尾 `/` ありは regular file に一致しない。
+`path` は Selection root の内側だけを指し、空 path、`.` / `./` 自体、`..` component、absolute path、glob、backslash を拒否する。Path separator は `/` とする。`.` component は正規化し、たとえば `./src/./generated/` と `src/generated/` は同じ concrete path として扱う。末尾 `/` の有無にかかわらず、実体が directory として一致した場合はその directory と subtree 全体を Selection 対象から除外する。末尾 `/` なしは同じ path の regular file にも一致するが、末尾 `/` ありは regular file に一致しない。
 
 level: MUST
 
 ### SPEC_085
 
-Name pattern、Shared ignore expansion、structured `path`、structured `match` は集合的な除外条件として適用する。同じ entry に複数条件が一致しても error ではなく、評価順序は observable semantics に含めない。実装は directory 条件に一致した subtree を早期に prune してよい。
+Name pattern、Shared ignore expansion、structured `path`、structured `match` は集合的な除外条件として適用し、同じ entry に複数条件が一致しても error としない。
 
 level: MUST
 
 ### SPEC_086
 
-`ignore` は link-like / special entry の種類による診断より優先する。Ignored entry は Selection candidate、link-only / special-entry-only error の根拠、skipped-link count の対象にせず、ignored subtree の entry も列挙や traversal-time validation の対象にしない。末尾 `/` のない name pattern は matching file / directory name の両方に加え、同じ name を持つ特殊 entry にも適用する。Structured `path` が link-like entry 自身に一致する場合も ignored entry として扱う。
+`ignore` は link-like / special entry の種類による診断より優先する。Ignored entry は Selection candidate、link-only / special-entry-only error の根拠、skipped-link count の対象にせず、ignored directory の subtree も Selection / filesystem-entry diagnostic の対象外とする。末尾 `/` のない name pattern は matching file / directory name の両方に加え、同じ name を持つ特殊 entry にも適用する。Structured `path` が link-like entry 自身に一致する場合も ignored entry として扱う。
 
 level: MUST
 
@@ -230,7 +224,7 @@ level: MUST
 
 ### SPEC_160
 
-`match` の value は Python-compatible regular expression として compile し、512 character 以下とする。Invalid regular expression は Configuration error とする。Matching は `re.fullmatch()` 相当の full-match semantics とする。
+`match` の value は512 character 以下の有効な Python-compatible regular expression とする。Matching は `re.fullmatch()` 相当の full-match semantics とし、invalid regular expression は Configuration error とする。
 
 level: MUST
 
@@ -248,24 +242,18 @@ level: MUST
 
 ### SPEC_163
 
-通常の string pattern、Shared expansion、structured match が結果として同一 regular file を複数回選択しても、最終 Selection は root-relative path 単位で deduplicate し、その file を1回だけ Archive candidate とする。各 `must` entry の成立判定は deduplication 前に独立して行う。
+通常の string pattern、Shared expansion、structured match が同一 regular file を複数回選択しても、その file は Archive candidate として1回だけ扱う。複数の `must` entry が同じ file に一致した場合でも、それぞれの `must` は独立して成立できる。
 
 level: MUST
 
 ### SPEC_164
 
-`ignore` の structured match は他の ignore 条件と同じ優先度を持つ。Regular file path に一致すればその file を除外し、regular directory path に一致すればその directory と subtree を traversal 前に prune する。Ancestor directory path に structured ignore match が成立する descendant も除外された subtree の一部として扱う。
+`ignore` の structured match は他の ignore 条件と同じ優先度を持つ。Regular file path に一致すればその file を除外し、regular directory path に一致すればその directory と subtree 全体を除外する。Ancestor directory path に structured ignore match が成立する descendant も除外された subtree の一部として扱う。
 
 level: MUST
 
 ### SPEC_165
 
-Structured match は既存の filesystem safety boundary を変更しない。Ignored entry は診断より先に除外する。Non-ignored symbolic link / Windows junction、FIFO、socket、device 等は selectable match とせず、`must` がそのような entry だけに一致した場合は既存の link-only / special-entry-only diagnostic semantics を適用する。
-
-level: MUST
-
-### SPEC_166
-
-Structured match の実装は Selection root 配下を走査して候補 path を照合してよく、regular expression から通常 string pattern と同等の guided traversal plan を推論することを要求しない。したがって structured match は通常 string pattern より広い filesystem traversal を行う場合がある。
+Structured match は既存の filesystem safety boundary を変更しない。Ignored entry は match の成立や link-like / special-entry diagnostic の根拠に含めない。Non-ignored symbolic link / Windows junction、FIFO、socket、device 等は selectable match とせず、`must` がそのような entry だけに一致した場合は既存の link-only / special-entry-only diagnostic semantics を適用する。
 
 level: MUST

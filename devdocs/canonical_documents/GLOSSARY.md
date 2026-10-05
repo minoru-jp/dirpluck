@@ -106,13 +106,9 @@ Archive の root に生成され、含まれる source と内容を示す index 
 
 実行時に対象を探す filesystem 上の範囲。
 
-## 書き込み境界
-
-ひとつの output definition が Archive を書き込める filesystem 上の範囲として、Configuration から静的に定まる境界。
-
 ## ネームスペース
 
-source を Archive 内で区別して配置するために、source root の外側へ追加する Archive 専用の名前空間。
+Scope から解決した Target を Archive 内で区別して配置するために、Target の archive root の外側へ追加する Archive 専用の名前空間。
 
 ## Invocation Template
 

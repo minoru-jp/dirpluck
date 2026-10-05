@@ -2,7 +2,7 @@
 
 ## SPEC_065
 
-A base or Case Selection for Pluck or an Always source requires at least one candidate across `must` and `may`. A candidate may be a direct string pattern, a structured `match` entry, or a Shared reference. `description` is optional; when present, it must be a non-empty string.
+A Pluck base Selection, a Pluck Case Selection, or an Always source base Selection requires at least one candidate across `must` and `may`. A candidate may be a direct string pattern, a structured `match` entry, or a Shared reference. `description` is optional; when present, it must be a non-empty string. An Always Case is not a Selection; it is a membership filter over the effective Always-source set and therefore does not use this Selection grammar.
 
 level: MUST
 
@@ -32,12 +32,6 @@ A direct string in `ignore` is a name pattern. Structured entries use `{ match =
 
 level: MUST
 
-## SPEC_068
-
-From 0.14.0 through releases before 1.0.0, the legacy one-element nested-array Shared reference (`["name"]`) and the one-element `ignore` path reference whose string begins with `./` (`["./path"]`) remain accepted as compatibility input, but both forms are deprecated. New Configurations must use `{ shared = "..." }` / `{ path = "..." }`. For each Configuration file loaded during a CLI run, if that file contains one or more valid deprecated nested-array references, the CLI must print exactly one warning for that file to stderr stating that the syntax will be removed in 1.0.0 and naming the replacement forms. The official Python API `dirpluck.run()` must report the same diagnostic once per loaded Configuration file through Python's warnings framework as the public `ConfigurationDeprecationWarning` (`FutureWarning` subclass), and must not place it in `RunResult.warnings`. The warning must be visible under Python's default filters and attributed to the first caller frame outside the dirpluck package instead of using a fixed `stacklevel`. Configuration files loaded through the base chain are treated the same way. The CLI collects the same diagnostic for stderr presentation and therefore does not emit an additional `ConfigurationDeprecationWarning`. These warnings must not change CLI stdout or the exit status. In 1.0.0, deprecated nested-array references are removed from the Configuration syntax and are invalid. During the compatibility period, a nested array is recognized only when it contains exactly one non-empty string; `[]`, `["foo", "bar"]`, and `[123]` are errors.
-
-level: MUST
-
 ## SPEC_069
 
 The Shared-reference namespace is determined uniquely by the containing field:
@@ -58,11 +52,9 @@ level: MUST
 
 ## SPEC_071
 
-Shared references are resolved against the effective Shared namespace after base composition. An unknown Shared reference is a Configuration error. Shared references are expanded in Selection-array order into their referenced pattern sets. A path reference does not use the Shared namespace; it is interpreted from that Selection's source root.
+Shared references are resolved against the effective Shared namespace after Base composition. An unknown Shared reference is a Configuration error. A Shared reference has the same Selection meaning as the effective pattern set that it names. A path reference does not use the Shared namespace; it is interpreted from that Selection's source root.
 
 level: MUST
-
-related: [SPEC_034](composition.md#spec_034)
 
 ## SPEC_072
 
@@ -180,19 +172,19 @@ level: MUST
 
 ### SPEC_084
 
-A `path` must stay inside the Selection root. An empty path, bare `.` or `./`, `..` components, absolute paths, globs, and backslashes are rejected; `/` is the separator. `.` components are normalized, so for example `./src/./generated/` and `src/generated/` identify the same concrete path. If the matched entry is a directory, its subtree is pruned before traversal whether or not the spelling had a trailing `/`. A spelling without a trailing `/` may also match a regular file at the same path, while a spelling with a trailing `/` does not match a regular file.
+If an `ignore` path pattern denotes a directory, that directory and its entire subtree are excluded from Selection.
 
 level: MUST
 
 ### SPEC_085
 
-Name patterns, expanded Shared ignores, structured `path` entries, and structured `match` entries are applied as a union of exclusion conditions. Several different conditions may match the same entry without error, and evaluation order is not observable semantics. Implementations may prune a subtree as soon as a directory exclusion matches.
+All `ignore` entries collectively define exclusions from the Selection result. An `ignore` entry that matches nothing is not an error.
 
 level: MUST
 
 ### SPEC_086
 
-`ignore` takes precedence over link-like and special-entry diagnostics. Ignored entries are not Selection candidates, do not cause link-only or special-entry-only errors, and are not included in the skipped-link count. Entries inside an ignored subtree are not enumerated or subjected to traversal-time validation. A name pattern without a trailing `/` applies to matching file and directory names and also to a special filesystem entry with the same name. If a structured `path` matches a link-like entry itself, that entry is likewise treated as ignored.
+Entries excluded by `ignore`, including entries within an ignored directory subtree, do not produce missing-pattern or type-mismatch diagnostics and do not contribute selected files.
 
 level: MUST
 
@@ -214,7 +206,7 @@ level: MUST
 
 ### SPEC_160
 
-The `match` value is compiled as a Python-compatible regular expression and must be no longer than 512 characters. An invalid regular expression is a Configuration error. Matching uses full-match semantics equivalent to `re.fullmatch()`.
+A regex Selection `{ match = "..." }` contains a non-empty Python-compatible regular expression of at most 512 characters. The expression is applied with full-match semantics to normalized relative source paths. Invalid regular expressions are Configuration errors.
 
 level: MUST
 
@@ -232,25 +224,19 @@ level: MUST
 
 ### SPEC_163
 
-If ordinary string patterns, Shared expansion, or structured matches ultimately select the same regular file more than once, the final Selection is deduplicated by root-relative path and includes that file only once as an Archive candidate. Satisfaction of each `must` entry is evaluated independently before this deduplication.
+If multiple Selection expressions match the same file, that file contributes one Archive candidate. Distinct `must` expressions are nevertheless satisfied independently: each required expression must have at least one match.
 
 level: MUST
 
 ### SPEC_164
 
-A structured `match` in `ignore` has the same precedence as other ignore conditions. Matching a regular file path excludes that file. Matching a regular directory path prunes that directory and its subtree before traversal. A descendant whose ancestor directory path matches a structured ignore is part of that excluded subtree.
+When an ignore rule denotes a directory, the directory and its entire subtree are excluded from matching and Selection results.
 
 level: MUST
 
 ### SPEC_165
 
-Structured `match` does not change the existing filesystem-safety boundary. Ignored entries are excluded before type diagnostics. Non-ignored symbolic links, Windows junctions, FIFOs, sockets, devices, and other unsupported entries are not selectable; if a `must` structured match matches only such entries, the existing link-only or special-entry-only diagnostic semantics apply.
-
-level: MUST
-
-### SPEC_166
-
-An implementation may scan entries below the Selection root and test their candidate paths against a structured `match`; it is not required to infer a guided traversal plan equivalent to ordinary string patterns from the regular expression. A structured match may therefore traverse a broader portion of the filesystem tree than an ordinary string pattern.
+Ignored entries do not contribute Selection matches, selected files, missing-pattern diagnostics, type-mismatch diagnostics, or skipped-link diagnostics.
 
 level: MUST
 

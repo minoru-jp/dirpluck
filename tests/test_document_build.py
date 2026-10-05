@@ -35,6 +35,7 @@ SPECIFICATION_DOCUMENTS = {
     "output.md",
     "preview.md",
     "cli-contract.md",
+    "compatibility.md",
 }
 CONFIGURATION_DOCUMENTS = {
     "INDEX.md",
@@ -52,6 +53,12 @@ CLI_DOCUMENTS = {
     "targets.md",
     "output.md",
 }
+RECIPE_DOCUMENTS = {
+    "INDEX.md",
+    "llm-development-environment.md",
+    "workspace-project-selection.md",
+    "team-shared-configuration.md",
+}
 PYTHON_API_DOCUMENTS = {
     "INDEX.md",
     "overview.md",
@@ -66,9 +73,11 @@ EXPECTED_DOCUMENTS = {
     "CHANGELOG.md",
     "STATUS.md",
     "docs/GETTING_STARTED.md",
+    "docs/migration/0.16.md",
     *(f"docs/changelog/{name}" for name in CHANGELOG_DOCUMENTS),
     *(f"docs/cli/{name}" for name in CLI_DOCUMENTS),
     *(f"docs/configuration/{name}" for name in CONFIGURATION_DOCUMENTS),
+    *(f"docs/recipes/{name}" for name in RECIPE_DOCUMENTS),
     "docs/TRUST.md",
     "devdocs/README.md",
     *(f"docs/specification/{name}" for name in SPECIFICATION_DOCUMENTS),
@@ -168,8 +177,10 @@ class DocumentBuildTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         published_paths = (
             "docs/GETTING_STARTED.md",
+            "docs/migration/0.16.md",
             "GLOSSARY.md",
             "docs/configuration/INDEX.md",
+            "docs/recipes/INDEX.md",
             "docs/cli/INDEX.md",
             "docs/python_api/INDEX.md",
             "docs/specification/INDEX.md",
@@ -248,6 +259,11 @@ class DocumentBuildTests(unittest.TestCase):
             for path in (CANONICAL_SOURCES / "python_api").glob("*.py")
             if path.name != "__init__.py"
         }
+        recipe_sources = {
+            path.stem
+            for path in (CANONICAL_SOURCES / "recipes").glob("*.py")
+            if path.name != "__init__.py"
+        }
         configuration_sources = {
             path.stem
             for path in (CANONICAL_SOURCES / "configuration").glob("*.py")
@@ -259,6 +275,14 @@ class DocumentBuildTests(unittest.TestCase):
         self.assertNotIn("canonical", spec_sources)
         self.assertNotIn("canonical", api_sources)
         self.assertNotIn("canonical", configuration_sources)
+        self.assertEqual(
+            recipe_sources,
+            {
+                "llm_development_environment",
+                "workspace_project_selection",
+                "team_shared_configuration",
+            },
+        )
         self.assertGreaterEqual(len(cli_sources), 4)
         self.assertGreaterEqual(len(spec_sources), 10)
         self.assertGreaterEqual(len(api_sources), 5)
@@ -268,6 +292,7 @@ class DocumentBuildTests(unittest.TestCase):
             *(CANONICAL_SOURCES / "changelog" / "archive").glob("*.py"),
             *(CANONICAL_SOURCES / "cli").glob("*.py"),
             *(CANONICAL_SOURCES / "configuration").glob("*.py"),
+            *(CANONICAL_SOURCES / "recipes").glob("*.py"),
             *(CANONICAL_SOURCES / "specification").glob("*.py"),
             *(CANONICAL_SOURCES / "python_api").glob("*.py"),
         ]:
@@ -289,7 +314,7 @@ class DocumentBuildTests(unittest.TestCase):
                 self.assertNotRegex(text, r"(?m)^\s*\w+\s*=\s*code_field\(")
                 if "@canonical_source(" in text:
                     self.assertRegex(
-                        text, r"@canonical_source\([^\n]*heading=[\"'](?:title|identity)[\"']"
+                        text, r"(?s)@canonical_source\([^)]*heading=[\"'](?:title|identity)[\"']"
                     )
 
         for source in (CANONICAL_SOURCES / "specification").glob("*.py"):
@@ -316,6 +341,7 @@ class DocumentBuildTests(unittest.TestCase):
         self.assertTrue((ROOT / "docs" / "changelog" / "INDEX.md").is_file())
         self.assertTrue((ROOT / "docs" / "cli" / "INDEX.md").is_file())
         self.assertTrue((ROOT / "docs" / "configuration" / "INDEX.md").is_file())
+        self.assertTrue((ROOT / "docs" / "recipes" / "INDEX.md").is_file())
         self.assertTrue((ROOT / "docs" / "specification" / "INDEX.md").is_file())
         self.assertTrue((ROOT / "docs" / "python_api" / "INDEX.md").is_file())
 

@@ -6,7 +6,7 @@ A TOML Configuration records what to include, what to exclude, and which fixed m
 
 ## Installation
 
-The current version is **0.14.1**.
+The current version is **0.16.0**.
 
 Python 3.11 or later is required.
 
@@ -16,6 +16,8 @@ dirpluck --version
 ```
 
 `dirpluck` has no third-party runtime dependencies.
+
+If you are upgrading from 0.14.x, see [Migrating to 0.16](https://github.com/minoru-jp/dirpluck/blob/main/docs/migration/0.16.md) for the breaking Always Archive-layout change.
 
 ## Example: prepare development context for an LLM
 
@@ -47,21 +49,17 @@ Create `default.dirpluck` at the workspace root:
 [about]
 description = "Repositories and runtime dependencies for LLM-assisted development."
 
-[namespace.dependencies]
-[namespace.tools]
 [namespace.repositories]
 
-[always.framework]
+[always.dependencies]
 description = "The foundational framework used by the target repositories."
-path = "framework-core"
-namespace = "dependencies"
-must = ["dist/*.whl"]
+path = "framework-core/dist"
+must = ["*.whl"]
 
-[always.docs-builder]
+[always.tools]
 description = "A tool used to build development documentation."
-path = "docs-builder"
-namespace = "tools"
-must = ["dist/*.whl"]
+path = "docs-builder/dist"
+must = ["*.whl"]
 
 [scope.projects]
 description = "Repositories that can be selected as development targets."
@@ -89,7 +87,7 @@ ignore = [
     { path = ".tmp/" },
 ]
 
-[pluck.case.diff]
+[case.pluck.diff]
 description = "Development target repository; .tmp/ contains the diff to review."
 may = ["*", "*/"]
 ignore = [
@@ -122,7 +120,7 @@ The normal Selection excludes `.tmp/`. When `service-api/.tmp/proposed-changes.p
 dirpluck projects/service-api/ --case diff --preview
 ```
 
-`--case diff` uses the Selection from `[pluck.case.diff]`, so `.tmp/` is included only for this run. The Case `description` is also carried into the generated Archive README. After inspection, remove `--preview` from the same command to build the Archive.
+`--case diff` uses the Selection from `[case.pluck.diff]`, so `.tmp/` is included only for this run. The Case `description` is also carried into the generated Archive README. After inspection, remove `--preview` from the same command to build the Archive.
 
 ### Build
 
@@ -138,18 +136,14 @@ Conceptually, the resulting Archive looks like this:
 develop-target.zip
 ├── README.md
 ├── dependencies/
-│   └── framework-core/
-│       └── dist/
-│           └── framework_core-2.4.0-py3-none-any.whl
+│   └── framework_core-2.4.0-py3-none-any.whl
 ├── repositories/
 │   ├── service-api/
 │   │   └── ...
 │   └── web-console/
 │       └── ...
 └── tools/
-    └── docs-builder/
-        └── dist/
-            └── docs_builder-1.6.0-py3-none-any.whl
+    └── docs_builder-1.6.0-py3-none-any.whl
 ```
 
 For another task, change only the Target:
@@ -191,6 +185,7 @@ You can change the Target, select multiple Targets together, and attach fixed ma
 This README introduces the basic workflow through one concrete example.
 
 - [Getting Started](https://github.com/minoru-jp/dirpluck/blob/main/docs/GETTING_STARTED.md): a short walkthrough from a minimal Configuration to preview and build.
+- [Recipes](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/INDEX.md): use-case guides that start from a real workspace and goal, then show the matching TOML and CLI patterns.
 - [Glossary](https://github.com/minoru-jp/dirpluck/blob/main/GLOSSARY.md): meanings of the concepts used throughout the documentation.
 - [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Configuration authoring, including Scope, Always, Shared, Case, and Base Configuration.
 - [CLI Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/cli/INDEX.md): Target references, CLI options, and Invocation Templates.

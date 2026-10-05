@@ -2,15 +2,15 @@
 
 ## SPEC_037
 
-If the Effective Configuration contains a Pluck, one or more positional CLI `TARGET` references are required, preserving the existing contract. An Effective Configuration without a Pluck may still accept positional file Target references from Scopes with `target_kind = "file"` or `"both"`. If it has neither Pluck nor Always sources and contains only file-capable Scopes, one or more positional Target references are required for the run.
+Positional CLI `TARGET` references are optional and may appear zero or more times. A targetless run does not use Pluck for source selection. If Always sources exist, it resolves only those Always sources; if no Always source exists, the resolved source set is empty and build succeeds with an Archive containing only the generated `README.md`. When Target references are supplied, normal Scope and Target resolution applies, and directory Targets still require Pluck. An Effective Configuration without a Pluck may continue to accept positional file Target references from Scopes with `target_kind = "file"` or `"both"`.
 
 level: MUST
 
-condition: depending on whether the Effective Configuration contains Pluck
+condition: when zero or more positional Target references are supplied
 
 ## SPEC_038
 
-Each positional reference resolves one or more Targets from the effective Scopes. The same effective Pluck selection is applied independently to each directory Target. A file Target does not use Pluck and instead includes the regular file itself as an atomic source. Resolving a directory Target without an effective Pluck is an error. Targets are not inferred automatically from the location of a Configuration file or from the origin of a Pluck definition.
+Each positional reference resolves one or more Targets from the effective Scopes. The same effective Pluck selection is applied independently to each directory Target. A file Target does not use Pluck and instead includes the regular file itself as an atomic source. Resolving a directory Target without an effective Pluck is an error. Targets are not inferred automatically from Configuration-file placement or from the Configuration in which a Pluck definition was written.
 
 level: MUST
 
@@ -24,7 +24,7 @@ The default Scope always exists and uses the directory containing the Root Confi
 
 level: MUST
 
-related: [SPEC_030](composition.md#spec_030), [SPEC_032](composition.md#spec_032)
+related: [SPEC_030](composition.md#spec_030)
 
 ### SPEC_040
 
@@ -36,7 +36,7 @@ related: [SPEC_018](paths.md#spec_018), [SPEC_024](paths.md#spec_024)
 
 ### SPEC_041
 
-Whether a named Scope root exists and is a directory is checked only when that Scope is actually used by `SCOPE/NAME`, `SCOPE/NAME/`, `SCOPE/`, `SCOPE:[...]`, or `SCOPE:<...>`. The current filesystem availability of an unused named Scope does not fail the run. Duplicate effective Scope-root validation remains Configuration-level validation and does not require an unused Scope root to exist.
+Whether a named Scope root exists and is a directory is checked only when that Scope is actually used by `SCOPE/NAME`, `SCOPE/NAME/`, `SCOPE/`, `SCOPE:[...]`, or `SCOPE:<...>`. The current filesystem availability of an unused named Scope does not fail the run. Different Scopes may refer to the same filesystem directory as their root; that fact alone is not an error.
 
 level: MUST
 
@@ -56,7 +56,7 @@ level: MUST
 
 ### SPEC_044
 
-`scope.ignore` case-sensitively matches direct-child Target-candidate names. A pattern without a trailing `/` applies to matching file and directory candidates; a pattern with a trailing `/` narrows the exclusion to directory candidates only. A matching entry cannot become a Target through single-Target selection, Scope expansion, or a Target selector. `target_kind` filters candidate types before this rule. This is independent of Selection `pluck.ignore` and `always.<name>.ignore`.
+`scope.ignore` case-sensitively matches direct-child Target-candidate names. A pattern without a trailing `/` applies to matching file and directory candidates; a pattern with a trailing `/` narrows the exclusion to directory candidates only. A matching entry cannot become a Target through single-Target selection, Scope expansion, or a Target selector. `scope.ignore` is an exclusion condition on direct-child candidates that are eligible under the current `target_kind`. This is independent of Selection `pluck.ignore` and `always.<name>.ignore`.
 
 level: MUST
 
@@ -138,13 +138,13 @@ level: MUST
 
 ### SPEC_155
 
-A regular-expression selector treats only its outermost `<` and `>` as selector syntax and compiles the contents as a Python-compatible regular expression. After Scope `ignore` and link-like-entry exclusion, the pattern is applied with full-match semantics to each eligible direct-child Target's normalized name. A regular-file candidate is matched as `NAME`; a regular-directory candidate is matched as `NAME/`. Ordinary regular-expression syntax such as `/?` can therefore select both types explicitly. The pattern must be non-empty and at most 512 characters. Invalid regular expressions and selectors that match zero eligible Targets are errors. `/` may appear as the directory type marker, but candidate discovery remains limited to direct children and never becomes recursive.
+A regular-expression selector treats only its outermost `<` and `>` as selector syntax and interprets the contents as a Python-compatible regular expression. After Scope `ignore` and link-like-entry exclusion, the expression is applied with full-match semantics to each eligible direct-child Target's normalized name. A regular-file candidate is matched as `NAME`; a regular-directory candidate is matched as `NAME/`. Ordinary regular-expression syntax such as `/?` can therefore select both types explicitly. The expression must be non-empty and at most 512 characters. Invalid regular expressions and selectors that match zero eligible Targets are errors. `/` may appear as the directory type marker, but candidate discovery remains limited to direct children and never becomes recursive.
 
 level: MUST
 
 ### SPEC_156
 
-A Target selector does not replace Scope candidate discovery. The Scope first determines eligible direct-child Targets using its `target_kind` type filter, Scope `ignore`, regular-entry requirements, and link-like-entry exclusion. The selector is then applied to that eligible set. Selection is not recursive. In `both` mode, each resolved Target retains its actual directory/file kind.
+A Target selector operates on the eligible direct-child Target candidates of its Scope. Eligibility is determined by `target_kind`, Scope `ignore`, the requirement for regular entries, and link-like-entry exclusion. Selection is not recursive. In `both` mode, each resolved Target retains its actual directory/file kind. A resolved directory Target is then processed with Pluck, while a resolved file Target is treated as an atomic source.
 
 level: MUST
 
@@ -178,7 +178,7 @@ level: MAY
 
 ### SPEC_158
 
-If a Target selector overlaps a literal Target reference or another Target selector and resolves the same filesystem entry, that overlap is collapsed to one runtime Target. If only existing literal Target references duplicate the same filesystem entry and no selector is involved, the existing distinct-entry validation error is preserved.
+If the same Target is selected more than once by one Target selector, it is treated as one Target. It does not participate more than once in later Archive planning merely because multiple selector matches reached it.
 
 level: MUST
 
@@ -188,42 +188,32 @@ title: Always source and Case
 
 ### SPEC_055
 
-`[always.<name>].path` is a concrete directory path; empty strings and globs are rejected. A relative path is resolved from the definition's Configuration-file directory according to the Filesystem path notation rules. `.` and `..` may be used, and an absolute path refers directly to a directory on the host filesystem. The explicitly configured Always source-root location may contain symbolic links or Windows directory junctions and is resolved to an existing directory under the host OS's normal filesystem semantics. That resolved directory itself becomes the Selection boundary. The filesystem root itself is rejected as an Always source. An alias may be used for the root location, but link-like entries encountered later during Selection traversal below that root remain non-selectable and non-traversable under the link-like-entry rule in Filesystem boundary and entry types.
+After it has been parsed as a TOML key, `<name>` in `[always.<name>]` is one Archive directory component and is the Always source's logical Archive identity. Empty names, `.`, `..`, path separators `/` and `\`, ASCII control characters U+0000 through U+001F, and U+007F are rejected as Archive identities. These restrictions preserve the Archive component boundary and entry name itself; dirpluck does not independently enforce host-OS-specific reserved names or other filename rules. `path` is a concrete directory path; empty strings and globs are rejected. A relative path is resolved from the definition's Configuration-file directory according to the Filesystem path notation rules, and `.` and `..` may be used. An absolute path directly references a directory on the host filesystem, including the filesystem root when explicitly selected. The configured Always location may contain symbolic links or Windows directory junctions and is resolved to an existing directory under the host OS's normal filesystem semantics. That resolved source directory itself becomes the Selection boundary, and its directory name does not participate in Archive identity. An alias may be used for the root location, but link-like entries encountered later during Selection traversal below that root remain non-selectable and non-traversable under the link-like-entry rule in Filesystem boundary and entry types.
 
 level: MUST
 
-related: [SPEC_018](paths.md#spec_018), [SPEC_024](paths.md#spec_024), [SPEC_032](composition.md#spec_032)
-
-### SPEC_056
-
-An Always source may have an optional `namespace` string that references an effective `[namespace.<name>]`. It does not change the source filesystem path or Selection boundary. An unknown Namespace reference is a Configuration error.
-
-level: MUST
+related: [SPEC_018](paths.md#spec_018), [SPEC_024](paths.md#spec_024)
 
 ### SPEC_057
 
-Zero or one Case is active for the entire Effective Configuration and is selected by CLI `--case`. There is no field for choosing a different Case per layer.
+The runtime Case selector has two independent axes: Pluck Case and Always Case. `PLUCK` selects only a Pluck Case, `.ALWAYS` selects only an Always Case, and `PLUCK.ALWAYS` selects both. Case names themselves cannot contain `.`. An empty selector, `.`, a trailing dot, or more than one dot is invalid. CLI `--case`, the official Python API `case=`, and the Invocation `case` field use the same grammar.
 
 level: MUST
 
 ### SPEC_058
 
-Without a selected Case, Pluck uses `[pluck]` when present, and each Always source uses its base `[always.<name>]` selection.
+Without a selected Pluck Case, a run with directory Targets uses the default `[pluck]` Selection. With a selected Pluck Case, it uses the complete effective `[case.pluck.<name>]` Selection and fails if that Case name does not exist. Pluck Case validity is independent of Target count and of whether Always sources exist, so a defined Pluck Case remains valid even when the run has zero Targets.
 
 level: MUST
-
-condition: when no Case is specified
 
 ### SPEC_059
 
-When a Case is selected and Pluck exists, a same-named `[pluck.case.<name>]` is required. Each Always source uses `[always.<name>.case.<name>]` when present and otherwise falls back to its base selection. If no Pluck exists, at least one Always source must define the selected Case name.
+An Always Case is a membership filter over the effective Always-source definitions after Base composition. Each listed name refers to the TOML identifier from `[always.<name>]`, not to an alias derived from a final Archive root. Every listed name must exist; an unknown name is a Configuration error.
 
 level: MUST
 
-condition: when a Case is specified
-
 ### SPEC_060
 
-A Case selection is a complete Selection, not a delta from its base Selection. It does not inherit `must`, `may`, `ignore`, Shared references, or `allow_empty`.
+`[case.pluck.<name>]` is a complete Selection rather than a delta from `[pluck]`; it does not inherit `must`, `may`, `ignore`, Shared references, or `allow_empty`. `[case.always.<name>]` is not a Selection at all, only an Always-source membership filter, so each selected Always source continues to use its own base Selection. A defined Case on either axis may validly produce zero participating sources, including a README-only Archive.
 
 level: MUST

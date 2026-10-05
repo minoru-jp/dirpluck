@@ -41,5 +41,5 @@
 | [Configuration sources](sources.md) | Pluck、Scope、Namespace、Always source の定義と配置。 |
 | [Configuration selection](selection.md) | Selection、Shared patterns、Case の記述方法。 |
 | [Configuration composition](composition.md) | Base Configuration による再利用と composition。 |
-| [Configuration output](output.md) | Fixed / timestamp Output と書き込み境界。 |
+| [Configuration output](output.md) | Fixed / timestamp Output の指定方法。 |
 | [Configuration examples](examples.md) | Configuration 全体を組み合わせた complete example。 |

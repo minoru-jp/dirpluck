@@ -7,11 +7,14 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import glob
 import os
 
-from ._archive import plan_archive, render_archive_tree
+from ._archive import render_archive_tree
+from ._case import CaseSelection, parse_case_selection
 from ._archive_mtime import resolve_archive_mtime, validate_archive_mtime_spec
-from ._builder_models import ArchivePlan, BuildRequest, RuntimeOutput
-from .builder import _build_archive_with_plan
-from .config import load_config, resolve_config_path
+from ._archive_models import ArchivePlan
+from ._request_models import BuildRequest, RuntimeOutput
+from .builder import build_archive_with_plan, plan_archive
+from ._config_parser import load_config
+from ._input_paths import resolve_config_path
 from .errors import UsageError
 from .invocation import load_invocation, resolve_invocation_path
 
@@ -83,6 +86,7 @@ def _validate_run_arguments(
     targets: tuple[str | Path, ...],
     *,
     config: str | None,
+    case: str | None,
     sequence: int | None,
     invocation: str | None,
     entry: str | None,
@@ -90,7 +94,13 @@ def _validate_run_arguments(
     archive_mtime: str | None,
     output: str | None,
     force: bool,
-) -> None:
+) -> CaseSelection | None:
+    normalized_case: CaseSelection | None = None
+    if case is not None:
+        try:
+            normalized_case = parse_case_selection(case)
+        except ValueError as exc:
+            raise UsageError(str(exc)) from exc
     if preview and sequence is not None:
         raise UsageError("sequence cannot be combined with preview")
     if preview and output is not None:
@@ -116,6 +126,7 @@ def _validate_run_arguments(
         raise UsageError("output path must be a non-empty string")
     if not isinstance(force, bool):
         raise UsageError("force must be a boolean")  # pyright: ignore[reportUnreachable]
+    return normalized_case
 
 
 def _archive_entry_names(plan: ArchivePlan) -> tuple[str, ...]:
@@ -147,9 +158,10 @@ def run(
     without writing the ZIP.
     """
 
-    _validate_run_arguments(
+    explicit_case = _validate_run_arguments(
         targets,
         config=config,
+        case=case,
         sequence=sequence,
         invocation=invocation,
         entry=entry,
@@ -164,8 +176,8 @@ def run(
     invocation_empty = False
     if invocation is None:
         config_path = resolve_config_path(config, cwd=runtime_cwd)
-        directories = targets
-        selected_case = case
+        selected_targets = targets
+        selected_case = explicit_case or CaseSelection()
         selected_archive_mtime = archive_mtime
     else:
         invocation_path = resolve_invocation_path(invocation, cwd=runtime_cwd)
@@ -176,15 +188,17 @@ def run(
         config_path = (
             template_config if template_config is not None else resolve_config_path(cwd=runtime_cwd)
         )
-        directories = selected.targets
-        selected_case = case if case is not None else selected.case
+        selected_targets = selected.targets
+        selected_case = (
+            explicit_case if explicit_case is not None else selected.case or CaseSelection()
+        )
         selected_archive_mtime = (
             archive_mtime if archive_mtime is not None else selected.archive_mtime
         )
 
     loaded = load_config(config_path)
     request = BuildRequest.create(
-        *directories,
+        *selected_targets,
         case=selected_case,
         sequence=sequence,
         paths=paths,
@@ -197,7 +211,7 @@ def run(
         plan = plan_archive(loaded, request, allow_missing=True)
         output_path = None
     else:
-        output_path, plan = _build_archive_with_plan(loaded, request)
+        output_path, plan = build_archive_with_plan(loaded, request)
 
     result = RunResult(
         output_path=output_path,

@@ -79,6 +79,7 @@ explicit-preview-rules = true
 
 [tool.basedpyright]
 pythonVersion = "3.11"
+exclude = ["tests_deferred"]
 extraPaths = ["src"]
 executionEnvironments = [
     { root = "devdocs", extraPaths = [".", "src"], reportUnannotatedClassAttribute = "none", reportAny = "none" },

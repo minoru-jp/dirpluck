@@ -10,8 +10,10 @@ example_007 = test_target_field("example 007")
 example_008 = test_target_field("example 008")
 
 
-@summary('Pluck、Scope、Namespace、Always source の定義と配置。')
-@canonical_source('Configuration sources', filename='sources.md', order=10, merge_policy="local", heading="title")
+@summary("Pluck、Scope、Namespace、Always source の定義と配置。")
+@canonical_source(
+    "Configuration sources", filename="sources.md", order=10, merge_policy="local", heading="title"
+)
 class CONFIGURATION_PART:
     r"""
     この文書は、Target を選ぶ Pluck / Scope と、固定 source を追加する Always、および Archive 上の Namespace を説明します。
@@ -32,7 +34,8 @@ class CONFIGURATION_PART:
 
         同じ実行で複数 directory Target を選んだ場合も、各 directory Target へ同じ pluck selection を独立して適用します。File Target と directory Target は同じ実行で併用できます。Pluck がない Configuration でも `target_kind = "file"` または `"both"` の Scope から file Target は positional Target reference で選択できますが、directory Target は選択できません。
         """
-        title @= 'Pluck'
+
+        title @= "Pluck"
 
         example_003 @= """
         [pluck]
@@ -61,7 +64,7 @@ class CONFIGURATION_PART:
         {{example_005}}
         ```
 
-        `target_kind = "directory"` の Scope は直下の eligible directory だけ、`target_kind = "file"` は直下の eligible regular file だけ、`target_kind = "both"` はその両方を Target candidate とします。`target_kind` は Scope 直下の entry に対する type filter として働きます。Scope `ignore` は除外側の規則として広く扱い、末尾 `/` なしは matching file / directory Target candidate の両方、末尾 `/` ありは directory candidate だけを除外します。File selection の `pluck.ignore` とは役割が違います。`description` はその Scope から得た Target の Archive README context として使います。
+        `target_kind = "directory"` の Scope は直下の eligible directory だけ、`target_kind = "file"` は直下の eligible regular file だけ、`target_kind = "both"` はその両方を Target candidate とします。`target_kind` は Scope 直下の entry に対する type filter として働きます。Scope `ignore` は除外側の規則として広く扱い、末尾 `/` なしは matching file / directory Target candidate の両方、末尾 `/` ありは directory candidate だけを除外します。File selection の `pluck.ignore` とは役割が違います。`description` はその Scope から得た Target group の Archive README context として1回表示されます。Generated README の Scope 名は選択範囲を識別するための名前であり、Target 間の優先度・重要度・階層関係を表しません。追加の意味を持たせる場合は `description` に明記します。
 
         CLI Target reference は、single Target と全展開に加え、すべての `target_kind` で使える Target selector を持ちます。
 
@@ -89,7 +92,8 @@ class CONFIGURATION_PART:
 
         名前付き Scope の path が現在の filesystem で利用可能かどうかは、その Scope を Target reference で実際に使うときに確認します。未マウントなどで存在しない named Scope が定義されていても、別の Scope だけを使う実行は妨げません。Named Scope の root location 自体は symbolic link / Windows directory junction を含められますが、解決した Scope root 直下で自動発見した link-like entry は Target として選択・展開しません。厳密な duplicate root、Namespace reference、Target resolution の規則は `../specification/INDEX.md` を参照してください。
         """
-        title @= 'Scope'
+
+        title @= "Scope"
 
         example_004 @= """
         [scope]
@@ -112,27 +116,26 @@ class CONFIGURATION_PART:
 
     class SECTION_031:
         r"""
-        {{TERM_18}}は、source root が Archive 上で同じ path に解決される場合などに、source を明示的に区別して配置するための Archive 専用 prefix です。Namespace 自体は名前付きの空 table として定義します。
+        {{TERM_18}}は source の logical Archive identity を補助する名前付き concept です。Namespace 自体は名前付きの空 table として定義します。
 
         ```toml
         {{example_006}}
         ```
 
-        Namespace 名そのものが Archive 上の1 directory 名になります。現時点で `[namespace.<name>]` は属性を持ちません。不要な設定値を持たせず、将来 Namespace 固有の policy が必要になった場合に同じ table を拡張できる構造とします。
+        Namespace 名は1個の Archive directory component です。現時点で `[namespace.<name>]` は属性を持ちません。`/` と `\`、ASCII control character は Archive component の構造を壊すため拒否しますが、dirpluck は OS 固有の予約名や filename 規則を独自判定しません。別の OS / filesystem へ展開する Archive を作る場合は、利用者が展開先に適した名前を選んでください。Namespace 名の一意性は大文字小文字を区別せず判定します。
 
-        Scope と Always source は Namespace 名を参照できます。
+        Scope の `namespace = "<name>"` は Target の final Archive root の prefix として使用します。Namespace は 1.0 では Scope 専用の Archive grouping concept です。
 
         ```toml
         {{example_007}}
         ```
 
-        たとえば `work/project` の source root が `project/` なら `work/project/`、Always source の通常の source root が `docs/` なら `external/docs/` として Archive に配置します。Namespace を指定しない source は従来どおり source root 自体を Archive root とします。
+        0.16.x 以降の 0.x series では `[always.<name>].namespace` も pre-1.0 compatibility として受理しますが、1.0.0 で削除します。Always source の Archive directory name は `[always.<name>]` の `<name>` に直接記述してください。互換期間の挙動と warning は `../specification/compatibility.md` と `../migration/0.16.md` を参照してください。
 
-        異なる resolved source の最終 Archive root が同じになる場合、dirpluck は source を黙って merge せず error にします。Namespace はこの衝突を明示的に避けるために使えますが、自動的に一意性を保証するものではありません。同じ Namespace を共有して最終 Archive root が再び同じになれば error です。
-
-        生成される{{TERM_10}}では、各 source の final Archive root 自体を見出しとして表示します。Namespace を使う場合も、その最終配置 path が見出しへ直接反映され、Namespace と Source root を分離した補助 metadata や Namespace の定型説明文は追加しません。
+        生成される{{TERM_10}}では、各 source の final Archive root 自体を見出しとして表示し、Namespace と source root を分離した補助 metadata は追加しません。
         """
-        title @= 'Namespace'
+
+        title @= "Namespace"
 
         example_006 @= """
         [namespace.work]
@@ -142,17 +145,10 @@ class CONFIGURATION_PART:
 
         example_007 @= """
         [namespace.work]
-        [namespace.external]
 
         [scope.work]
         path = "/srv/work"
         namespace = "work"
-
-        [always.docs]
-        path = "../docs"
-        namespace = "external"
-        description = "External documentation."
-        must = ["*.md"]
         """
 
         merge @= TERMS.TERM_10
@@ -160,23 +156,26 @@ class CONFIGURATION_PART:
 
     class SECTION_004:
         r"""
-        `[always.<name>]` は Configuration 側で source directory を固定し、実行のたびに参加させる{{TERM_5}}です。`path` は relative path と absolute path のどちらでも指定できます。
+        `[always.<name>]` は Configuration 側で source directory を固定し、実行のたびに参加させる{{TERM_5}}です。0.16.0 以降、`<name>` は Always source の Archive directory identity そのものです。`path` は filesystem 上の取得元 directory / Selection root だけを指定し、path の basename や Configuration directory からの relative path は Archive root に使いません。
 
         ```toml
         {{example_008}}
         ```
 
-        Relative `path` は、その definition が記述されている Configuration file の directory を基準に解決します。`..` を使って外側の directory を参照することもできます。Absolute `path` は host filesystem 上の場所を直接参照します。明示した Always root location は symbolic link / Windows directory junction を含めることができ、alias の参照先 directory を source root として利用します。Archive 上の source root 名は実体側へ置き換えず、Configuration に書いた location 側の name / relative path を使います。
+        たとえば `[always.guidelines] path = "review-guidelines"` は selected file を `guidelines/` の下へ配置します。`review-guidelines` という source directory name は Archive path に現れません。`[always.company_reference] path = "/srv/company/reference"` も `company_reference/` の下へ配置します。
 
-        解決された source directory 自体が selection boundary です。Root 自体に alias を使えることと、Source 内の自動 traversal で link-like entry をたどることは別です。Source 内で symbolic link または Windows directory junction として認識した entry は選択せず、リンク先もたどりません。
+        Relative `path` は、その definition が記述されている Configuration file の directory を基準に解決します。`..` を使って外側の directory を参照でき、absolute `path` は host filesystem 上の directory を直接参照します。`path` は必ず実在 directory に解決し、その directory 自体を Selection boundary とします。Filesystem root も明示的な Always source directory として使用できます。明示 location は symbolic link / Windows directory junction を含められますが、その root 内の自動 traversal で link-like entry は選択・走査しません。
 
-        Always source には任意で `namespace = "<name>"` を指定し、定義済みの{{TERM_18}}を Archive root の外側へ追加できます。Filesystem 上の source path や selection boundary は変わりません。
+        Always source の Archive directory identity は `[always.<name>]` の `<name>` だけで決まります。1.0 では Always source に `namespace` field を持たせません。0.16.x 以降の 0.x series で受理する `namespace` は pre-1.0 compatibility であり、1.0.0 で削除します。
 
-        Always source の Selection は Target の Pluck とは独立して評価します。同じ physical file が Target 配下にも存在していても、Target 側の `ignore` や Selection result は Always source の Selection を変更しません。両方が同じ physical file を選択し、異なる Archive path に配置する場合は両方を収録します。生成される{{TERM_10}}では、Always source が実際に選択した file と Target が実際に選択した file に physical overlap がある場合、その Always source section に Target 側の Archive root と重複 file 数を表示します。
+        Always source の Selection は Target の Pluck とは独立して評価します。同じ physical file が Target 配下にも存在していても、Target 側の `ignore` や Selection result は Always source の Selection を変更しません。両方が同じ physical file を選択し、異なる Archive path に配置する場合は両方を収録します。Target と Always の final archive root が完全に同じ spelling なら、同じ destination region への意図的な composition として共有できます。`App` と `app` のように大文字小文字だけが異なる root は曖昧なので error です。共有 region 内で異なる physical file が同じ final Archive entry path に解決された場合は、通常の Archive entry collision として error にします。
 
-        複数の Always source は名前を変えて定義します。Pluck を持たず Always source だけで完結する Configuration も有効です。
+        TOML syntax と Configuration schema の検証を先に行い、Always source 名は大文字小文字を区別しない比較で一意にします。Runtime Target 同士の final archive root も同じ kind 内では一意です。Target と Always の間だけは上記の exact-spelling composition を許可し、case-only ambiguity は拒否します。Pluck を持たず Always source だけで完結する Configuration も有効です。
         """
-        title @= 'Always'
+
+        title @= "Always"
+
+        merge @= TERMS.TERM_5
 
         example_008 @= """
         [always.guidelines]
@@ -189,7 +188,3 @@ class CONFIGURATION_PART:
         description = "Reference material maintained outside this project."
         must = ["*.md"]
         """
-
-        merge @= TERMS.TERM_5
-        merge @= TERMS.TERM_10
-        merge @= TERMS.TERM_18

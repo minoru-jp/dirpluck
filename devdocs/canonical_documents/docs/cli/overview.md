@@ -37,12 +37,12 @@ Target / Case は `targets.md`、Invocation Template は `invocation-templates.m
 ## 基本形
 
 ```text
-dirpluck [TARGET ...] [--config PATH] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
-dirpluck -i PATH [-e NAME] [--case NAME] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck [TARGET ...] [--config PATH] [--case CASE] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
+dirpluck -i PATH [-e NAME] [--case CASE] [--here[=FILENAME] | --output PATH] [--force] [--sequence N] [--archive-mtime VALUE] [--preview] [--paths]
 dirpluck --version
 ```
 
-選択した実効設定に Pluck がある場合は、従来どおり1個以上の `TARGET` reference を指定します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。Always-only Configuration は positional argument なしでも実行できます。
+選択した実効設定に Always source が1個以上あれば、Pluck も定義されている Configuration でも `TARGET` reference を省略し、Always source だけを Archive にできます。Target を指定した場合は従来どおり Pluck を directory Target に適用します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。
 
 ```console
 dirpluck ./example/
@@ -79,4 +79,4 @@ dirpluck --version
 
 正常終了は status 0 です。CLI argument error や dirpluck の validation / build error は status 2 で終了し、`dirpluck: error:` に続けて理由を表示します。
 
-Archive を生成する通常実行では、成功すると output path を標準出力へ表示します。Selection traversal で symbolic link / Windows directory junction として認識した entry を除外していた場合は、その直後に除外件数を note として表示します。この runtime note は Archive 内の README には書き込みません。
+Archive を生成する通常実行では、成功すると output path を標準出力へ表示します。Selection traversal で symbolic link / Windows directory junction として認識した entry を除外していた場合は、除外件数も informational note として表示します。この runtime note は Archive 内の README には書き込みません。

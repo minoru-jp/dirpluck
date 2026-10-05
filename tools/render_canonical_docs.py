@@ -35,7 +35,23 @@ DOCUMENT_ARTIFACTS: tuple[tuple[str, str, Path], ...] = (
     ("document", "devdocs.canonical_sources.status.canonical", Path(".")),
     ("glossary", "devdocs.canonical_sources.vocabulary.canonical", Path("GLOSSARY.md")),
     ("document", "devdocs.canonical_sources.getting_started.canonical", Path("docs")),
+    (
+        "document",
+        "devdocs.canonical_sources.recipes.llm_development_environment",
+        Path("docs/recipes"),
+    ),
+    (
+        "document",
+        "devdocs.canonical_sources.recipes.workspace_project_selection",
+        Path("docs/recipes"),
+    ),
+    (
+        "document",
+        "devdocs.canonical_sources.recipes.team_shared_configuration",
+        Path("docs/recipes"),
+    ),
     ("document", "devdocs.canonical_sources.trust.canonical", Path("docs")),
+    ("document", "devdocs.canonical_sources.migration.v0_16", Path("docs/migration")),
     ("document", "devdocs.canonical_sources.devdocs_readme.canonical", Path("devdocs")),
     ("document", "devdocs.canonical_sources.cli.overview", Path("docs/cli")),
     ("document", "devdocs.canonical_sources.cli.invocation_templates", Path("docs/cli")),
@@ -81,6 +97,11 @@ DOCUMENT_ARTIFACTS: tuple[tuple[str, str, Path], ...] = (
         "devdocs.canonical_sources.specification.cli_contract",
         Path("docs/specification"),
     ),
+    (
+        "document",
+        "devdocs.canonical_sources.specification.compatibility",
+        Path("docs/specification"),
+    ),
 )
 
 # canonical source package, output directory, index title
@@ -90,6 +111,7 @@ INDEX_ARTIFACTS: tuple[tuple[str, Path, str], ...] = (
         Path("docs/changelog"),
         "dirpluck Changelog Archive",
     ),
+    ("devdocs.canonical_sources.recipes", Path("docs/recipes"), "dirpluck Recipes"),
     ("devdocs.canonical_sources.cli", Path("docs/cli"), "dirpluck CLI Guide"),
     (
         "devdocs.canonical_sources.configuration",

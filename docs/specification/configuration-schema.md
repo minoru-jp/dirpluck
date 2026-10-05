@@ -10,12 +10,12 @@ The accepted top-level structure is:
 [shared.may]
 [shared.ignore]
 [pluck]
-[pluck.case.<name>]
+[case.pluck.<name>]
+[case.always.<name>]
 [scope]
 [scope.<name>]
 [namespace.<name>]
 [always.<name>]
-[always.<name>.case.<name>]
 [output]
 [output.timestamp]
 ```
@@ -38,13 +38,13 @@ condition: when `[about]` is defined
 
 ## SPEC_014
 
-Each Configuration layer may contain zero or one Pluck and zero or more named Scopes, Always sources, Shared patterns, and Namespaces. `[scope]` is an optional `description` / `target_kind` / `ignore` / `namespace` configuration for the always-present default Scope of the Root Configuration; it is not a declaration that creates a Scope. A named Scope has required `path` plus the same optional fields. `target_kind` is `"directory"`, `"file"`, or `"both"` and defaults to `"directory"`. Pluck and Always sources may contain zero or more Cases.
+Each Configuration in a Base chain may contain zero or one Pluck and zero or more named Scopes, Always sources, Shared patterns, and Namespaces. `[scope]` configures the optional `description` / `target_kind` / `ignore` / `namespace` fields of the always-present default Scope in the Root Configuration; it is not a declaration that creates a Scope. A named Scope has a required `path` and the same optional fields. `target_kind` is `"directory"`, `"file"`, or `"both"` and defaults to `"directory"`. A canonical `[always.<name>]` has required `path` plus Selection fields only; `namespace` is not part of the 1.0 schema. Case definitions live under the top-level `[case]` namespace. `[case.pluck.<name>]` is a complete Pluck Selection, while `[case.always.<name>]` filters membership in the effective Always-source set. Therefore `case` is not reserved as an Always-source name and `[always.case]` remains a normal Always source definition.
 
 level: MUST
 
 ## SPEC_015
 
-Each Configuration may declare zero or one Output. When Output is declared, fixed Output and timestamp Output are mutually exclusive. Output is not required for schema validity, archive planning, or `--preview`. A build that actually writes an Archive requires either the Root Configuration's own Output declaration or Runtime Output. Output from a Base layer is not inherited by the root.
+Each Configuration may declare zero or one Output. When Output is declared, fixed Output and timestamp Output are mutually exclusive. Standalone schema validity and Archive planning / `--preview` do not require Output. A build that writes an Archive file requires either an Output declaration on the Root Configuration itself or a runtime Output. Output declared by a Base Configuration is not inherited by the Root Configuration.
 
 level: MUST
 
@@ -52,8 +52,9 @@ condition: when Output is declared; when a build writes an Archive file
 
 ## SPEC_016
 
-A single Configuration layer may have no local source definition. After base composition, the Effective Configuration must contain at least one of Pluck, an Always source, or a Scope that permits file Targets with `target_kind = "file"` or `"both"`. The default Scope always exists for the Root Configuration, so an effective Pluck does not require a separate Scope declaration. When an Effective Configuration has no Pluck or Always source and is composed only of file-capable Scopes, an invocation that needs an Archive source requires at least one positional Target reference.
+Each Configuration, and the effective configuration after Base composition, may contain no source definitions. Pluck, Always sources, and named Scopes are all optional, and an Effective Configuration containing only the always-present default Scope is valid. If a runtime request resolves zero sources, build / preview still succeeds and the Archive may contain only the generated `README.md`.
 
 level: MUST
 
-condition: after base composition
+condition: after Base composition
+

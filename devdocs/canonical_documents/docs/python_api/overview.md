@@ -30,7 +30,7 @@
 
 # Python API overview
 
-この文書は、dirpluck 0.14.x の公式 Python API を説明します。API は CLI と同じ実行 model を Python から利用するための最小 surface として定義し、Configuration parser や builder pipeline の低 level object を一般用途の互換性契約には含めません。
+この文書は、dirpluck 0.16.x の公式 Python API を説明します。API は CLI と同じ実行 model を Python から利用するための最小 surface として定義し、Configuration parser や builder pipeline の低 level object を一般用途の互換性契約には含めません。
 
 `run()` の引数と runtime modifier は `run.md`、返り値は `result.md`、公開 error boundary は `errors.md`、package root の互換性対象 export は `surface.md` を参照してください。Configuration / Target / Case / Archive の実行意味論は `../specification/INDEX.md` と共通です。
 
@@ -38,9 +38,9 @@
 
 公式 API の中心は `dirpluck.run()` です。CLI が受け取る Target、Configuration、Case、Invocation Template、Entry、preview、output modifier を Python argument として渡し、同じ application layer で実行します。
 
-CLI は人間向けの argument parsing、help、exit status、stdout / stderr formatting を担当します。Python API は `SystemExit` を通常の制御手段にせず、結果を `RunResult` で返し、期待される dirpluck error を `DirpluckError` として raise します。Non-fatal な planning diagnostic は `RunResult.warnings` に返し、CLI は同じ warning を stderr へ表示します。
+CLI は人間向けの argument parsing、help、exit status、stdout / stderr formatting を担当します。Python API は `SystemExit` を通常の制御手段にせず、結果を `RunResult` で返し、期待される dirpluck error を `DirpluckError` として raise します。Non-fatal な planning diagnostic は `RunResult.warnings` に返し、CLI は同じ warning を stderr へ表示します。Configuration / migration lifecycle の warning は Python の warnings framework で報告し、CLI は同じ public warning を収集して stderr へ表示します。
 
-0.14.x では、package root から明示的に export する名前だけを公式 Python API とします。低 level module や underscore 名は implementation detail であり、Beta 中の互換性保証対象には含めません。
+0.16.x では、package root から明示的に export する名前だけを公式 Python API とします。低 level module や underscore 名は implementation detail であり、Beta 中の互換性保証対象には含めません。
 
 ## 基本形
 

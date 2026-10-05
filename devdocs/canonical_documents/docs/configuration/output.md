@@ -30,9 +30,9 @@
 
 # Configuration output
 
-この文書は、Configuration が宣言する Output、fixed / timestamp mode、書き込み境界を説明します。
+この文書は、Configuration が宣言する Output と fixed / timestamp mode を説明します。
 
-この guide は Configuration 側の Output authoring を説明し、fixed / timestamp / runtime Output と書き込み境界の厳密な契約は `../specification/output.md` が定義します。CLI runtime Output は `../cli/output.md`、trust boundary は `../TRUST.md` を参照してください。
+この guide は Configuration 側の Output authoring を説明し、fixed / timestamp / runtime Output の厳密な契約は `../specification/output.md` が定義します。CLI runtime Output は `../cli/output.md`、trust boundary は `../TRUST.md` を参照してください。
 
 ## Output
 
@@ -68,9 +68,3 @@ Filename は次の形で生成します。
 ```
 
 `prefix` と `suffix` は timestamp mode 専用です。同じ秒に複数 run を意図的に区別したい場合は CLI `--sequence N` を使えます。CLI `--here` や末尾 `/` の `--output PATH`、Python API の末尾 `/` の `output=` で runtime directory Output を指定した場合も、root Configuration が `[output.timestamp]` を持てば `prefix` / `suffix` は automatic filename の naming rule として再利用されます。Configured `path` は runtime destination には使いません。ZIP entry 自体の mtime を統一する policy は Configuration field ではなく、CLI / Invocation Template の `--archive-mtime` / `archive_mtime` で指定します。
-
-### Writable destination
-
-Output は、Configuration だけから書き込み境界を静的に確定できる形に限定します。Fixed output では指定した完全 file path、timestamp output では指定した directory tree が書き込み境界です。
-
-Base chain 上の Output definitions は互いの書き込み境界へ介入できません。Fixed / timestamp の組み合わせごとの overlap 判定は `../specification/INDEX.md` を参照してください。

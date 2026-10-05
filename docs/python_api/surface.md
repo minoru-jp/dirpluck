@@ -1,14 +1,21 @@
 # Package surface
 
-The official package-root exports for 0.14.x are exactly:
+The official package-root exports for 0.16.x are exactly:
 
 ```python
-from dirpluck import ConfigurationDeprecationWarning, DirpluckError, RunResult, __version__, run
+from dirpluck import (
+    AlwaysMigrationWarning,
+    ConfigurationDeprecationWarning,
+    DirpluckError,
+    RunResult,
+    __version__,
+    run,
+)
 ```
 
-`ConfigurationDeprecationWarning` is the public `FutureWarning` subclass for filtering or promoting deprecated Configuration-syntax migration notices.
+`ConfigurationDeprecationWarning` is the public `FutureWarning` subclass for filtering or promoting deprecated Configuration-syntax migration notices. `AlwaysMigrationWarning` is the public `FutureWarning` subclass for filtering or promoting the 0.16.x Always layout and Namespace-compatibility warnings.
 
-`dirpluck.builder`, `dirpluck.config`, `dirpluck.invocation`, underscore-prefixed modules, and models or helpers importable from those modules are not official API. Code that depends on them may need changes as internal refactoring continues during Beta.
+`dirpluck.builder`, `dirpluck.invocation`, underscore-prefixed modules, and models or helpers importable from those modules are not official API. Code that depends on them may need changes as internal refactoring continues during Beta.
 
 Keeping the official surface deliberately small provides the same high-level capability as the CLI while preserving room to change Configuration models and archive-planning internals later.
 
