@@ -2,6 +2,21 @@
 
 Release history for dirpluck from 0.10.0 onward. Earlier releases are available in the [Changelog Archive](docs/changelog/INDEX.md).
 
+## 0.18.0
+
+Add Extra sources that can be activated only when needed by an Always Case, and update the representative LLM development-handoff example to use the current Configuration model.
+
+### Added
+
+- Add `[extra.<name>]`. An Extra source has the same source schema as `[always.<name>]`, but remains inactive merely by being declared and becomes an Always-side fixed source only for runs where `[case.always.<name>]` references it through `include` or `add`. Once activated, an Extra follows the same Selection, Layout, Archive-collision, and generated-README Always-side source rules as a normal Always source.
+- Give Always Cases a complete-enumeration mode and a delta mode. `include` is the complete mode and participates only the listed sources from the shared Always / Extra reference namespace. `add` / `exclude` are the delta mode: start from all Always sources, add listed Extras, and remove listed Always sources. `include` is mutually exclusive with `add` / `exclude`, while `add` and `exclude` may be combined. `add` accepts only Extras and `exclude` accepts only Always sources; wrong-kind or undefined references are Configuration errors. Always / Extra identifiers must be unique case-insensitively after Base composition.
+- Apply `[about].always_layout` to Extra as its default Layout and allow `[extra.<name>].layout` to override it. Undefined Layout references, Namespace conflicts, and final Archive-root collisions after Layout application use the same validation as Always sources.
+
+### Changed
+
+- Update the root README representative Configuration so Always, Extra, Scope / Pluck, Layout, conditional descriptions, and an Always Case read as one LLM-assisted development-handoff example. The README keeps an effective excerpt and links to `docs/recipes/llm-development-environment.md` for the complete workflow.
+- Update the LLM development environment Recipe to the 0.18.0 Configuration model. The complete executable example separates a persistent handoff guide as Always, an offline wheelhouse as Extra, and development repositories as Targets, while demonstrating default / offline (`add`) / combined Pluck+Always Cases, Layout-specific Archive structure, and the uses of `description_no_*` / `description_empty`.
+
 ## 0.17.0
 
 Add Layout for explicit Archive placement and conditional README descriptions based on which source roles resolve for a run.

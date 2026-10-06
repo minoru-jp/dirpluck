@@ -1,8 +1,8 @@
 # Configuration sources
 
-How Pluck, Scope, Layout, Namespace, and Always sources define where material comes from and where it appears in the Archive.
+How Pluck, Scope, Layout, Namespace, and Always / Extra sources define where material comes from and where it appears in the Archive.
 
-This guide explains source authoring. The compatibility contract is defined by [Runtime Targets, Scopes, and Cases](../specification/runtime-targets.md), [Archive model and generated README](../specification/archive.md), [Namespace](../specification/namespace.md), and [Filesystem boundaries and entry types](../specification/filesystem.md). For operation, see the [CLI guide](../cli/INDEX.md); for filesystem and sharing boundaries, see the [Trust model](../TRUST.md).
+This guide explains source authoring, including Always sources that normally participate and Extra sources activated by an Always Case. The compatibility contract is defined by [Runtime Targets, Scopes, and Cases](../specification/runtime-targets.md), [Archive model and generated README](../specification/archive.md), [Namespace](../specification/namespace.md), and [Filesystem boundaries and entry types](../specification/filesystem.md). For operation, see the [CLI guide](../cli/INDEX.md); for filesystem and sharing boundaries, see the [Trust model](../TRUST.md).
 
 ## Pluck
 
@@ -121,7 +121,7 @@ layout = "development-targets"
 
 A Layout name is one Archive directory component. `description` is optional, and an empty `[layout.<name>]` table is valid. Declaring a Layout does not create an empty directory in the ZIP. The `<name>/...` path appears only when a source actually uses that Layout. When a used Layout has a `description`, the generated README includes that description for the Layout directory.
 
-`[about].always_layout` and `[about].targets_layout` provide default Layouts for Always sources and Targets respectively. An individual `[always.<name>].layout`, `[scope].layout`, or `[scope.<name>].layout` overrides the corresponding default. A source with neither an individual Layout nor a default remains directly at the Archive root.
+`[about].always_layout` and `[about].targets_layout` provide default Layouts for Always / Extra sources and Targets respectively. An individual `[always.<name>].layout`, `[extra.<name>].layout`, `[scope].layout`, or `[scope.<name>].layout` overrides the corresponding default. A source with neither an individual Layout nor a default remains directly at the Archive root.
 
 Layout references are resolved against the effective Layout set after Base composition; an unknown Layout is an error. Layout names must be unique under a case-insensitive comparison. Layout does not identify a source-side filesystem directory. It controls only the Archive destination.
 
@@ -151,4 +151,29 @@ The resolved source directory itself is the selection boundary. Allowing an alia
 
 An Always source's Selection is evaluated independently of the Target Pluck. Even when the same physical file also exists under a Target, the Target's `ignore` rules and Selection result do not change the Always source's Selection. If both sources select the same physical file for different Archive paths, both entries are included. When selected files physically overlap, the generated Archive README records the Target-side Archive root and overlap count in the Always source section.
 
-After Layout is applied, final Archive roots must be unique under a case-insensitive comparison regardless of source role. A Target and an Always source that resolve to the same final root are therefore an error rather than an intentional composition. A Configuration with only Always sources and no Pluck is also valid.
+After Layout is applied, final Archive roots must be unique under a case-insensitive comparison regardless of source role. A Target and an Always or activated Extra source that resolve to the same final root are therefore an error rather than an intentional composition. A Configuration with only fixed sources and no Pluck is also valid.
+
+## Extra
+
+`[extra.<name>]` defines a fixed source that is available to an Always Case but does not participate merely because it is defined. Its canonical table schema is the same as `[always.<name>]`: required `path`, Selection fields `description` / `must` / `may` / `ignore` / `allow_empty`, and optional `layout`.
+
+```toml
+[always.guidelines]
+path = "review-guidelines"
+must = ["*.md"]
+
+[extra.dev-tools]
+path = "tooling"
+description = "Tools needed only for development runs."
+must = ["*.whl"]
+
+[case.always.development]
+add = ["dev-tools"]
+```
+
+An Extra remains inactive merely by being declared. It becomes active only for a run whose `[case.always.<name>]` references it through complete `include` or delta `add`, after which it behaves with the same fixed / Always role as an ordinary Always source. If no Always Case is selected, or the selected Case does not `include` / `add` that Extra, it remains inactive.
+
+`include` completely enumerates the participating sources from the shared Always / Extra identifier namespace. `add` / `exclude` are deltas over the default set of all Always sources: `add` activates only Extra identifiers, while `exclude` removes only Always identifiers. `include` cannot be combined with `add` / `exclude`, but `add` and `exclude` may be used together. Wrong-kind references are Configuration errors. Because Always and Extra share this Case-reference namespace, ambiguous effective identifiers such as `[always.foo]` and `[extra.foo]`, including names that differ only by case, are invalid.
+
+Layout follows the Always rules. `[extra.<name>].layout` takes precedence; otherwise `[about].always_layout` applies; if neither exists, the Extra is placed directly under the Archive root when activated. Once activated, README role detection, collision checks, Layout descriptions, and `description_no_always` handling treat the Extra as an Always source.
+

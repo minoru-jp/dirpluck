@@ -26,39 +26,90 @@ def _write(path: Path, text: str = "example\n") -> None:
 
 
 class RecipeExampleTests(unittest.TestCase):
-    def test_llm_environment_recipe_switches_offline_wheels_with_always_case(self):
+    def test_llm_environment_recipe_builds_handoff_with_extra_layouts_and_cases(self):
         configuration = _snippet("llm_development_environment.py", "configuration_example")
 
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            project = root / "project"
+            project = root / "projects" / "service-api"
             _write(project / "README.md")
             _write(project / "pyproject.toml")
             _write(project / "src" / "main.py")
             _write(project / "tests" / "test_main.py")
+            _write(project / ".tmp" / "proposed-changes.patch", "patch\n")
             _write(project / ".git" / "config")
             _write(project / ".venv" / "pyvenv.cfg")
+            _write(root / "handoff" / "DEVELOPMENT.md", "Read this first.\n")
             _write(root / "offline_wheels" / "shikumi-0.2.4-py3-none-any.whl", "wheel")
             _write(root / "offline_wheels" / "shikumi_devdoc-0.3.5-py3-none-any.whl", "wheel")
             _write(root / "offline_wheels" / "basedpyright-1.40.1-py3-none-any.whl", "wheel")
             _write(root / "offline_wheels" / "ruff-0.16.10-py3-none-any.whl", "wheel")
             _write(root / "default.dirpluck", configuration)
 
-            offline = dirpluck.run("./project/", preview=True, cwd=root)
+            default = dirpluck.run("projects/service-api/", preview=True, cwd=root)
+            self.assertIn("support/handoff/DEVELOPMENT.md", default.archive_entries)
             self.assertIn(
-                "offline_wheels/shikumi-0.2.4-py3-none-any.whl",
+                "development-targets/service-api/src/main.py",
+                default.archive_entries,
+            )
+            self.assertFalse(
+                any(entry.startswith("dependencies/") for entry in default.archive_entries)
+            )
+            self.assertFalse(any("/.git/" in entry for entry in default.archive_entries))
+            self.assertFalse(any("/.venv/" in entry for entry in default.archive_entries))
+            self.assertFalse(any("/.tmp/" in entry for entry in default.archive_entries))
+
+            offline = dirpluck.run(
+                "projects/service-api/",
+                case=".offline",
+                preview=True,
+                cwd=root,
+            )
+            self.assertIn("support/handoff/DEVELOPMENT.md", offline.archive_entries)
+            self.assertIn(
+                "dependencies/offline_wheels/shikumi-0.2.4-py3-none-any.whl",
                 offline.archive_entries,
             )
-            self.assertIn("project/src/main.py", offline.archive_entries)
-            self.assertFalse(any("/.git/" in entry for entry in offline.archive_entries))
-            self.assertFalse(any("/.venv/" in entry for entry in offline.archive_entries))
-            self.assertIn("If the Python package index is unavailable", offline.archive_readme)
+            self.assertIn("Offline installation artifacts", offline.archive_readme)
 
-            online = dirpluck.run("./project/", case=".claude", preview=True, cwd=root)
-            self.assertFalse(
-                any(entry.startswith("offline_wheels/") for entry in online.archive_entries)
+            review = dirpluck.run(
+                "projects/service-api/",
+                case="review.offline",
+                preview=True,
+                cwd=root,
             )
-            self.assertIn("project/src/main.py", online.archive_entries)
+            self.assertIn(
+                "development-targets/service-api/.tmp/proposed-changes.patch",
+                review.archive_entries,
+            )
+            self.assertIn(
+                "dependencies/offline_wheels/ruff-0.16.10-py3-none-any.whl",
+                review.archive_entries,
+            )
+
+            project_only = dirpluck.run(
+                "projects/service-api/",
+                case=".project-only",
+                preview=True,
+                cwd=root,
+            )
+            self.assertFalse(
+                any(
+                    entry.startswith("support/") or entry.startswith("dependencies/")
+                    for entry in project_only.archive_entries
+                )
+            )
+            self.assertIn(
+                "No support source is active",
+                project_only.archive_readme,
+            )
+
+            empty = dirpluck.run(case=".project-only", preview=True, cwd=root)
+            self.assertEqual(empty.archive_entries, ("README.md",))
+            self.assertIn(
+                "No development target or support source is active",
+                empty.archive_readme,
+            )
 
     def test_workspace_recipe_target_forms_select_the_expected_projects(self):
         configuration = _snippet("workspace_project_selection.py", "configuration_example")

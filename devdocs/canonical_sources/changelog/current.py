@@ -11,6 +11,25 @@ class CHANGELOG:
     dirpluck 0.10.0 以降のリリース履歴。0.9.x 以前の履歴は [Changelog Archive](docs/changelog/INDEX.md) を参照してください。
     """
 
+    class RELEASE_28:
+        r"""
+        Always Caseから必要時だけ有効化できるExtra sourceを追加し、現在のConfiguration modelを使ったLLM development handoffの代表例を更新するrelease。
+        """
+
+        title @= "0.18.0"
+
+        version @= "0.18.0"
+
+        added @= "`[extra.<name>]`を追加する。Extra sourceは`[always.<name>]`と同じsource schemaを持つが、定義しただけではinactiveとし、`[case.always.<name>]`の`include`または`add`から参照されたrunだけでAlways相当のfixed sourceとして有効化する。有効化されたExtraはSelection、Layout、Archive collision、generated READMEのAlways側source判定で通常のAlways sourceと同じ規則に従う。"
+
+        added @= "Always Caseに完全指定modeと差分指定modeを設ける。`include`はAlways / Extraの共通参照namespaceから列挙したsourceだけを参加させる完全指定とし、`add` / `exclude`は全Alwaysを起点にExtraを追加・Alwaysを除外する差分指定とする。`include`と`add` / `exclude`は排他的、`add`と`exclude`は併用可能とする。`add`はExtraだけ、`exclude`はAlwaysだけを受理し、種別違いまたは未定義参照はConfiguration errorとする。Always / Extra identifierはBase composition後に大文字小文字を区別せず一意でなければならない。"
+
+        added @= "Extraにも`[about].always_layout`をdefault Layoutとして適用し、`[extra.<name>].layout`で個別にoverrideできるようにする。未定義Layout参照、Namespaceとの競合、Layout適用後のfinal Archive root collisionはAlwaysと同じvalidationを適用する。"
+
+        changed @= "Root READMEの代表Configurationを、Always、Extra、Scope / Pluck、Layout、conditional description、Always Caseを一つのLLM-assisted development handoff例として読める構成へ更新する。READMEは主要部分の抜粋に留め、`docs/recipes/llm-development-environment.md`へcomplete workflowの導線を置く。"
+
+        changed @= "LLM development environment Recipeを0.18.0のConfiguration modelへ更新する。常設handoff guideをAlways、offline wheelhouseをExtra、開発repositoryをTargetとして分離し、default / offline (`add`) / combined Pluck+Always Case、Layout別Archive構造、`description_no_*` / `description_empty`の用途を一つの実行可能なexampleで示す。"
+
     class RELEASE_27:
         r"""
         Archive 内の配置を明示する Layout と、resolved source の有無に応じた README description を追加する release。

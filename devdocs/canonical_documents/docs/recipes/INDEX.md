@@ -18,6 +18,6 @@
 
 | Document | Summary |
 | --- | --- |
-| [Recipe: LLM 開発環境へ project を渡す](llm-development-environment.md) | ネットワーク制限のあるLLM sandbox向けにoffline wheelhouseを同梱し、Always Caseで切り替えるRecipe。 |
+| [Recipe: LLM 開発環境へ project を渡す](llm-development-environment.md) | LLM-assisted development の handoff Archive を、Layout、Extra、Case、conditional description を組み合わせて構成するRecipe。 |
 | [Recipe: workspace から必要な project を選ぶ](workspace-project-selection.md) | 複数projectを持つworkspaceをScopeとして登録し、CLI Targetで必要なprojectだけ選ぶRecipe。 |
 | [Recipe: チーム共通設定から用途別 package を作る](team-shared-configuration.md) | Base、Shared、Case を使い、チーム共通設定から通常レビュー用と完全版の package を作る Recipe。 |

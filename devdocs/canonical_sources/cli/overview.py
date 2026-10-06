@@ -25,7 +25,7 @@ class CLI_PART:
         {{example_001}}
         ```
 
-        選択した{{TERM_15}}に Always source が1個以上あれば、Pluck も定義されている Configuration でも `TARGET` reference を省略し、Always source だけを Archive にできます。Target を指定した場合は従来どおり Pluck を directory Target に適用します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。
+        選択した{{TERM_15}}で fixed source が1個以上参加する場合、Pluck も定義されている Configuration でも `TARGET` reference を省略し、Always source と選択した Always Case で有効化された Extra source だけを Archive にできます。Target を指定した場合は従来どおり Pluck を directory Target に適用します。Pluck がなくても `target_kind = "file"` / `"both"` の Scope から file Target は positional argument で選択できます。Directory Target は Pluck を必要とします。
 
         ```console
         {{example_002}}

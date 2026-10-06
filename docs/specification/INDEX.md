@@ -7,7 +7,7 @@
 | [Configuration schema](configuration-schema.md) | Top-level Configuration document schema and table structure. |
 | [Filesystem path notation](paths.md) | Filesystem path notation used by Configuration and runtime inputs. |
 | [Base chain and composition](composition.md) | Base chains, cycle detection, definition composition, and Output handling. |
-| [Runtime Targets, Scopes, and Cases](runtime-targets.md) | Scope, Target reference, expansion, Always source, and Case resolution. |
+| [Runtime Targets, Scopes, and Cases](runtime-targets.md) | Scope, Target reference, expansion, Always / Extra source, and Case resolution. |
 | [Namespace](namespace.md) | Namespace definitions and constraints for Archive placement. |
 | [Selection and Shared patterns](selection.md) | Selection, Shared patterns, and include/ignore pattern grammar. |
 | [Filesystem boundaries and entry types](filesystem.md) | Filesystem boundaries, link-like entries, and non-regular entries. |

@@ -14,7 +14,7 @@ level: MUST
 
 ## SPEC_090
 
-Explicit named-Scope and Always source-root locations may resolve an existing directory through a relative or absolute `path` using the host OS's normal filesystem semantics, including locations that contain symbolic links or Windows directory junctions. For an Always source, the resolved source directory itself becomes the Selection boundary. Output locations do not participate in source boundaries.
+Explicit named-Scope and Always / Extra source-root locations may resolve an existing directory through a relative or absolute `path` using the host OS's normal filesystem semantics, including locations that contain symbolic links or Windows directory junctions. For an Always / Extra source, the resolved source directory itself becomes the Selection boundary. Output locations do not participate in source boundaries.
 
 level: MUST
 
@@ -44,7 +44,7 @@ condition: when Selection traversal excludes a non-ignored link-like entry
 
 ## SPEC_094
 
-This rule applies to entries encountered while automatically traversing a source tree from its root. Explicit filesystem paths such as `about.base`, named Scope `path`, Always `path`, and Output `path` follow the Filesystem path notation rules and the rules specific to each field. In particular, an alias may be used for a named Scope or Always root location without implying that Target discovery or Selection traversal may follow another link-like entry below that root. Interpretation of entries or filesystem objects when the generated ZIP is extracted depends on the extractor and platform; `dirpluck` does not guarantee the behavior of third-party extraction software.
+This rule applies to entries encountered while automatically traversing a source tree from its root. Explicit filesystem paths such as `about.base`, named Scope `path`, Always / Extra `path`, and Output `path` follow the Filesystem path notation rules and the rules specific to each field. In particular, an alias may be used for a named Scope, Always, or Extra root location without implying that Target discovery or Selection traversal may follow another link-like entry below that root. Interpretation of entries or filesystem objects when the generated ZIP is extracted depends on the extractor and platform; `dirpluck` does not guarantee the behavior of third-party extraction software.
 
 level: MUST
 

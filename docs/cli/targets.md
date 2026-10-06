@@ -51,7 +51,7 @@ When invoking dirpluck from a shell, quote the entire selector reference so the 
 
 `./` by itself, `/acme`, `work/team/acme`, and absolute filesystem paths are not accepted as Target references. `./acme` and `./acme/` are valid explicit default-Scope file and directory forms, respectively.
 
-Target references may be omitted entirely. A targetless run does not use Pluck for source selection; if Always sources exist, it archives only those sources. If no Always source exists, the run is still valid and produces a README-only Archive. A Configuration without a Pluck may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck.
+Target references may be omitted entirely. A targetless run does not use Pluck for source selection; if ordinary Always sources or Extra sources activated by the selected Always Case through `include` / `add` participate, it archives only those fixed sources. If no fixed source participates, the run is still valid and produces a README-only Archive. A Configuration without a Pluck may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck.
 
 ```console
 dirpluck --config project-snapshot
@@ -61,7 +61,7 @@ For Scope and `ignore` definitions, see [Configuration guide](../configuration/I
 
 ## Case
 
-Select Cases with `--case CASE`. The selector has independent Pluck and Always axes: `PLUCK` selects only a Pluck Case, `.ALWAYS` selects only an Always Case, and `PLUCK.ALWAYS` selects both.
+Select Cases with `--case CASE`. The selector has independent Pluck and Always axes: `PLUCK` selects only a Pluck Case, `.ALWAYS` selects only an Always Case, and `PLUCK.ALWAYS` selects both. An Always Case selects participating Always sources and can activate Extra sources.
 
 ```console
 dirpluck ./acme/ --case audit

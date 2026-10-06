@@ -19,7 +19,7 @@ class SECTION_001:
         r"""
         {{TERM_2}}は、どの filesystem location から何を選び、どこへ Archive を書くかを宣言します。dirpluck は、その宣言が利用者の意図に対して適切か、参照先が機密か、description が実態と一致するかを推論しません。
 
-        Configuration を第三者から受け取った場合や、内容を自分で確認していない場合は、実行前に `about.base`、Scope、Always source、selection、Output を確認してください。Configuration は sandbox policy や capability manifest ではなく、dirpluck に渡す実行指示として扱います。
+        Configuration を第三者から受け取った場合や、内容を自分で確認していない場合は、実行前に `about.base`、Scope、Always / Extra source、selection、Output を確認してください。Configuration は sandbox policy や capability manifest ではなく、dirpluck に渡す実行指示として扱います。
         """
 
         title @= "Configuration は実行指示です"
@@ -47,7 +47,7 @@ class SECTION_001:
 
         Relative filesystem path は runtime cwd ではなく、その field が記述された Configuration file の directory を基準に解決します。Base chain に含まれる Configuration もそれぞれ独自の anchor を持ちます。
 
-        Source boundary、archive path collision、Configuration schema などの structural validation は行います。Configuration / Invocation Template document の参照と、Configuration が明示する named Scope / Always の source root location は host OS の通常の filesystem semantics に従い、alias を利用できます。一方、その明示 root からの Target discovery と Selection traversal では認識した symbolic link / Windows directory junction をたどらず Archive にも含めません。明示 location の resolution と source tree traversal は別の filesystem boundary です。FIFO、socket、device など regular file / regular directory ではない特殊 filesystem entry も Archive 対象にしません。これらは declared filesystem operation の目的や安全性を判定する guard ではありません。
+        Source boundary、archive path collision、Configuration schema などの structural validation は行います。Configuration / Invocation Template document の参照と、Configuration が明示する named Scope / Always / Extra の source root location は host OS の通常の filesystem semantics に従い、alias を利用できます。一方、その明示 root からの Target discovery と Selection traversal では認識した symbolic link / Windows directory junction をたどらず Archive にも含めません。明示 location の resolution と source tree traversal は別の filesystem boundary です。FIFO、socket、device など regular file / regular directory ではない特殊 filesystem entry も Archive 対象にしません。これらは declared filesystem operation の目的や安全性を判定する guard ではありません。
         """
 
         title @= "Filesystem permission が実際の権限境界です"
@@ -67,7 +67,7 @@ class SECTION_001:
         r"""
         dirpluck が明示的に link-like entry として非 traversal 対象にするのは、platform API で symbolic link または Windows directory junction として認識できた entry です。それとは別に、regular file / regular directory として扱えない FIFO、socket、device などの特殊 filesystem entry も Archive 対象から除外します。Filesystem / OS には別種の reparse point、redirecting mechanism、特殊な filesystem object が存在し得るため、あらゆる環境で link-like mechanism や filesystem object の意味を完全に列挙・解釈し、Archive からの完全な不在を保証するものではありません。
 
-        この判定は source root からの自動 traversal 時に利用できる filesystem semantics に基づきます。Named Scope / Always の root location 自体を Configuration が明示している場合は、その location が alias であることだけを理由に拒否せず、host OS の通常の filesystem semantics で root を解決します。対応対象の Windows runtime で traversal 中の junction 判定に必要な reparse-tag API / metadata が取得できない場合、dirpluck はその entry を通常 directory として扱わず、安全に判定できないことを error として返します。将来別の mechanism を安全境界へ追加する場合も、dirpluck は認識対象を拡張できますが、未知の platform-specific behavior まで事前に保証しません。
+        この判定は source root からの自動 traversal 時に利用できる filesystem semantics に基づきます。Named Scope / Always / Extra の root location 自体を Configuration が明示している場合は、その location が alias であることだけを理由に拒否せず、host OS の通常の filesystem semantics で root を解決します。対応対象の Windows runtime で traversal 中の junction 判定に必要な reparse-tag API / metadata が取得できない場合、dirpluck はその entry を通常 directory として扱わず、安全に判定できないことを error として返します。将来別の mechanism を安全境界へ追加する場合も、dirpluck は認識対象を拡張できますが、未知の platform-specific behavior まで事前に保証しません。
 
         また、生成した ZIP を展開するときに entry metadata や filesystem object をどのように解釈・作成するかは、利用する extractor と platform に依存します。dirpluck は第三者の unzip / archive software の展開時挙動を制御・保証しません。
         """

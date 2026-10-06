@@ -28,7 +28,7 @@ These are the same public diagnostics that the official Python API exposes as `A
 
 ## Source paths in the Archive index
 
-The generated Archive README is a human-facing index of the Archive contents. All Always sources are listed before Targets, and each Always section shows its optional `description` before metadata such as the selected file count. Targets are grouped by Scope; directory Targets are listed by final Archive path under that Scope's Pluck group. The same Scope / Pluck `description` is shown once for the group instead of being repeated for every Target. File Targets do not use Pluck and are shown directly under their Scope.
+The generated Archive README is a human-facing index of the Archive contents. All participating Always sources and activated Extra sources are listed before Targets, and each fixed-source section shows its optional `description` before metadata such as the selected file count. Targets are grouped by Scope; directory Targets are listed by final Archive path under that Scope's Pluck group. The same Scope / Pluck `description` is shown once for the group instead of being repeated for every Target. File Targets do not use Pluck and are shown directly under their Scope.
 
 The `Scope: "..."` note near the beginning of the README makes the intended meaning explicit: a Scope name identifies only the selection range used to find Targets. It does not imply priority, importance, or hierarchy between Targets. If a Scope name carries additional meaning, describe that meaning with `scope.description`. The selected Case name, Configuration path / table, base chain, and similar execution provenance are not recorded.
 

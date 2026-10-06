@@ -2,7 +2,7 @@
 
 ## SPEC_037
 
-Positional CLI `TARGET` references are optional and may appear zero or more times. A targetless run does not use Pluck for source selection. If Always sources exist, it resolves only those Always sources; if no Always source exists, the resolved source set is empty and build succeeds with an Archive containing only the generated `README.md`. When Target references are supplied, normal Scope and Target resolution applies, and directory Targets still require Pluck. An Effective Configuration without a Pluck may continue to accept positional file Target references from Scopes with `target_kind = "file"` or `"both"`.
+Positional CLI `TARGET` references are optional and may appear zero or more times. A targetless run does not use Pluck for source selection. If normally participating Always sources or Extra sources activated by the selected Always Case through `include` / `add` exist, it resolves only those fixed sources; if no fixed source participates, the resolved source set is empty and build succeeds with an Archive containing only the generated `README.md`. When Target references are supplied, normal Scope and Target resolution applies, and directory Targets still require Pluck. An Effective Configuration without a Pluck may continue to accept positional file Target references from Scopes with `target_kind = "file"` or `"both"`.
 
 level: MUST
 
@@ -194,6 +194,12 @@ level: MUST
 
 related: [SPEC_018](paths.md#spec_018), [SPEC_024](paths.md#spec_024)
 
+### SPEC_056
+
+`[extra.<name>]` uses the same canonical source schema, name validation, filesystem `path`, Selection, and optional Layout semantics as `[always.<name>]`. An Extra definition alone does not create a participating source. Extra identifiers share the Always-Case reference namespace with effective Always identifiers and must be mutually unique under a case-insensitive comparison. Because Extra is new syntax, it does not accept the deprecated Always `namespace` compatibility field.
+
+level: MUST
+
 ### SPEC_057
 
 The runtime Case selector has two independent axes: Pluck Case and Always Case. `PLUCK` selects only a Pluck Case, `.ALWAYS` selects only an Always Case, and `PLUCK.ALWAYS` selects both. Case names themselves cannot contain `.`. An empty selector, `.`, a trailing dot, or more than one dot is invalid. CLI `--case`, the official Python API `case=`, and the Invocation `case` field use the same grammar.
@@ -202,18 +208,18 @@ level: MUST
 
 ### SPEC_058
 
-Without a selected Pluck Case, a run with directory Targets uses the default `[pluck]` Selection. With a selected Pluck Case, it uses the complete effective `[case.pluck.<name>]` Selection and fails if that Case name does not exist. Pluck Case validity is independent of Target count and of whether Always sources exist, so a defined Pluck Case remains valid even when the run has zero Targets.
+Without a selected Pluck Case, a run with directory Targets uses the default `[pluck]` Selection. With a selected Pluck Case, it uses the complete effective `[case.pluck.<name>]` Selection and fails if that Case name does not exist. Pluck Case validity is independent of Target count and of whether fixed sources exist, so a defined Pluck Case remains valid even when the run has zero Targets.
 
 level: MUST
 
 ### SPEC_059
 
-An Always Case is a membership filter over the effective Always-source definitions after Base composition. Each listed name refers to the TOML identifier from `[always.<name>]`, not to an alias derived from a final Archive root. Every listed name must exist; an unknown name is a Configuration error.
+Without an Always Case, every effective Always source participates and every Extra remains inactive. An Always Case has two modes. `include` is the complete-enumeration mode: it participates only the listed identifiers from the combined effective Always / Extra namespace, and `include = []` explicitly selects zero sources. `add` / `exclude` are the delta mode: they start from all effective Always sources, remove Always identifiers listed in `exclude`, and activate Extra identifiers listed in `add`. `include` is mutually exclusive with `add` / `exclude`, while `add` and `exclude` may be combined. `add` accepts only Extra identifiers and `exclude` accepts only Always identifiers; wrong-kind or undefined references are Configuration errors. Empty `add` / `exclude` lists, or omitting both delta fields, perform no change. References use TOML Always / Extra identifiers rather than aliases derived from final Archive roots, and validation occurs after Base composition.
 
 level: MUST
 
 ### SPEC_060
 
-`[case.pluck.<name>]` is a complete Selection rather than a delta from `[pluck]`; it does not inherit `must`, `may`, `ignore`, Shared references, or `allow_empty`. `[case.always.<name>]` is not a Selection at all, only an Always-source membership filter, so each selected Always source continues to use its own base Selection. A defined Case on either axis may validly produce zero participating sources, including a README-only Archive.
+`[case.pluck.<name>]` is a complete Selection rather than a delta from `[pluck]`; it does not inherit `must`, `may`, `ignore`, Shared references, or `allow_empty`. `[case.always.<name>]` is not a Selection. It controls Always-source membership and Extra activation, and every selected Always source or activated Extra continues to use its own base Selection. A defined Case on either axis may validly produce zero participating sources, including a README-only Archive.
 
 level: MUST

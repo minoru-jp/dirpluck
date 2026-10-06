@@ -25,7 +25,7 @@ level: MUST
 
 ## SPEC_149
 
-Positional arguments are resolved as `TARGET` references according to the CLI Target reference rules in Runtime Target, Scope, and Case. Zero or more positional Target references are always accepted. With zero Targets, Pluck does not participate in source selection; Always sources are resolved when present, and otherwise the run succeeds with zero resolved sources and a README-only Archive. When Target references are supplied, file Targets from Scopes with `target_kind = "file"` or `"both"` remain accepted without Pluck, while directory Targets require Pluck.
+Positional arguments are resolved as `TARGET` references according to the CLI Target reference rules in Runtime Target, Scope, and Case. Zero or more positional Target references are always accepted. With zero Targets, Pluck does not participate in source selection; normally participating Always sources and Extra sources activated by the selected Always Case through `include` / `add` are resolved when present, and otherwise the run succeeds with zero resolved sources and a README-only Archive. When Target references are supplied, file Targets from Scopes with `target_kind = "file"` or `"both"` remain accepted without Pluck, while directory Targets require Pluck.
 
 level: MUST
 

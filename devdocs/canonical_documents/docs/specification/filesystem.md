@@ -30,7 +30,7 @@ level: MUST
 
 ## SPEC_090
 
-Named Scope / Always source の明示 root location は relative / absolute `path` から host OS の通常の filesystem semantics で実在 directory を解決でき、symbolic link / Windows directory junction を含む location も root として利用できる。Always は解決した source directory 自体を selection boundary とする。Output location は source boundary に参加しない。
+Named Scope / Always / Extra source の明示 root location は relative / absolute `path` から host OS の通常の filesystem semantics で実在 directory を解決でき、symbolic link / Windows directory junction を含む location も root として利用できる。Always / Extra は解決した source directory 自体を selection boundary とする。Output location は source boundary に参加しない。
 
 level: MUST
 
@@ -60,7 +60,7 @@ condition: non-ignored link-like entry を Selection traversal で除外した�
 
 ## SPEC_094
 
-この規則は source root から自動的に tree を探索するときに現れる entry に対するものであり、Configuration の `about.base`、named Scope `path`、Always `path`、Output `path` といった明示 filesystem path の resolution rule は Filesystem path notation と各 field 固有の規則に従う。特に named Scope / Always の root location は alias を利用できても、そこから先の Target discovery / Selection traversal が別の link-like entry をたどることを意味しない。生成した ZIP を展開するときの entry / filesystem object の解釈は extractor と platform に依存し、dirpluck は第三者の展開 software の動作を保証しない。
+この規則は source root から自動的に tree を探索するときに現れる entry に対するものであり、Configuration の `about.base`、named Scope `path`、Always / Extra `path`、Output `path` といった明示 filesystem path の resolution rule は Filesystem path notation と各 field 固有の規則に従う。特に named Scope / Always / Extra の root location は alias を利用できても、そこから先の Target discovery / Selection traversal が別の link-like entry をたどることを意味しない。生成した ZIP を展開するときの entry / filesystem object の解釈は extractor と platform に依存し、dirpluck は第三者の展開 software の動作を保証しない。
 
 level: MUST
 

@@ -31,7 +31,7 @@ dirpluck -i invocations/release --entry docs --case audit
 dirpluck --invocation-template ../shared/release --preview
 ```
 
-An Invocation with no fields is valid. It contributes no stored execution inputs; execution uses CLI values and normal defaults. After a successful `--preview` or normal build, the CLI prints a note when the selected Invocation has no `config`, `targets`, `case`, or `archive_mtime`. This is informational rather than a warning because valid runs, including Always-only and README-only builds, may need no stored Invocation values.
+An Invocation with no fields is valid. It contributes no stored execution inputs; execution uses CLI values and normal defaults. After a successful `--preview` or normal build, the CLI prints a note when the selected Invocation has no `config`, `targets`, `case`, or `archive_mtime`. This is informational rather than a warning because valid runs, including fixed-source-only and README-only builds, may need no stored Invocation values.
 
 An Invocation Template is not a general difference-composition mechanism for stored invocations. Positional `TARGET` and `--config` cannot be combined with `-i` / `--invocation-template`. CLI `--case CASE` uses the same `PLUCK` / `.ALWAYS` / `PLUCK.ALWAYS` grammar and may override the selected Invocation's `case`, and `--archive-mtime VALUE` may override its `archive_mtime`. `--here`, `--output`, `--force`, `--preview`, `--sequence`, `--archive-mtime`, and `--paths` remain available as runtime modifiers, subject to their normal combination constraints. `-e` / `--entry` can be used only together with `-i` / `--invocation-template`.
 

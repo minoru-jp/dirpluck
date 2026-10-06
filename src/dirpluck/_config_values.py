@@ -501,6 +501,10 @@ def _validate_always_name(name: object, where: str) -> str:  # pyright: ignore[r
     return _validate_archive_directory_name(name, where, label="Always source names")
 
 
+def _validate_extra_name(name: object, where: str) -> str:  # pyright: ignore[reportUnusedFunction]
+    return _validate_archive_directory_name(name, where, label="Extra source names")
+
+
 def _parse_namespace_reference(value: object, where: str) -> str | None:  # pyright: ignore[reportUnusedFunction]
     if value is None:
         return None

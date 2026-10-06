@@ -55,7 +55,7 @@ configs/common.dirpluck
 
 ## 基本形
 
-Configuration はひとつの最終 Archive intent を表します。実行時に選ぶ Target の探索場所と kind は `scope` で表し、directory Target の内部 Selection は `pluck`、Configuration に固定する source は `always` で表します。File Target は `scope` だけで選択でき、Pluck は適用しません。
+Configuration はひとつの最終 Archive intent を表します。実行時に選ぶ Target の探索場所と kind は `scope` で表し、directory Target の内部 Selection は `pluck`、Configuration に固定する source は `always`、Case で必要時だけ追加する fixed source は `extra` で表します。File Target は `scope` だけで選択でき、Pluck は適用しません。
 
 ```toml
 [pluck]
@@ -76,7 +76,7 @@ must = ["*.md"]
 path = "artifacts/review.zip"
 ```
 
-`[pluck]` は directory 対象へ適用するpluck、`[scope]` / `[scope.<name>]` は Target を探し `target_kind` を決めるスコープ、`[always.<name>]` は常時ソースです。Archive 内の最上位配置を分けたい場合は `[layout.<name>]` を宣言し、Always / Target の既定値または個別 source から参照します。必要に応じて共有パターン、ケース、基底設定ファイルを使って構成を広げます。
+`[pluck]` は directory 対象へ適用するpluck、`[scope]` / `[scope.<name>]` は Target を探し `target_kind` を決めるスコープ、`[always.<name>]` は常時参加する常時ソース、`[extra.<name>]` は `case.always` の `include` / `add` で有効化されたときだけ参加する追加 source です。Archive 内の最上位配置を分けたい場合は `[layout.<name>]` を宣言し、Always / Extra / Target の既定値または個別 source から参照します。必要に応じて共有パターン、ケース、基底設定ファイルを使って構成を広げます。
 
 ## About
 
@@ -95,7 +95,7 @@ base = "../common/common.dirpluck"
 
 `description` は任意で、生成される Archive README の見出し直下に常に表示する Configuration 全体の説明です。`description_no_targets`、`description_no_always`、`description_empty` も任意で、resolved source が Always のみ、Target のみ、0件のときに対応する1個だけを追加表示します。`description_empty` の場合も generated `README.md` 自体は作られます。
 
-`always_layout` / `targets_layout` は、宣言済み `[layout.<name>]` を参照して Always / Target の既定配置先を指定します。個別 `[always.<name>].layout` / `[scope].layout` / `[scope.<name>].layout` がある場合はそちらを優先し、どちらもなければ Archive root 直下へ配置します。
+`always_layout` / `targets_layout` は、宣言済み `[layout.<name>]` を参照して Always / Extra / Target の既定配置先を指定します。個別 `[always.<name>].layout` / `[extra.<name>].layout` / `[scope].layout` / `[scope.<name>].layout` がある場合はそちらを優先し、どちらもなければ Archive root 直下へ配置します。
 
 これらの `[about]` field は Base chain で field ごとに、外側から見て最初に定義された値を使います。`base` は任意で、この Configuration が基礎とする基底設定ファイルを1個指定します。`[about]` を定義する場合は少なくとも1 field を記述します。
 
@@ -127,4 +127,4 @@ C:/Users/name/references
 
 Absolute path はその場所を直接参照するため、Configuration の portability は低くなります。別 OS の absolute-root notation への変換、`~` expansion、environment-variable interpolation は行いません。
 
-この基準は少なくとも `about.base`、`scope.<name>.path`、`always.<name>.path`、`output.path`、`output.timestamp.path` に共通です。Configuration document 自体を参照する `about.base` だけでなく、named Scope / Always のように明示した source root location も host OS の通常の filesystem semantics に従い、symbolic link / Windows directory junction を含む location を利用できます。明示 root の alias を解決して source root とすることと、その root からの自動 traversal で link-like entry を選択しないことは別です。Pattern や CLI Target reference のように filesystem location ではない値は、それぞれの規則に従います。厳密な validation は `../specification/INDEX.md` を参照してください。
+この基準は少なくとも `about.base`、`scope.<name>.path`、`always.<name>.path`、`extra.<name>.path`、`output.path`、`output.timestamp.path` に共通です。Configuration document 自体を参照する `about.base` だけでなく、named Scope / Always / Extra のように明示した source root location も host OS の通常の filesystem semantics に従い、symbolic link / Windows directory junction を含む location を利用できます。明示 root の alias を解決して source root とすることと、その root からの自動 traversal で link-like entry を選択しないことは別です。Pattern や CLI Target reference のように filesystem location ではない値は、それぞれの規則に従います。厳密な validation は `../specification/INDEX.md` を参照してください。

@@ -43,7 +43,7 @@ level: MUST
 
 ## SPEC_149
 
-Positional argument は Runtime Target, Scope, and Case の CLI Target reference rules で解決する。Positional Target reference は常に0個以上を受理する。0個の場合は Pluck を source selection に使用せず、Always source があればそれらだけを解決し、Always source もなければ resolved source 0件の README-only Archive として正常に実行する。Target reference を指定した場合、Pluck がない Configuration でも `target_kind = "file"` / `"both"` の Scope から file Target reference は受理するが、directory Target は受理しない。
+Positional argument は Runtime Target, Scope, and Case の CLI Target reference rules で解決する。Positional Target reference は常に0個以上を受理する。0個の場合は Pluck を source selection に使用せず、通常参加する Always source と選択した Always Case の `include` / `add` で有効化された Extra source があれば、それら fixed source だけを解決する。参加する fixed source もなければ resolved source 0件の README-only Archive として正常に実行する。Target reference を指定した場合、Pluck がない Configuration でも `target_kind = "file"` / `"both"` の Scope から file Target reference は受理するが、directory Target は受理しない。
 
 level: MUST
 

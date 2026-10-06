@@ -666,6 +666,7 @@ class ConfigSelectionTests(ConfigTestCase):
             case = config.always_cases["review"]
             self.assertEqual(case.description, "Framework only.")
             self.assertEqual(case.include, ("framework",))
+            self.assertIsNone(case.add)
             self.assertIsNone(case.exclude)
 
     def test_always_case_reference_validation_is_deferred_to_effective_configuration(self):
@@ -710,7 +711,7 @@ class ConfigSelectionTests(ConfigTestCase):
             self.assertIn("archive", config.always_cases)
             self.assertEqual(config.always_cases["archive"].include, ("documents",))
 
-    def test_always_case_include_and_exclude_empty_have_distinct_meanings(self):
+    def test_always_case_include_add_and_exclude_empty_have_distinct_meanings(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             config = load_config(
@@ -724,6 +725,10 @@ class ConfigSelectionTests(ConfigTestCase):
                 [case.always.none]
                 include = []
 
+                [case.always.delta]
+                add = []
+                exclude = []
+
                 [case.always.all]
                 exclude = []
             """,
@@ -731,24 +736,30 @@ class ConfigSelectionTests(ConfigTestCase):
             )
             self.assertIn("case", config.always)
             self.assertEqual(config.always_cases["none"].include, ())
+            self.assertIsNone(config.always_cases["none"].add)
             self.assertIsNone(config.always_cases["none"].exclude)
+            self.assertIsNone(config.always_cases["delta"].include)
+            self.assertEqual(config.always_cases["delta"].add, ())
+            self.assertEqual(config.always_cases["delta"].exclude, ())
             self.assertIsNone(config.always_cases["all"].include)
+            self.assertIsNone(config.always_cases["all"].add)
             self.assertEqual(config.always_cases["all"].exclude, ())
 
-    def test_always_case_include_and_exclude_are_mutually_exclusive(self):
-        with resolved_temporary_directory() as temp:
-            root = Path(temp)
-            with self.assertRaisesRegex(ConfigurationError, "mutually exclusive"):
-                load_config(
-                    self._write(
-                        root,
-                        """
-                    [case.always.invalid]
-                    include = []
-                    exclude = []
-                """,
+    def test_always_case_include_is_mutually_exclusive_with_delta_fields(self):
+        for conflicting_field in ("add", "exclude"):
+            with self.subTest(field=conflicting_field), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                with self.assertRaisesRegex(ConfigurationError, "mutually exclusive"):
+                    load_config(
+                        self._write(
+                            root,
+                            f"""
+                        [case.always.invalid]
+                        include = []
+                        {conflicting_field} = []
+                    """,
+                        )
                     )
-                )
 
     def test_case_hierarchy_is_rejected(self):
         for table in ("case.pluck.review.extra", "case.always.review.extra"):
@@ -997,3 +1008,75 @@ class IgnorePathReferenceConfigTests(ConfigTestCase):
             )
             with self.assertRaisesRegex(ConfigurationError, "entity names, not paths"):
                 load_config(manifest)
+
+
+class ExtraConfigTests(ConfigTestCase):
+    def test_extra_uses_the_same_selection_schema_as_always(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(
+                self._write(
+                    root,
+                    """
+                [extra.tools]
+                path = "tools"
+                description = "Tools."
+                must = ["src/"]
+                may = ["README.md"]
+                ignore = ["*.tmp"]
+            """,
+                )
+            )
+            source = config.extras["tools"]
+            self.assertEqual(source.path, "tools")
+            self.assertEqual(source.selection.description, "Tools.")
+            self.assertEqual(_raws(source.selection.must), ("src/",))
+            self.assertEqual(_raws(source.selection.may), ("README.md",))
+
+    def test_always_case_include_accepts_extra_reference_after_effective_composition(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "tools").mkdir()
+            config = load_config(
+                self._write(
+                    root,
+                    """
+                [extra.tools]
+                path = "tools"
+                may = ["*.txt"]
+                allow_empty = true
+
+                [case.always.tools]
+                include = ["tools"]
+            """,
+                )
+            )
+            sources = resolve_sources(config, BuildRequest.create(case=".tools"))
+            self.assertEqual(
+                [(source.role, source.archive_root) for source in sources],
+                [("fixed", "tools")],
+            )
+
+    def test_always_and_extra_names_share_one_effective_case_namespace(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "always-source").mkdir()
+            (root / "extra-source").mkdir()
+            config = load_config(
+                self._write(
+                    root,
+                    """
+                [always.Tools]
+                path = "always-source"
+                may = ["*.txt"]
+                allow_empty = true
+
+                [extra.tools]
+                path = "extra-source"
+                may = ["*.txt"]
+                allow_empty = true
+            """,
+                )
+            )
+            with self.assertRaisesRegex(ConfigurationError, "Always and Extra source names"):
+                resolve_sources(config, BuildRequest.create())

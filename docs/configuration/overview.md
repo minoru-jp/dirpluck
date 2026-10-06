@@ -19,7 +19,7 @@ configs/common.dirpluck
 A `.dirpluck-inv` file is a separate Invocation Template document type, not a Configuration. It does not participate in the Configuration schema or base chain. See [CLI guide](../cli/INDEX.md) for authoring and selecting Invocation Templates.
 ## Basic form
 
-A Configuration represents one final Archive intent. Use `scope` to declare where runtime Targets are found and which Target kind a Scope exposes. Use `pluck` for the internal Selection of directory Targets, and `always` for sources fixed by the Configuration. File Targets are selected through a Scope and do not use Pluck.
+A Configuration represents one final Archive intent. Use `scope` to declare where runtime Targets are found and which Target kind a Scope exposes. Use `pluck` for the internal Selection of directory Targets, `always` for fixed sources that normally participate, and `extra` for fixed sources activated only by an Always Case. File Targets are selected through a Scope and do not use Pluck.
 
 ```toml
 [pluck]
@@ -40,10 +40,10 @@ must = ["*.md"]
 path = "artifacts/review.zip"
 ```
 
-`[pluck]` is the Pluck applied to directory Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for and where `target_kind` is chosen, and `[always.<name>]` defines Always sources. To separate top-level placement inside the Archive, declare `[layout.<name>]` and reference it from the default policy for Always / Target sources or from an individual source. Add Shared patterns, Pluck/Always Cases, Namespaces, and a Base Configuration as needed.
+`[pluck]` is the Pluck applied to directory Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for and where `target_kind` is chosen, and `[always.<name>]` defines sources that normally participate, while `[extra.<name>]` defines additional sources that remain inactive until activated by `case.always` through `include` or `add`. To separate top-level placement inside the Archive, declare `[layout.<name>]` and reference it from the default policy for Always / Extra / Target sources or from an individual source. Add Shared patterns, Pluck/Always Cases, Namespaces, and a Base Configuration as needed.
 ## About
 
-`[about]` declares information about the Configuration itself. It may contain the overall `description`, conditional descriptions based on the resolved source roles, default Layouts for Always / Target sources, and `base`.
+`[about]` declares information about the Configuration itself. It may contain the overall `description`, conditional descriptions based on the resolved source roles, default Layouts for Always / Extra / Target sources, and `base`.
 
 ```toml
 [about]
@@ -58,7 +58,7 @@ base = "../common/common.dirpluck"
 
 `description` is optional and describes the Configuration as a whole. When present, it is always displayed directly below the heading in the generated Archive README. `description_no_targets`, `description_no_always`, and `description_empty` are also optional. Exactly one is added when the resolved sources are Always-only, Target-only, or zero sources respectively. The generated `README.md` still exists in the empty case.
 
-`always_layout` / `targets_layout` reference declared `[layout.<name>]` definitions and provide the default placement for Always sources / Targets. An individual `[always.<name>].layout`, `[scope].layout`, or `[scope.<name>].layout` takes precedence. If neither the individual source nor `[about]` selects a Layout, that source is placed directly at the Archive root.
+`always_layout` / `targets_layout` reference declared `[layout.<name>]` definitions and provide the default placement for Always / Extra sources and Targets. An individual `[always.<name>].layout`, `[extra.<name>].layout`, `[scope].layout`, or `[scope.<name>].layout` takes precedence. If neither the individual source nor `[about]` selects a Layout, that source is placed directly at the Archive root.
 
 These `[about]` fields are resolved independently along the Base chain: for each field, the first definition found from the outermost Configuration inward is used. `base` is optional and names one Base Configuration on which this Configuration is based. If `[about]` is present, at least one field must be present.
 
@@ -89,4 +89,4 @@ C:/Users/name/references
 
 An absolute path directly references that location and therefore reduces Configuration portability. `dirpluck` does not convert absolute-root notation for another OS, expand `~`, or interpolate environment variables.
 
-This rule applies at least to `about.base`, `scope.<name>.path`, `always.<name>.path`, `output.path`, and `output.timestamp.path`. Not only `about.base`, which references another Configuration document, but also explicitly configured source-root locations such as named Scopes and Always sources follow the host OS's normal filesystem semantics and may include symbolic links or Windows directory junctions. Resolving an alias used as an explicit root is separate from the rule that recognized link-like entries are not selected during automatic traversal below that root. Values that are not filesystem locations, such as patterns and CLI Target references, follow their own rules. See [Specification](../specification/INDEX.md) for exact validation.
+This rule applies at least to `about.base`, `scope.<name>.path`, `always.<name>.path`, `extra.<name>.path`, `output.path`, and `output.timestamp.path`. Not only `about.base`, which references another Configuration document, but also explicitly configured source-root locations such as named Scopes and Always / Extra sources follow the host OS's normal filesystem semantics and may include symbolic links or Windows directory junctions. Resolving an alias used as an explicit root is separate from the rule that recognized link-like entries are not selected during automatic traversal below that root. Values that are not filesystem locations, such as patterns and CLI Target references, follow their own rules. See [Specification](../specification/INDEX.md) for exact validation.

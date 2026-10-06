@@ -84,9 +84,9 @@ Warning location は固定 `stacklevel` に依存せず、dirpluck package 外�
 
 ## README-only Archive
 
-`dirpluck.run()` は resolved source が0件でも正常に完了できます。Target を渡さず、Always source も解決されない場合、build は generated `README.md` だけを含む Archive を生成し、`preview=True` は `README.md` だけの tree を返します。これは warning / exception ではありません。Generated README には source が0件だったことを informational text として記録し、`RunResult.archive_entries` は `("README.md",)` になります。
+`dirpluck.run()` は resolved source が0件でも正常に完了できます。Target を渡さず、通常の Always source も、選択した Always Case で有効化される Extra source も解決されない場合、build は generated `README.md` だけを含む Archive を生成し、`preview=True` は `README.md` だけの tree を返します。これは warning / exception ではありません。Generated README には source が0件だったことを informational text として記録し、`RunResult.archive_entries` は `("README.md",)` になります。
 
-`case=` は CLI `--case CASE` と同じ2軸 selector です。`"audit"` は Pluck Case、`".release"` は Always Case、`"audit.release"` は両方を指定します。各軸の Case name 自体が Configuration 上で有効なら、その適用結果として source が0件でも正常です。指定した軸に存在しない Case name は error です。
+`case=` は CLI `--case CASE` と同じ2軸 selector です。`"audit"` は Pluck Case、`".release"` は Always Case、`"audit.release"` は両方を指定します。Always Case は Always source の参加選択と Extra source の有効化を行います。各軸の Case name 自体が Configuration 上で有効なら、その適用結果として source が0件でも正常です。指定した軸に存在しない Case name は error です。
 
 ## Runtime Output
 

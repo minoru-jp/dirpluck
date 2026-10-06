@@ -63,7 +63,7 @@ class Scope:
 
 @dataclass(frozen=True)
 class Always:
-    """One Configuration-bound source available to Always Case selection."""
+    """One Configuration-bound fixed source definition."""
 
     path: str
     selection: SelectionDefinition
@@ -73,10 +73,11 @@ class Always:
 
 @dataclass(frozen=True)
 class AlwaysCase:
-    """One named filter over the effective Always source collection."""
+    """One named participation rule over the effective Always and Extra collections."""
 
     description: str | None
     include: tuple[str, ...] | None
+    add: tuple[str, ...] | None
     exclude: tuple[str, ...] | None
 
 
@@ -112,6 +113,7 @@ class Config:
     pluck_cases: Mapping[str, SelectionDefinition]
     scopes: Mapping[str | None, Scope]
     always: Mapping[str, Always]
+    extras: Mapping[str, Always]
     always_cases: Mapping[str, AlwaysCase]
     namespaces: frozenset[str]
     layouts: Mapping[str, Layout]

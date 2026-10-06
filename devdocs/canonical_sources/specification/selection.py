@@ -16,7 +16,7 @@ from shikumi_devdoc.norms.document import title
 )
 class SPECIFICATION_PART:
     class SPEC_065:
-        r"""Pluck の base / Pluck Case Selection と、Always source の base Selection は、`must` / `may` の candidate を少なくとも1個必要とする。Candidate は direct string pattern、structured `match` entry、または Shared reference で記述できる。`description` は任意で、記述する場合だけ空でない string を必要とする。Always Case は Selection ではなく effective Always source 集合の membership filter なので、この Selection grammar を持たない。"""
+        r"""Pluck の base / Pluck Case Selection と、Always / Extra source の base Selection は、`must` / `may` の candidate を少なくとも1個必要とする。Candidate は direct string pattern、structured `match` entry、または Shared reference で記述できる。`description` は任意で、記述する場合だけ空でない string を必要とする。Always Case は Selection ではなく effective Always / Extra source の activation / membership filter なので、この Selection grammar を持たない。"""
 
         level @= MUST
 
@@ -165,7 +165,7 @@ class SPECIFICATION_PART:
 
         class SPEC_083:
             r"""
-            Selection-relative concrete path は `ignore` の `{ path = STRING }` inline table で記述する。Pluck では Target directory、Always source では解決済み Always source directory を Selection root とする。`path` は Selection root 基準の relative path であり、先頭の `./` は任意として正規化する。末尾 `/` のない concrete path は、その path にある file / directory の両方を除外対象とする。末尾 `/` を付けた場合だけ directory に限定する。
+            Selection-relative concrete path は `ignore` の `{ path = STRING }` inline table で記述する。Pluck では Target directory、Always / Extra source では解決済み fixed source directory を Selection root とする。`path` は Selection root 基準の relative path であり、先頭の `./` は任意として正規化する。末尾 `/` のない concrete path は、その path にある file / directory の両方を除外対象とする。末尾 `/` を付けた場合だけ directory に限定する。
 
             ```text
             { path = "tests/fixtures/big.bin" }   exact entry path (file or directory)

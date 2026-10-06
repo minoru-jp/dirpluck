@@ -11,7 +11,7 @@ class SECTION_001:
     r"""
     {{TERM_1}} は、複数の場所にある file から必要なものを選び、ひとつの ZIP Archive にまとめるための CLI tool です。
 
-    何を含め、何を除外し、どの固定資料を常に添えるかを TOML の{{TERM_2}}として残せます。たとえば LLM に repository を渡して開発作業を依頼するときに、今回の開発対象、共通 framework、作業に必要な local wheel、関連 repository を、同じ rule から再現可能な Archive にまとめられます。
+    何を含め、何を除外し、どの固定資料を常に添え、どの追加資料を Case に応じて有効化するかを TOML の{{TERM_2}}として残せます。たとえば LLM に repository を渡して開発作業を依頼するときに、今回の開発対象、作業手順、必要時だけ使う local wheel などを、同じ rule から再現可能な Archive にまとめられます。
     """
 
     merge @= TERMS.TERM_1
@@ -39,90 +39,82 @@ class SECTION_001:
 
     class SECTION_003:
         r"""
-        次のような workspace を考えます。
+        代表例として、LLM-assisted developmentへ渡すhandoff Archiveを作ります。完全版は [LLM development environment Recipe](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/llm-development-environment.md) にあり、ここでは主要な構造だけを抜粋します。
+
+        次のようなworkspaceを考えます。
 
         ```text
         workspace/
         ├── default.dirpluck
-        ├── framework-core/
-        │   └── dist/
-        │       └── framework_core-2.4.0-py3-none-any.whl
-        ├── docs-builder/
-        │   └── dist/
-        │       └── docs_builder-1.6.0-py3-none-any.whl
-        └── repositories/
+        ├── handoff/
+        │   └── DEVELOPMENT.md
+        ├── offline_wheels/
+        │   └── ...
+        └── projects/
             ├── service-api/
-            │   ├── src/
-            │   └── .tmp/
-            │       └── proposed-changes.patch
-            ├── worker-jobs/
-            └── web-console/
+            └── worker-jobs/
         ```
 
-        `repositories/` には同じ基盤を利用する複数の repository があり、今回は `service-api` と `web-console` を LLM に渡す開発対象とします。`framework-core` と `docs-builder` の wheel は、どの Target を選んでも作業に必要なので常に Archive へ含めます。`service-api/.tmp/` には、別の作業で取得した評価対象の差分が置かれています。
-
-        Workspace root の `default.dirpluck` を次のようにします。
+        Workspace rootの`default.dirpluck`を次のようにします。
 
         ```toml
         {{readme_llm_context_configuration}}
         ```
 
-        `always` は Target に関係なく固定資料を加えます。`scope.projects` は runtime に選べる repository の場所を定め、`pluck` は選ばれた directory Target へ同じ Selection を適用します。`targets_layout = "repositories"` は選択した Target を宣言済み `repositories/` Layout の下へ配置します。通常は `.tmp/` を除外し、`diff` Case のときだけ評価対象の差分を含めます。`description` は選択 semantics を変えませんが、生成される Archive README に役割を残すため、受け取った人や LLM が開発対象・基盤・補助 tool を区別できます。
+        この例では、常に必要な作業指示を`always`、offline環境だけで必要なwheelhouseを`extra`として定義します。Extraは定義しただけではinactiveで、`.offline` Always Caseからaddされたrunだけで有効になります。
+
+        Layoutはsupport material、dependency、development TargetをArchive内で分離します。`description_no_targets`などのconditional descriptionはsourceの有無に応じた補足をgenerated READMEへ追加し、通常の`description`は常に表示されます。
         """
 
-        title @= "例: LLM に開発 context を渡す"
+        title @= "例: LLM に開発 handoff Archive を渡す"
 
         readme_llm_context_configuration @= """
         [about]
-        description = "LLMによる開発作業のためのリポジトリと実行依存物。"
-        description_no_targets = "今回は開発対象リポジトリを含まず、固定資料だけを収録しています。"
-        targets_layout = "repositories"
+        description = "LLM-assisted development向けのhandoff Archive。"
+        description_no_targets = "開発対象Targetは選択されていません。"
+        description_no_always = "support sourceは有効ではありません。"
+        description_empty = "sourceは選択されておらず、generated READMEだけを収録します。"
+        always_layout = "support"
+        targets_layout = "development-targets"
 
-        [layout.repositories]
-        description = "今回の開発対象として選択されたリポジトリ。"
+        [layout.support]
+        description = "開発時に参照する作業指示。"
 
-        [always.dependencies]
-        description = "対象リポジトリが利用する基盤フレームワーク。"
-        path = "framework-core/dist"
+        [layout.dependencies]
+        description = "offline環境で使用する開発dependency。"
+
+        [layout.development-targets]
+        description = "今回の開発対象として選択されたrepository。"
+
+        [always.handoff]
+        description = "どの通常handoffにも添える開発手順。"
+        path = "handoff"
+        must = ["DEVELOPMENT.md"]
+
+        [extra.offline_wheels]
+        description = "package indexを利用できない環境向けのwheelhouse。"
+        path = "offline_wheels"
         must = ["*.whl"]
-
-        [always.tools]
-        description = "開発文書を構成するためのツール。"
-        path = "docs-builder/dist"
-        must = ["*.whl"]
+        layout = "dependencies"
 
         [scope.projects]
-        description = "開発対象として選択できるリポジトリ。"
-        path = "repositories"
-        ignore = ["archive/", "scratch/"]
+        description = "開発対象として選択できるrepository。"
+        path = "projects"
 
-        [shared.ignore]
-        repository-noise = [
+        [pluck]
+        description = "LLMへ渡す通常のproject file。"
+        may = ["*", "*/"]
+        ignore = [
             ".git/",
             ".venv/",
             "__pycache__/",
             ".env*",
-            "*.pem",
-            "*.key",
             "*.pyc",
         ]
 
-        [pluck]
-        description = "今回LLMに渡す開発対象のリポジトリ。"
-        may = ["*", "*/"]
-        ignore = [
-            { shared = "repository-noise" },
-            { path = "private/local-notes/" },
-            { path = ".tmp/" },
-        ]
-
-        [case.pluck.diff]
-        description = "開発対象のリポジトリ。.tmp/ に評価してほしい差分が含まれています。"
-        may = ["*", "*/"]
-        ignore = [
-            { shared = "repository-noise" },
-            { path = "private/local-notes/" },
-        ]
+        [case.always.offline]
+        description = "package indexへ接続できないhandoff先。"
+        add = ["offline_wheels"]
 
         [output]
         path = "develop-target.zip"
@@ -131,68 +123,40 @@ class SECTION_001:
 
         class SECTION_004:
             r"""
-            Archive を作る前に、まず内容を確認します。この例では workspace root を runtime current working directory として実行するため、`default.dirpluck` が自動的に使われます。
+            通常のhandoffはExtraを有効化せずpreviewします。
 
             ```console
-            dirpluck projects/service-api/ projects/web-console/ --preview
+            dirpluck projects/service-api/ --preview
             ```
 
-            `--preview` は ZIP をまだ書き込まず、現在の filesystem から何が選択されるかを表示します。想定していない file が含まれていないか、必要な file が欠けていないかを確認します。
-            """
-
-            title @= "Preview"
-
-        class SECTION_005:
-            r"""
-            通常の Selection では `.tmp/` を除外しています。`service-api/.tmp/proposed-changes.patch` も一緒に渡して差分を評価するときは、`diff` Case を選びます。
+            package indexへ接続できないhandoff先では`.offline` Always Caseを選びます。
 
             ```console
-            dirpluck projects/service-api/ --case diff --preview
+            dirpluck projects/service-api/ --case .offline --preview
             ```
 
-            `--case diff` は `[case.pluck.diff]` の Selection を使用するため、この場合だけ `.tmp/` も Archive の対象になります。生成される Archive README には Case 側の `description` も反映されます。確認後は同じ command から `--preview` を外して build できます。
-            """
-
-            title @= "Case で差分を追加する"
-
-        class SECTION_006:
-            r"""
-            内容に問題がなければ、同じ Target で Archive を作成します。
-
-            ```console
-            dirpluck projects/service-api/ projects/web-console/
-            ```
-
-            概念的には、次のような Archive が得られます。
+            概念的には次のArchiveになります。
 
             ```text
             develop-target.zip
             ├── README.md
+            ├── support/
+            │   └── handoff/
+            │       └── DEVELOPMENT.md
             ├── dependencies/
-            │   └── framework_core-2.4.0-py3-none-any.whl
-            ├── repositories/
-            │   ├── service-api/
-            │   │   └── ...
-            │   └── web-console/
+            │   └── offline_wheels/
             │       └── ...
-            └── tools/
-                └── docs_builder-1.6.0-py3-none-any.whl
+            └── development-targets/
+                └── service-api/
+                    └── ...
             ```
 
-            別の作業では Target だけを変えます。
-
-            ```console
-            dirpluck projects/worker-jobs/ --preview
-            ```
-
-            {{TERM_2}}に残した収集 rule と固定資料はそのまま再利用できます。
+            内容に問題がなければ`--preview`を外してbuildします。Pluck Caseとの組み合わせやREADME-only Archiveを含む完全な例は [Recipe](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/llm-development-environment.md) を参照してください。
             """
 
-            title @= "Build"
+            title @= "Preview と Build"
 
-            merge @= TERMS.TERM_2
-
-        class SECTION_007:
+        class SECTION_005:
             r"""
             自動的な Target discovery と Selection traversal で見つかった symbolic link や認識済み Windows directory junction は追跡せず、Archive にも含めません。詳細な filesystem boundary は [Trust Model](https://github.com/minoru-jp/dirpluck/blob/main/docs/TRUST.md) を参照してください。
             """
@@ -207,7 +171,7 @@ class SECTION_001:
 
         外部の相手や non-local の LLM に Archive を渡す場合は、共有前に `--preview` で選択内容を確認してください。
 
-        {{TERM_2}}自体も filesystem 操作の指示です。Named Scope / Always source は local filesystem の location を参照でき、Output は書き込み先を指定します。第三者から受け取った Configuration や内容を確認していない Configuration はそのまま実行せず、参照 source、Base Configuration、Selection、Output を確認してください。
+        {{TERM_2}}自体も filesystem 操作の指示です。Named Scope / Always / Extra source は local filesystem の location を参照でき、Output は書き込み先を指定します。第三者から受け取った Configuration や内容を確認していない Configuration はそのまま実行せず、参照 source、Base Configuration、Selection、Output を確認してください。
 
         生成される Archive README は source filesystem path を default では記録しません。`--paths` を指定すると resolved source path が追加され、absolute path など local environment の情報を含む可能性があります。
 
@@ -225,7 +189,7 @@ class SECTION_001:
 
         {{TERM_1}} が役立つのは、「今回どの file を渡すか」という判断を次回も再利用したい場合です。{{TERM_2}}に rule を残しておけば、shell history、過去の会話、人間の記憶に依存せず、同じ意図から Archive を再構成できます。
 
-        Target だけを入れ替えたり、複数 Target をまとめたり、固定資料を `always` で添えたりできます。
+        Target だけを入れ替えたり、複数 Target をまとめたり、固定資料を `always` で添えたり、追加資料を `extra` と Always Case で必要な run だけ有効化したり、Layout で Archive 内の役割を分けたりできます。
         """
 
         title @= "なぜ dirpluck を使うのか"
@@ -240,7 +204,7 @@ class SECTION_001:
         - [Getting Started](https://github.com/minoru-jp/dirpluck/blob/main/docs/GETTING_STARTED.md): 最小 Configuration から preview / build までの短い walkthrough。
         - [Recipes](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/INDEX.md): 実際の workspace と目的から TOML / CLI の組み合わせを学ぶ use-case guide。
         - [Glossary](https://github.com/minoru-jp/dirpluck/blob/main/GLOSSARY.md): 文書全体で使う概念の意味。
-        - [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Scope、Always、Shared、Case、Base Configuration など Configuration authoring の guide。
+        - [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Scope、Always、Extra、Layout、Shared、Case、Base Configuration など Configuration authoring の guide。
         - [CLI Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/cli/INDEX.md): Target 指定、CLI option、Invocation Template の guide。
         - [Python API](https://github.com/minoru-jp/dirpluck/blob/main/docs/python_api/INDEX.md): CLI と同じ execution model を Python から使う最小の公式 API。
         - [Specification](https://github.com/minoru-jp/dirpluck/blob/main/docs/specification/INDEX.md): Configuration composition、resolution、matching、filesystem traversal、Archive、Output、validation の厳密な規則。

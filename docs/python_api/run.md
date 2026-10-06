@@ -38,7 +38,7 @@ cwd           Python API only: runtime anchor for relative control-document path
 
 When `invocation` is used, positional `targets` and `config` are not supplied at the same time. `entry` is valid only together with `invocation`. Because `preview=True` does not resolve or write an Output, it cannot be combined with `sequence`, `output`, or `force=True`. `sequence` must be an integer greater than or equal to 1. `output` uses the same `/`-separator path syntax as CLI `--output`, relative to `cwd`, and `force` is boolean.
 
-When an Invocation Template is selected, the `case` argument overrides the stored Case and `archive_mtime` overrides the stored `archive_mtime`, following the same rules as the corresponding CLI options. `case` uses the same two-axis grammar: `"audit"` selects a Pluck Case, `".release"` selects an Always Case, and `"audit.release"` selects both. If the Invocation omits `config`, dirpluck uses `cwd/default.dirpluck`; if it omits `targets`, the run has no Targets; if it omits `case`, normal default Case semantics apply; if it omits `archive_mtime`, the normal per-entry timestamp behavior applies.
+When an Invocation Template is selected, the `case` argument overrides the stored Case and `archive_mtime` overrides the stored `archive_mtime`, following the same rules as the corresponding CLI options. `case` uses the same two-axis grammar: `"audit"` selects a Pluck Case, `".release"` selects an Always Case, and `"audit.release"` selects both. An Always Case selects participating Always sources and can activate Extra sources. If the Invocation omits `config`, dirpluck uses `cwd/default.dirpluck`; if it omits `targets`, the run has no Targets; if it omits `case`, normal default Case semantics apply; if it omits `archive_mtime`, the normal per-entry timestamp behavior applies.
 
 ## Configuration deprecation warning
 
@@ -58,7 +58,7 @@ Using `[always.<name>].namespace` always reports a separate pre-1.0 compatibilit
 
 ## README-only Archive
 
-`dirpluck.run()` may complete successfully with zero resolved sources. With no Target references and no Always sources, a build creates an Archive containing only the generated `README.md`; `preview=True` returns a tree containing only `README.md`. This is a normal result, not a warning or exception. The generated README records that no sources were selected, and `RunResult.archive_entries` is `("README.md",)`.
+`dirpluck.run()` may complete successfully with zero resolved sources. With no Target references, no ordinary Always sources, and no Extra sources activated by the selected Always Case, a build creates an Archive containing only the generated `README.md`; `preview=True` returns a tree containing only `README.md`. This is a normal result, not a warning or exception. The generated README records that no sources were selected, and `RunResult.archive_entries` is `("README.md",)`.
 
 A valid Case may also produce a zero-source result. Case names that are not defined by the applicable Configuration rules remain errors.
 

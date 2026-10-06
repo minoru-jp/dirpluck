@@ -16,7 +16,7 @@ level: MUST
 
 ## SPEC_097
 
-The Archive root for an Always source is `<name>/`, where `<name>` is the Always source name.
+The Archive root for an Always source or an activated Extra source is derived from its TOML source identifier, not from the filesystem source location. Without Layout, that identifier is the source root; with Layout, it appears below the Layout directory.
 
 level: MUST
 
@@ -24,7 +24,7 @@ related: [SPEC_063](namespace.md#spec_063)
 
 ## SPEC_098
 
-Every resolved source final Archive root must be unique under a case-insensitive comparison regardless of source role. A Target and an Always source that resolve to the exact same spelling are an error rather than a shared destination region. Roots such as `App` and `app` that differ only in case are also ambiguous and invalid. Because Layout is part of the final Archive root, the same uniqueness rule applies after Layout placement. The spelling actually written to the Archive is preserved.
+Every resolved source final Archive root must be unique under a case-insensitive comparison regardless of source role. A Target and an Always or activated Extra source that resolve to the exact same spelling are an error rather than a shared destination region. Roots such as `App` and `app` that differ only in case are also ambiguous and invalid. Because Layout is part of the final Archive root, the same uniqueness rule applies after Layout placement. The spelling actually written to the Archive is preserved.
 
 level: MUST
 
@@ -50,13 +50,13 @@ level: MUST
 
 ## SPEC_102
 
-The generated root `README.md` is an index of Archive contents, not a resolution report. If effective `[about].description` exists, it is included as the overall Archive description regardless of the resolved source mix. In addition, exactly one conditional description is included when configured: `description_no_targets` for Always-only sources, `description_no_always` for Target-only sources, or `description_empty` when neither role resolves. No conditional description is added when both roles are present. Source presence is determined by the resolved source role rather than selected-file count, so a source with `allow_empty = true` and zero selected files still counts as present. Exact Markdown headings, punctuation, whitespace, and other presentation details are not a stable machine-readable compatibility interface.
+The generated root `README.md` is an index of Archive contents, not a resolution report. If effective `[about].description` exists, it is included as the overall Archive description regardless of the resolved source mix. In addition, exactly one conditional description is included when configured: `description_no_targets` for Always-role-only sources, `description_no_always` for Target-only sources, or `description_empty` when neither role resolves. No conditional description is added when both roles are present. An activated Extra has the same fixed / Always role as an Always source for this decision. Source presence is determined by the resolved source role rather than selected-file count, so a source with `allow_empty = true` and zero selected files still counts as present. Exact Markdown headings, punctuation, whitespace, and other presentation details are not a stable machine-readable compatibility interface.
 
 level: MUST
 
 ## SPEC_103
 
-For each actually used Layout that has a `description`, the generated README includes identifiable information for that Layout directory and description exactly once. A Layout without a description remains valid for placement and does not require a Layout-description entry. Source listings represent Always sources before Targets and place each source or group description before auxiliary metadata such as file counts, source paths, or overlap information. Targets are grouped by Scope and show the Scope identity and `scope.description` as group context. Directory Targets are represented by final Archive root under that Scope's Pluck group, and Scope / Pluck Selection descriptions are not repeated for every Target in the same Scope. File Targets do not use Pluck and are represented directly under the Scope group as atomic sources. Always sources show their final Archive root and their own Selection `description`. Multi-line descriptions are preserved. Exact heading levels, inline-code spelling, labels, and whitespace are presentation details rather than a stable machine-readable interface.
+For each actually used Layout that has a `description`, the generated README includes identifiable information for that Layout directory and description exactly once. A Layout without a description remains valid for placement and does not require a Layout-description entry. Source listings represent Always sources and activated Extra sources before Targets and place each source or group description before auxiliary metadata such as file counts, source paths, or overlap information. Targets are grouped by Scope and show the Scope identity and `scope.description` as group context. Directory Targets are represented by final Archive root under that Scope's Pluck group, and Scope / Pluck Selection descriptions are not repeated for every Target in the same Scope. File Targets do not use Pluck and are represented directly under the Scope group as atomic sources. Always sources and activated Extra sources show their final Archive root and their own Selection `description`. Multi-line descriptions are preserved. Exact heading levels, inline-code spelling, labels, and whitespace are presentation details rather than a stable machine-readable interface.
 
 level: MUST
 

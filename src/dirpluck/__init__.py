@@ -4,7 +4,7 @@ from ._application import RunResult, run
 from .errors import DirpluckError
 from ._warnings import AlwaysMigrationWarning, ConfigurationDeprecationWarning
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"
 
 __all__ = [
     "AlwaysMigrationWarning",

@@ -2,15 +2,15 @@
 
 This document describes dirpluck's current development stage, compatibility policy, and the criteria for moving toward 1.0.
 
-The `0.17.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and from 0.10.0 onward the project strongly favored preserving the published surface. Real-world use since then has shown that design issues still remain that should be corrected before 1.0, so 0.16.0 revises the compatibility policy for the remainder of the 0.x series.
+The `0.18.x` line is **Beta**. Version 0.9.0 made the major reorganization of the Configuration language and filesystem model, and from 0.10.0 onward the project strongly favored preserving the published surface. Real-world use since then has shown that design issues still remain that should be corrected before 1.0, so 0.16.0 revises the compatibility policy for the remainder of the 0.x series.
 
 ## Current status
 
-The current public version line is `0.17.x`, and the development stage is **Beta**.
+The current public version line is `0.18.x`, and the development stage is **Beta**.
 
 The remaining 0.x series is a design-convergence period for defining the 1.0.0 public contract. The project will reduce migration burden where practical, but it will not freeze a design that is unsuitable for 1.0 solely for compatibility.
 
-0.15.0 was not published; the contract changes planned for it are folded into 0.16.0. The 0.16.0 implementation reorganizes the internal execution model into three stages: input parsing / normalization, extraction from the filesystem, and Archive / message output. The 0.17.0 Layout and conditional-description work follows the same boundary. This direction is the internal foundation for 1.0: later stages should not reinterpret public grammar, and each layer should avoid depending unnecessarily on the input language of the previous layer or the presentation format of the next one.
+0.15.0 was not published; the contract changes planned for it are folded into 0.16.0. The 0.16.0 implementation reorganizes the internal execution model into three stages: input parsing / normalization, extraction from the filesystem, and Archive / message output. The 0.17.0 Layout / conditional-description work and the 0.18.0 Extra-source work follow the same boundary. This direction is the internal foundation for 1.0: later stages should not reinterpret public grammar, and each layer should avoid depending unnecessarily on the input language of the previous layer or the presentation format of the next one.
 
 ## Stability policy
 
@@ -30,7 +30,7 @@ During Beta, the project will especially verify that:
 
 - the Configuration model has clear responsibility boundaries and remains practical for real project trees and shareable Archive creation;
 - the CLI and official Python API provide the same invocation semantics and migration diagnostics;
-- the major contracts around Scope, Selection, Base, Layout, Namespace, Always, Output, and Archive planning converge on their 1.0 forms;
+- the major contracts around Scope, Selection, Base, Layout, Namespace, Always, Extra, Output, and Archive planning converge on their 1.0 forms;
 - the `parse / normalize → extract → output` responsibility boundary remains intact, without input-language concepts or presentation concerns flowing into layers that do not need them;
 - awkward semantic boundaries discovered through real use are corrected before 1.0, including with breaking changes when necessary;
 - deprecations, warnings, and Migration Guides are available when appropriate for those changes; and

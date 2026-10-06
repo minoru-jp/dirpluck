@@ -2,11 +2,11 @@
 
 `dirpluck` is a CLI tool for selecting the files you need from multiple locations and collecting them into a single ZIP Archive.
 
-A TOML Configuration records what to include, what to exclude, and which fixed material should always be attached. For example, when handing repositories to an LLM for development work, you can package the current development targets, a shared framework, local wheels needed for the task, and related repositories into a reproducible Archive built from the same rules.
+A TOML Configuration records what to include, what to exclude, which fixed material should always be attached, and which additional material should be activated only for selected Cases. For example, when handing a repository to an LLM for development work, you can package the current development target, working instructions, and local wheels needed only in some environments into a reproducible Archive built from the same rules.
 
 ## Installation
 
-The current version is **0.17.0**.
+The current version is **0.18.0**.
 
 Python 3.11 or later is required.
 
@@ -19,117 +19,95 @@ dirpluck --version
 
 If you are upgrading from 0.16.x, see [Migrating to 0.17](https://github.com/minoru-jp/dirpluck/blob/main/docs/migration/0.17.md) for the final Archive-root uniqueness change and the move to Layout. If you are upgrading from 0.14.x or earlier, also review [Migrating to 0.16](https://github.com/minoru-jp/dirpluck/blob/main/docs/migration/0.16.md) for the earlier Always Archive-identity change.
 
-## Example: prepare development context for an LLM
+## Example: hand an LLM a development handoff Archive
+
+As a representative example, build a handoff Archive for LLM-assisted development. The complete version lives in the [LLM development environment Recipe](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/llm-development-environment.md); this README keeps only the main structure.
 
 Suppose you have this workspace:
 
 ```text
 workspace/
 ├── default.dirpluck
-├── framework-core/
-│   └── dist/
-│       └── framework_core-2.4.0-py3-none-any.whl
-├── docs-builder/
-│   └── dist/
-│       └── docs_builder-1.6.0-py3-none-any.whl
-└── repositories/
+├── handoff/
+│   └── DEVELOPMENT.md
+├── offline_wheels/
+│   └── ...
+└── projects/
     ├── service-api/
-    │   ├── src/
-    │   └── .tmp/
-    │       └── proposed-changes.patch
-    ├── worker-jobs/
-    └── web-console/
+    └── worker-jobs/
 ```
-
-`repositories/` contains several repositories built on the same foundation. For this task, `service-api` and `web-console` are the development targets to give to the LLM. The `framework-core` and `docs-builder` wheels are needed regardless of which Target is selected, so they should always be included in the Archive. `service-api/.tmp/` contains a downloaded diff to review in a separate workflow.
 
 Create `default.dirpluck` at the workspace root:
 
 ```toml
 [about]
-description = "Repositories and runtime dependencies for LLM-assisted development."
-description_no_targets = "This Archive contains fixed material only; no development-target repository was selected."
-targets_layout = "repositories"
+description = "A handoff Archive for LLM-assisted development."
+description_no_targets = "No development Target was selected."
+description_no_always = "No support source is active."
+description_empty = "No source was selected; this Archive contains only the generated README."
+always_layout = "support"
+targets_layout = "development-targets"
 
-[layout.repositories]
+[layout.support]
+description = "Working instructions used during development."
+
+[layout.dependencies]
+description = "Development dependencies used in offline environments."
+
+[layout.development-targets]
 description = "Repositories selected as development targets for this task."
 
-[always.dependencies]
-description = "The foundational framework used by the target repositories."
-path = "framework-core/dist"
-must = ["*.whl"]
+[always.handoff]
+description = "Development instructions attached to every normal handoff."
+path = "handoff"
+must = ["DEVELOPMENT.md"]
 
-[always.tools]
-description = "A tool used to build development documentation."
-path = "docs-builder/dist"
+[extra.offline_wheels]
+description = "A wheelhouse for environments that cannot reach a package index."
+path = "offline_wheels"
 must = ["*.whl"]
+layout = "dependencies"
 
 [scope.projects]
 description = "Repositories that can be selected as development targets."
-path = "repositories"
-ignore = ["archive/", "scratch/"]
+path = "projects"
 
-[shared.ignore]
-repository-noise = [
+[pluck]
+description = "Normal project files to hand to the LLM."
+may = ["*", "*/"]
+ignore = [
     ".git/",
     ".venv/",
     "__pycache__/",
     ".env*",
-    "*.pem",
-    "*.key",
     "*.pyc",
 ]
 
-[pluck]
-description = "Repositories selected as development targets for this LLM task."
-may = ["*", "*/"]
-ignore = [
-    { shared = "repository-noise" },
-    { path = "private/local-notes/" },
-    { path = ".tmp/" },
-]
-
-[case.pluck.diff]
-description = "Development target repository; .tmp/ contains the diff to review."
-may = ["*", "*/"]
-ignore = [
-    { shared = "repository-noise" },
-    { path = "private/local-notes/" },
-]
+[case.always.offline]
+description = "The destination cannot reach a package index."
+include = ["handoff", "offline_wheels"]
 
 [output]
 path = "develop-target.zip"
 overwrite = true
 ```
 
-`always` adds fixed material regardless of the selected Target. `scope.projects` defines where selectable repositories live, and `pluck` applies the same Selection to each selected directory Target. `targets_layout = "repositories"` places selected Targets below the declared `repositories/` Layout. Normally `.tmp/` is excluded; the `diff` Case includes it when the downloaded changes should be reviewed. `description` does not change selection semantics, but it is carried into the generated Archive README so a person or LLM can distinguish the development targets, foundation, and supporting tools.
+In this example, working instructions that are always needed are defined with `always`, while the wheelhouse needed only for offline environments is defined with `extra`. An Extra source is inactive merely by being declared and becomes active only for runs where an Always Case such as `.offline` adds it.
 
-### Preview
+Layouts separate support material, dependencies, and development Targets inside the Archive. Conditional descriptions such as `description_no_targets` add context to the generated README according to which sources are present, while the ordinary `description` is always shown.
 
-Before creating the Archive, inspect what will be collected. In this example, commands are run from the workspace root, so `default.dirpluck` is used automatically.
+### Preview and build
+
+Preview a normal handoff without activating the Extra source:
 
 ```console
-dirpluck projects/service-api/ projects/web-console/ --preview
+dirpluck projects/service-api/ --preview
 ```
 
-`--preview` shows what would be selected from the current filesystem without writing the ZIP. Check that nothing unexpected is included and that required files are not missing.
-
-### Add a diff with a Case
-
-The normal Selection excludes `.tmp/`. When `service-api/.tmp/proposed-changes.patch` should be included for review, select the `diff` Case:
+For a destination that cannot reach a package index, select the `.offline` Always Case:
 
 ```console
-dirpluck projects/service-api/ --case diff --preview
-```
-
-`--case diff` uses the Selection from `[case.pluck.diff]`, so `.tmp/` is included only for this run. The Case `description` is also carried into the generated Archive README. After inspection, remove `--preview` from the same command to build the Archive.
-
-### Build
-
-If the preview looks right, build the Archive with the same Targets:
-
-```console
-dirpluck projects/service-api/ projects/web-console/
+dirpluck projects/service-api/ --case .offline --preview
 ```
 
 Conceptually, the resulting Archive looks like this:
@@ -137,24 +115,18 @@ Conceptually, the resulting Archive looks like this:
 ```text
 develop-target.zip
 ├── README.md
+├── support/
+│   └── handoff/
+│       └── DEVELOPMENT.md
 ├── dependencies/
-│   └── framework_core-2.4.0-py3-none-any.whl
-├── repositories/
-│   ├── service-api/
-│   │   └── ...
-│   └── web-console/
+│   └── offline_wheels/
 │       └── ...
-└── tools/
-    └── docs_builder-1.6.0-py3-none-any.whl
+└── development-targets/
+    └── service-api/
+        └── ...
 ```
 
-For another task, change only the Target:
-
-```console
-dirpluck projects/worker-jobs/ --preview
-```
-
-The collection rules and fixed material recorded in the Configuration stay the same.
+If the preview looks correct, remove `--preview` to build the ZIP. See the [Recipe](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/llm-development-environment.md) for the complete example, including combined Pluck / Always Cases and a README-only Archive.
 
 ### Filesystem note
 
@@ -168,7 +140,7 @@ The example ignore list for `.git/`, `.venv/`, `.env*`, `*.pem`, `*.key`, and si
 
 Before sending an Archive to another party or to a non-local LLM, inspect the selection with `--preview`.
 
-A Configuration is also an instruction for filesystem operations. Named Scopes and Always sources can reference local filesystem locations, and Output declares where the Archive is written. Do not run a Configuration received from someone else, or one you have not reviewed, without checking its referenced sources, Base Configuration, Selection, and Output.
+A Configuration is also an instruction for filesystem operations. Named Scopes and Always / Extra sources can reference local filesystem locations, and Output declares where the Archive is written. Do not run a Configuration received from someone else, or one you have not reviewed, without checking its referenced sources, Base Configuration, Selection, and Output.
 
 The generated Archive README does not include source filesystem paths by default. If `--paths` is used, resolved source paths are added and may reveal local-environment information such as absolute paths.
 
@@ -180,7 +152,7 @@ For a one-off ZIP, doing the work by hand may be simpler.
 
 `dirpluck` is useful when the decision about what to hand off needs to be reused later. Recording the rules in a Configuration lets you reconstruct an Archive from the same intent without relying on shell history, past conversations, or human memory.
 
-You can change the Target, select multiple Targets together, and attach fixed material with `always` while keeping the collection rules reusable.
+You can change the Target, select multiple Targets together, attach fixed material with `always`, activate additional material only for selected runs with `extra` and an Always Case, and use Layouts to separate roles inside the Archive.
 
 ## Documentation
 
@@ -189,7 +161,7 @@ This README introduces the basic workflow through one concrete example.
 - [Getting Started](https://github.com/minoru-jp/dirpluck/blob/main/docs/GETTING_STARTED.md): a short walkthrough from a minimal Configuration to preview and build.
 - [Recipes](https://github.com/minoru-jp/dirpluck/blob/main/docs/recipes/INDEX.md): use-case guides that start from a real workspace and goal, then show the matching TOML and CLI patterns.
 - [Glossary](https://github.com/minoru-jp/dirpluck/blob/main/GLOSSARY.md): meanings of the concepts used throughout the documentation.
-- [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Configuration authoring, including Scope, Always, Shared, Case, and Base Configuration.
+- [Configuration Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/configuration/INDEX.md): Configuration authoring, including Scope, Always, Extra, Layout, Shared, Case, and Base Configuration.
 - [CLI Guide](https://github.com/minoru-jp/dirpluck/blob/main/docs/cli/INDEX.md): Target references, CLI options, and Invocation Templates.
 - [Python API](https://github.com/minoru-jp/dirpluck/blob/main/docs/python_api/INDEX.md): the small official Python API for the same execution model as the CLI.
 - [Specification](https://github.com/minoru-jp/dirpluck/blob/main/docs/specification/INDEX.md): exact rules for Configuration composition, resolution, matching, filesystem traversal, Archives, Output, and validation.

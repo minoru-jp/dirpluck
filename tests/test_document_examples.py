@@ -99,77 +99,56 @@ class DocumentExampleTests(unittest.TestCase):
 
         with resolved_temporary_directory() as temp:
             root = Path(temp)
-            (root / "framework-core" / "dist").mkdir(parents=True)
-            (root / "docs-builder" / "dist").mkdir(parents=True)
-            for repository in ("service-api", "worker-jobs", "web-console"):
-                project = root / "repositories" / repository
+            (root / "handoff").mkdir(parents=True)
+            (root / "offline_wheels").mkdir(parents=True)
+            for repository in ("service-api", "worker-jobs"):
+                project = root / "projects" / repository
                 (project / "src").mkdir(parents=True)
-                (project / "private" / "local-notes").mkdir(parents=True)
-                (project / ".tmp").mkdir(parents=True)
+                (project / ".git").mkdir(parents=True)
+                (project / ".venv").mkdir(parents=True)
                 (project / "README.md").write_text(repository + "\n", encoding="utf-8")
                 (project / "src" / "main.py").write_text("VALUE = 1\n", encoding="utf-8")
                 (project / ".env.local").write_text("SECRET=example\n", encoding="utf-8")
-                (project / "private" / "local-notes" / "notes.txt").write_text(
-                    "local notes\n", encoding="utf-8"
-                )
-                (project / ".tmp" / "proposed-changes.patch").write_text(
-                    "diff --git a/src/main.py b/src/main.py\n", encoding="utf-8"
-                )
+                (project / ".git" / "config").write_text("git\n", encoding="utf-8")
+                (project / ".venv" / "pyvenv.cfg").write_text("venv\n", encoding="utf-8")
 
-            (
-                root / "framework-core" / "dist" / "framework_core-2.4.0-py3-none-any.whl"
-            ).write_bytes(b"wheel")
-            (root / "docs-builder" / "dist" / "docs_builder-1.6.0-py3-none-any.whl").write_bytes(
-                b"wheel"
-            )
+            (root / "handoff" / "DEVELOPMENT.md").write_text("Read first.\n", encoding="utf-8")
+            (root / "offline_wheels" / "ruff-0.16.10-py3-none-any.whl").write_bytes(b"wheel")
             (root / "default.dirpluck").write_text(configuration + "\n", encoding="utf-8")
 
-            result = dirpluck.run(
+            default = dirpluck.run("projects/service-api/", preview=True, cwd=root)
+            self.assertIn("support/handoff/DEVELOPMENT.md", default.archive_entries)
+            self.assertIn(
+                "development-targets/service-api/README.md",
+                default.archive_entries,
+            )
+            self.assertFalse(
+                any(entry.startswith("dependencies/") for entry in default.archive_entries)
+            )
+            self.assertNotIn(
+                "development-targets/worker-jobs/README.md",
+                default.archive_entries,
+            )
+            self.assertFalse(any("/.git/" in entry for entry in default.archive_entries))
+            self.assertFalse(any("/.venv/" in entry for entry in default.archive_entries))
+            self.assertFalse(any(".env" in entry for entry in default.archive_entries))
+
+            offline = dirpluck.run(
                 "projects/service-api/",
-                "projects/web-console/",
+                case=".offline",
                 preview=True,
                 cwd=root,
             )
-
-            self.assertIsNone(result.output_path)
-            self.assertFalse((root / "develop-target.zip").exists())
+            self.assertIn("support/handoff/DEVELOPMENT.md", offline.archive_entries)
             self.assertIn(
-                "dependencies/framework_core-2.4.0-py3-none-any.whl",
-                result.archive_entries,
+                "dependencies/offline_wheels/ruff-0.16.10-py3-none-any.whl",
+                offline.archive_entries,
             )
             self.assertIn(
-                "tools/docs_builder-1.6.0-py3-none-any.whl",
-                result.archive_entries,
+                "development-targets/service-api/README.md",
+                offline.archive_entries,
             )
-            self.assertIn("repositories/service-api/README.md", result.archive_entries)
-            self.assertIn("repositories/web-console/README.md", result.archive_entries)
-            self.assertNotIn("repositories/worker-jobs/README.md", result.archive_entries)
-            self.assertFalse(any(".env" in entry for entry in result.archive_entries))
-            self.assertFalse(
-                any("private/local-notes" in entry for entry in result.archive_entries)
-            )
-            self.assertFalse(any("/.tmp/" in entry for entry in result.archive_entries))
-
-            diff_result = dirpluck.run(
-                "projects/service-api/",
-                case="diff",
-                preview=True,
-                cwd=root,
-            )
-            self.assertIn(
-                "repositories/service-api/.tmp/proposed-changes.patch",
-                diff_result.archive_entries,
-            )
-            self.assertNotIn("repositories/worker-jobs/README.md", diff_result.archive_entries)
-            self.assertNotIn("repositories/web-console/README.md", diff_result.archive_entries)
-            self.assertFalse(any(".env" in entry for entry in diff_result.archive_entries))
-            self.assertFalse(
-                any("private/local-notes" in entry for entry in diff_result.archive_entries)
-            )
-            self.assertIn(
-                ".tmp/ に評価してほしい差分が含まれています。",
-                diff_result.archive_readme,
-            )
+            self.assertIn("offline環境で使用する開発dependency。", offline.archive_readme)
 
     def test_cli_console_test_targets_are_commands(self):
         checked = 0

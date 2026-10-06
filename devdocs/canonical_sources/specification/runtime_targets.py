@@ -8,7 +8,7 @@ from shikumi_devdoc.norms.common import canonical_source, merge, summary
 from shikumi_devdoc.norms.document import title
 
 
-@summary("Scope、Target reference、expansion、Always source、Case の解決規則。")
+@summary("Scope、Target reference、expansion、Always / Extra source、Case の解決規則。")
 @canonical_source(
     "Runtime Target, Scope, and Case",
     filename="runtime-targets.md",
@@ -18,7 +18,7 @@ from shikumi_devdoc.norms.document import title
 )
 class SPECIFICATION_PART:
     class SPEC_037:
-        r"""CLI positional `TARGET` reference は0個以上とする。Target reference が0個の run では Pluck は source selection に参加せず、Always source があればそれらだけを解決する。Always source もなければ resolved source は0個となり、build は generated `README.md` だけを含む Archive として正常に成立する。Target reference を指定した場合は従来どおり Scope / Target resolution を行い、directory Target は Pluck を必要とする。Pluck がない Effective Configuration でも `target_kind = "file"` / `"both"` の Scope から file Target を選ぶ positional Target reference は受理する。"""
+        r"""CLI positional `TARGET` reference は0個以上とする。Target reference が0個の run では Pluck は source selection に参加せず、通常参加する Always source と選択した Always Case の `include` / `add` で有効化された Extra source があれば、それら fixed source だけを解決する。参加する fixed source もなければ resolved source は0個となり、build は generated `README.md` だけを含む Archive として正常に成立する。Target reference を指定した場合は従来どおり Scope / Target resolution を行い、directory Target は Pluck を必要とする。Pluck がない Effective Configuration でも `target_kind = "file"` / `"both"` の Scope から file Target を選ぶ positional Target reference は受理する。"""
 
         merge @= TERMS.TERM_15
         level @= MUST
@@ -183,6 +183,11 @@ class SPECIFICATION_PART:
             level @= MUST
             related @= (PATHS_SPEC.SPEC_018, PATHS_SPEC.SPEC_024)
 
+        class SPEC_056:
+            r"""`[extra.<name>]` は `[always.<name>]` と同じ canonical source schema、name validation、filesystem `path`、Selection、optional Layout semantics を持つ。ただし Extra source は definition だけでは participating source にならない。Extra identifier は effective Always identifier と共通の Case reference namespace に属し、大文字小文字を区別しない比較で互いに一意でなければならない。Extra source は新規 syntax であるため deprecated Always `namespace` compatibility field を持たない。"""
+
+            level @= MUST
+
         class SPEC_057:
             r"""Runtime Case selector は Pluck Case と Always Case の2軸を独立に指定する。`PLUCK` は Pluck Case だけ、`.ALWAYS` は Always Case だけ、`PLUCK.ALWAYS` は両方を指定する。Case name 自身に `.` は使用できない。空 selector、`.`、末尾 dot、2個以上の dot を持つ selector は error とする。CLI `--case`、公式 Python API の `case=`、Invocation の `case` field は同じ grammar を使用する。"""
 
@@ -190,16 +195,16 @@ class SPECIFICATION_PART:
             level @= MUST
 
         class SPEC_058:
-            r"""Pluck Case を指定しない場合、directory Target がある run は `[pluck]` の default Selection を使う。Pluck Case を指定した場合は effective `[case.pluck.<name>]` の完全な Selection を使い、Case name が存在しなければ error とする。Pluck Case の validity は Target 数や Always source の有無から独立して判定し、Case が定義済みなら Target が0件でも selector 自体は有効とする。"""
+            r"""Pluck Case を指定しない場合、directory Target がある run は `[pluck]` の default Selection を使う。Pluck Case を指定した場合は effective `[case.pluck.<name>]` の完全な Selection を使い、Case name が存在しなければ error とする。Pluck Case の validity は Target 数や fixed source の有無から独立して判定し、Case が定義済みなら Target が0件でも selector 自体は有効とする。"""
 
             level @= MUST
 
         class SPEC_059:
-            r"""Always Case を指定しない場合は effective Always source をすべて参加させる。Always Case を指定した場合は effective `[case.always.<name>]` を使い、Case name が存在しなければ error とする。Always Case は source 個別の Selection を置き換えず、effective Always source 集合の membership だけを決める。`include` と `exclude` は同時に指定できない。`include` は記載した Always identifier だけを参加させ、`include = []` は0件を明示する。`exclude` は記載した identifier を除外し、`exclude = []` は何も除外しない。両 field を省略した Case はすべての Always source を参加させる。参照名は final archive root から導出した別名ではなく TOML の Always identifier とし、Base composition 後の effective Always source 集合に存在しない参照は Configuration error とする。"""
+            r"""Always Case を指定しない場合は effective Always source をすべて参加させ、Extra source はすべて inactive のままとする。Always Case を指定した場合は effective `[case.always.<name>]` を使い、Case name が存在しなければ error とする。Always Case は source 個別の Selection を置き換えず、Always / Extra source の participation だけを決める。`include` は完全指定 mode とし、effective Always / Extra identifier の共通 namespace から記載した source だけを参加させる。`include = []` は0件を明示する。`add` / `exclude` は既定状態への差分指定 mode とし、`include` と `add` / `exclude` は同時に指定できないが、`add` と `exclude` は併用できる。差分指定 mode は全 effective Always source を起点に、`exclude` に記載した Always source を除外し、`add` に記載した Extra source を有効化する。`add` は Extra identifier だけ、`exclude` は Always identifier だけを受理し、反対種別または未定義 identifier を記載した Configuration は error とする。`add = []` / `exclude = []` または両 field 省略はその操作を行わない。参照名は final archive root から導出した別名ではなく TOML の Always / Extra identifier とし、Base composition 後の対応する effective source 集合に存在しない参照は Configuration error とする。"""
 
             level @= MUST
 
         class SPEC_060:
-            r"""`[case.pluck.<name>]` は base `[pluck]` の差分ではなく完全な Selection とし、`must` / `may` / `ignore` / Shared reference / `allow_empty` を継承しない。`[case.always.<name>]` は Selection ではなく Always source membership filter であり、選択された各 Always source は自身の base Selection をそのまま使用する。Pluck Case / Always Case のどちらも、定義済み Case の結果として participating source が0件になることを許可し、README-only Archive を正常な結果として扱う。"""
+            r"""`[case.pluck.<name>]` は base `[pluck]` の差分ではなく完全な Selection とし、`must` / `may` / `ignore` / Shared reference / `allow_empty` を継承しない。`[case.always.<name>]` は Selection ではなく Always / Extra source の activation / membership filter であり、選択された Always source と有効化された Extra source はそれぞれ自身の base Selection をそのまま使用する。Pluck Case / Always Case のどちらも、定義済み Case の結果として participating source が0件になることを許可し、README-only Archive を正常な結果として扱う。"""
 
             level @= MUST

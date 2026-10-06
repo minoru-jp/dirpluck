@@ -42,7 +42,7 @@
 | [Configuration schema](configuration-schema.md) | Configuration document の top-level schema と table 構造。 |
 | [Filesystem path notation](paths.md) | Configuration と runtime input で使用する filesystem path notation。 |
 | [Base chain and composition](composition.md) | Base chain、cycle detection、definition composition、Output の扱い。 |
-| [Runtime Target, Scope, and Case](runtime-targets.md) | Scope、Target reference、expansion、Always source、Case の解決規則。 |
+| [Runtime Target, Scope, and Case](runtime-targets.md) | Scope、Target reference、expansion、Always / Extra source、Case の解決規則。 |
 | [Namespace](namespace.md) | Archive placement に使用する Namespace の canonical semantics。 |
 | [Selection and shared patterns](selection.md) | Selection、Shared pattern、include/ignore pattern grammar。 |
 | [Filesystem boundary and entry types](filesystem.md) | filesystem boundary、link-like entry、non-regular entry の扱い。 |

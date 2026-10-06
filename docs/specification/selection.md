@@ -2,7 +2,7 @@
 
 ## SPEC_065
 
-A Pluck base Selection, a Pluck Case Selection, or an Always source base Selection requires at least one candidate across `must` and `may`. A candidate may be a direct string pattern, a structured `match` entry, or a Shared reference. `description` is optional; when present, it must be a non-empty string. An Always Case is not a Selection; it is a membership filter over the effective Always-source set and therefore does not use this Selection grammar.
+A Pluck base Selection, a Pluck Case Selection, or an Always / Extra source base Selection requires at least one candidate across `must` and `may`. A candidate may be a direct string pattern, a structured `match` entry, or a Shared reference. `description` is optional; when present, it must be a non-empty string. An Always Case is not a Selection; it is an activation / membership filter over the effective Always / Extra source set and therefore does not use this Selection grammar.
 
 level: MUST
 
@@ -160,7 +160,7 @@ level: MUST
 
 ### SPEC_083
 
-A Selection-relative concrete path is written as a `{ path = STRING }` inline table in `ignore`. For Pluck, the Selection root is the Target directory. For an Always source, it is the resolved Always-source directory. `path` is relative to the Selection root, and an initial `./` is optional and normalized. Without a trailing `/`, the concrete path excludes either a file or a directory at that path. Appending `/` narrows the exclusion to a directory only.
+A Selection-relative concrete path is written as a `{ path = STRING }` inline table in `ignore`. For Pluck, the Selection root is the Target directory. For an Always or Extra source, it is the resolved source directory. `path` is relative to the Selection root, and an initial `./` is optional and normalized. Without a trailing `/`, the concrete path excludes either a file or a directory at that path. Appending `/` narrows the exclusion to a directory only.
 
 ```text
 { path = "tests/fixtures/big.bin" }   exact entry path (file or directory)

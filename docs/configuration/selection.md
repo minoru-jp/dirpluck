@@ -6,7 +6,7 @@ This guide explains Selection authoring. Exact pattern grammar and validation ar
 
 ## Selection
 
-Directory-Target Pluck, Always sources, and Cases each contain an independent Selection. A Selection uses `must`, `may`, `ignore`, and optionally `allow_empty`; use `description` only when you want to attach a human-readable explanation. File Targets are atomic sources and do not contain a Selection.
+Directory-Target Pluck and Always / Extra sources each contain an independent Selection. Pluck Cases also contain complete Selections, while Always Cases select or activate source definitions rather than defining a Selection. A Selection uses `must`, `may`, `ignore`, and optionally `allow_empty`; use `description` only when you want to attach a human-readable explanation. File Targets are atomic sources and do not contain a Selection.
 
 Ordinary Selection strings and Scope regular-expression Target selectors intentionally use different pattern languages. Ordinary `must` / `may` strings use restricted path patterns for predictable directory traversal, while ordinary `ignore` strings use restricted name patterns. When a Selection needs more expressive matching, a `{ match = "..." }` inline table can apply a Python-compatible regular expression to a full root-relative path below the Selection root. The Scope `<...>` Target selector also uses a Python-compatible regular expression, but only to filter normalized names of already-eligible direct-child Targets. These differences are intentional. See [Targets and Cases](../cli/targets.md) for Target-selector syntax.
 
@@ -22,7 +22,7 @@ Describe the role the source plays in the extraction intent. In the generated Ar
 description = "Reference material used to evaluate the submission."
 ```
 
-`description` is optional. Omitting it does not change Selection semantics. When present, it must be a non-empty string. An Always source description appears directly below that source heading, before metadata such as the file count. A Pluck description is not duplicated for every directory Target; it appears once in the Pluck group within each Scope. Multi-line descriptions remain section content rather than being compressed into a table cell.
+`description` is optional. Omitting it does not change Selection semantics. When present, it must be a non-empty string. An Always or activated Extra source description appears directly below that source heading, before metadata such as the file count. A Pluck description is not duplicated for every directory Target; it appears once in the Pluck group within each Scope. Multi-line descriptions remain section content rather than being compressed into a table cell.
 
 ### `must`
 
@@ -95,7 +95,7 @@ ignore = [
 ]
 ```
 
-The `path` value is always relative to the Selection root. For Pluck, that root is the current Target root; for an Always source, it is that Always source root. A leading `./` is optional, so `./src/generated/` and `src/generated/` normalize to the same path. Without a trailing `/`, the path excludes either a file or a directory at that location; if it is a directory, its subtree is excluded as well. A trailing `/` narrows the exclusion to a directory only. The path must stay inside the Selection root and does not accept `..`, absolute paths, globs, or backslashes.
+The `path` value is always relative to the Selection root. For Pluck, that root is the current Target root; for an Always / Extra source, it is that fixed source root. A leading `./` is optional, so `./src/generated/` and `src/generated/` normalize to the same path. Without a trailing `/`, the path excludes either a file or a directory at that location; if it is a directory, its subtree is excluded as well. A trailing `/` narrows the exclusion to a directory only. The path must stay inside the Selection root and does not accept `..`, absolute paths, globs, or backslashes.
 
 Ordinary name patterns follow the same broad-exclusion rule: without a trailing `/` they exclude matching files and directories, while a trailing `/` narrows the exclusion to directories. Name patterns, Shared ignore references, path references, and structured `match` entries are combined as one set of exclusion conditions. It is valid for several conditions to match the same entry. Any name ignore, path reference, or structured `match` that matches a directory excludes that directory before traversal, and its contents are not inspected. Evaluation order is not part of the semantics.
 
@@ -153,7 +153,7 @@ From 0.14.0 through releases before 1.0.0, the legacy one-element nested-array f
 See [Specification](../specification/INDEX.md) for name resolution and duplicate validation along a base chain.
 ## Cases
 
-Cases have different jobs for Pluck and Always. A Pluck Case is another complete Selection. An Always Case filters which Always sources participate.
+Cases have different jobs for Pluck and Always. A Pluck Case is another complete Selection. An Always Case selects participating Always sources and activates Extra sources.
 
 ```toml
 [pluck]
@@ -168,12 +168,15 @@ must = ["documents/", "metadata.json", "records/"]
 path = "review-guidelines"
 must = ["*.md"]
 
-[always.license]
+[extra.license]
 path = "legal"
 must = ["LICENSE"]
 
 [case.always.release]
 include = ["guidelines", "license"]
+
+[case.always.with-license]
+add = ["license"]
 ```
 
 ```console
@@ -184,6 +187,6 @@ dirpluck ./acme/ --case audit.release
 
 `[case.pluck.audit]` is not a delta from `[pluck]`. Write every required `must`, `may`, `ignore`, Shared reference, and `allow_empty` value in the Case itself. From 0.16.x through releases before 1.0.0, legacy `[pluck.case.audit]` remains accepted as compatibility input, reports a migration notice, and is removed in 1.0.0.
 
-`[case.always.release]` does not change any Always source Selection. It filters the effective Always-source set. `include` and `exclude` are mutually exclusive. `include = []` explicitly selects no Always sources; `exclude = []` excludes none; omitting both includes every Always source.
+`[case.always.release]` does not change any source Selection. Always Cases have two modes. `include` is the complete mode: only listed effective Always / Extra identifiers participate, and `include = []` explicitly selects zero fixed sources. `add` / `exclude` are the delta mode: start from all Always sources, `add` Extra identifiers, and `exclude` Always identifiers. `include` cannot be combined with `add` / `exclude`, while `add` and `exclude` may be used together. `add` accepts only Extra identifiers and `exclude` only Always identifiers.
 
 The runtime selector has two independent axes. `--case audit` selects only the Pluck Case, `--case .release` selects only the Always Case, and `--case audit.release` selects both. A defined Case may validly result in zero sources. See [Specification](../specification/INDEX.md) for the normative Case rules.

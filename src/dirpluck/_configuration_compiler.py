@@ -221,36 +221,34 @@ def _compose_scopes(
     return compiled
 
 
-def _compose_always(
-    layers: tuple[Config, ...],
+def _compose_fixed_sources(
+    definitions: Mapping[str, tuple[Config, Always]],
     shared: SharedPatterns,
     namespaces: frozenset[str],
     layouts: Mapping[str, Layout],
     default_layout: str | None,
+    *,
+    table_name: str,
+    compatibility_notices: bool,
 ) -> tuple[Mapping[str, FixedSourceSpec], Mapping[str, CompatibilityNotice]]:
-    definitions = {
-        name: (config, source)
-        for config in reversed(layers)
-        for name, source in config.always.items()
-    }
-
     compiled: dict[str, FixedSourceSpec] = {}
     notices: dict[str, CompatibilityNotice] = {}
     archive_roots: dict[str, str] = {}
     for name, (owner, source) in definitions.items():
+        where = f"[{table_name}.{name}]"
         if (
             source.compatibility_namespace is not None
             and source.compatibility_namespace not in namespaces
         ):
             raise ConfigurationError(
-                f"effective [always.{name}].namespace references unknown Namespace "
+                f"effective {where}.namespace references unknown Namespace "
                 + repr(source.compatibility_namespace)
             )
         effective_layout = source.layout if source.layout is not None else default_layout
-        _validate_layout_reference(effective_layout, layouts, where=f"[always.{name}].layout")
+        _validate_layout_reference(effective_layout, layouts, where=f"{where}.layout")
         if source.compatibility_namespace is not None and effective_layout is not None:
             raise ConfigurationError(
-                f"effective [always.{name}] cannot use both Namespace "
+                f"effective {where} cannot use both Namespace "
                 + f"{source.compatibility_namespace!r} and Layout {effective_layout!r}"
             )
         effective_name = source.compatibility_namespace or name
@@ -261,9 +259,10 @@ def _compose_always(
         previous = archive_roots.get(key)
         if previous is not None:
             raise ConfigurationError(
-                "effective Always source archive roots must be distinct ignoring case after namespace resolution and Layout application: "
-                + f"[always.{previous}] conflicts with {archive_root!r} "
-                + f"from [always.{name}]"
+                f"effective {table_name.capitalize()} source archive roots must be distinct "
+                + "ignoring case after namespace resolution and Layout application: "
+                + f"[{table_name}.{previous}] conflicts with {archive_root!r} "
+                + f"from {where}"
             )
         archive_roots[key] = name
         root = _anchor_always_root(owner, source)
@@ -271,25 +270,58 @@ def _compose_always(
             label=f"always source {effective_name!r}",
             archive_root=archive_root,
             root=root,
-            selection=normalize_selection(source.selection, shared, f"[always.{name}]"),
+            selection=normalize_selection(source.selection, shared, where),
             layout_name=effective_layout,
         )
-        notice = always_layout_notice(
-            manifest=owner.manifest,
-            source_name=name,
-            source_root=root,
-            namespace=source.compatibility_namespace,
-            effective_name=effective_name,
-            layout=effective_layout,
-        )
-        if notice is not None:
-            notices[name] = notice
+        if compatibility_notices:
+            notice = always_layout_notice(
+                manifest=owner.manifest,
+                source_name=name,
+                source_root=root,
+                namespace=source.compatibility_namespace,
+                effective_name=effective_name,
+                layout=effective_layout,
+            )
+            if notice is not None:
+                notices[name] = notice
     return compiled, notices
+
+
+def _effective_fixed_source_definitions(
+    layers: tuple[Config, ...],
+) -> tuple[
+    Mapping[str, tuple[Config, Always]],
+    Mapping[str, tuple[Config, Always]],
+]:
+    always = {
+        name: (config, source)
+        for config in reversed(layers)
+        for name, source in config.always.items()
+    }
+    extras = {
+        name: (config, source)
+        for config in reversed(layers)
+        for name, source in config.extras.items()
+    }
+    by_casefold: dict[str, tuple[str, str]] = {}
+    for table_name, definitions in (("always", always), ("extra", extras)):
+        for name in definitions:
+            key = name.casefold()
+            previous = by_casefold.get(key)
+            if previous is not None:
+                previous_table, previous_name = previous
+                raise ConfigurationError(
+                    "effective Always and Extra source names must be distinct ignoring case: "
+                    + f"[{previous_table}.{previous_name}] and [{table_name}.{name}]"
+                )
+            by_casefold[key] = (table_name, name)
+    return MappingProxyType(always), MappingProxyType(extras)
 
 
 def _compose_always_cases(
     layers: tuple[Config, ...],
     always: Mapping[str, FixedSourceSpec],
+    extras: Mapping[str, FixedSourceSpec],
 ) -> Mapping[str, AlwaysCase]:
     cases = {
         name: definition
@@ -297,18 +329,34 @@ def _compose_always_cases(
         for name, definition in config.always_cases.items()
     }
 
-    names = set(always)
+    selectable = set(always) | set(extras)
+    always_names = set(always)
     for case_name, case in cases.items():
-        references = case.include if case.include is not None else case.exclude
-        if references is None:
-            continue
-        unknown = [name for name in references if name not in names]
-        if unknown:
-            listed = ", ".join(repr(name) for name in unknown)
-            raise ConfigurationError(
-                f"effective [case.always.{case_name}] references undefined Always source(s): {listed}"
-            )
-    return cases
+        if case.include is not None:
+            unknown = [name for name in case.include if name not in selectable]
+            if unknown:
+                listed = ", ".join(repr(name) for name in unknown)
+                raise ConfigurationError(
+                    f"effective [case.always.{case_name}].include references undefined "
+                    + f"Always source(s) or Extra source(s): {listed}"
+                )
+        if case.add is not None:
+            unknown = [name for name in case.add if name not in extras]
+            if unknown:
+                listed = ", ".join(repr(name) for name in unknown)
+                raise ConfigurationError(
+                    f"effective [case.always.{case_name}].add references source(s) that are "
+                    + f"not effective Extra sources: {listed}; add accepts Extra sources only"
+                )
+        if case.exclude is not None:
+            unknown = [name for name in case.exclude if name not in always_names]
+            if unknown:
+                listed = ", ".join(repr(name) for name in unknown)
+                raise ConfigurationError(
+                    f"effective [case.always.{case_name}].exclude references source(s) that are "
+                    + f"not effective Always sources: {listed}; exclude accepts Always sources only"
+                )
+    return MappingProxyType(cases)
 
 
 def _selected_pluck(
@@ -341,10 +389,12 @@ def _selected_pluck(
 
 def _selected_always(
     always: Mapping[str, FixedSourceSpec],
+    extras: Mapping[str, FixedSourceSpec],
     cases: Mapping[str, AlwaysCase],
     selection: CaseSelection,
-) -> tuple[str, ...]:
-    names = tuple(always)
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    always_names = tuple(always)
+    extra_names: tuple[str, ...] = ()
     if selection.always is not None:
         try:
             definition = cases[selection.always]
@@ -355,11 +405,16 @@ def _selected_always(
             ) from exc
         if definition.include is not None:
             included = set(definition.include)
-            names = tuple(name for name in names if name in included)
-        elif definition.exclude is not None:
-            excluded = set(definition.exclude)
-            names = tuple(name for name in names if name not in excluded)
-    return names
+            always_names = tuple(name for name in always_names if name in included)
+            extra_names = tuple(name for name in extras if name in included)
+        else:
+            if definition.exclude is not None:
+                excluded = set(definition.exclude)
+                always_names = tuple(name for name in always_names if name not in excluded)
+            if definition.add is not None:
+                added = set(definition.add)
+                extra_names = tuple(name for name in extras if name in added)
+    return always_names, extra_names
 
 
 def compile_collection_input(
@@ -388,14 +443,32 @@ def compile_collection_input(
 
     pluck_default, pluck_cases = _compose_pluck(layers, shared)
     scopes = _compose_scopes(layers, namespaces, layouts, default_targets_layout)
-    always, always_notices = _compose_always(
-        layers, shared, namespaces, layouts, default_always_layout
+    always_definitions, extra_definitions = _effective_fixed_source_definitions(layers)
+    always, always_notices = _compose_fixed_sources(
+        always_definitions,
+        shared,
+        namespaces,
+        layouts,
+        default_always_layout,
+        table_name="always",
+        compatibility_notices=True,
     )
-    always_cases = _compose_always_cases(layers, always)
+    extras, _ = _compose_fixed_sources(
+        extra_definitions,
+        shared,
+        namespaces,
+        layouts,
+        default_always_layout,
+        table_name="extra",
+        compatibility_notices=False,
+    )
+    always_cases = _compose_always_cases(layers, always, extras)
     directory_selection, directory_selection_error = _selected_pluck(
         pluck_default, pluck_cases, case
     )
-    selected_always_names = _selected_always(always, always_cases, case)
+    selected_always_names, selected_extra_names = _selected_always(
+        always, extras, always_cases, case
+    )
     compatibility_notices = tuple(
         notice for name in selected_always_names if (notice := always_notices.get(name)) is not None
     )
@@ -468,7 +541,10 @@ def compile_collection_input(
             targets=tuple(targets),
             directory_selection=directory_selection,
             directory_selection_error=directory_selection_error,
-            fixed_sources=tuple(always[name] for name in selected_always_names),
+            fixed_sources=(
+                *(always[name] for name in selected_always_names),
+                *(extras[name] for name in selected_extra_names),
+            ),
         ),
         presentation,
         compatibility_notices,

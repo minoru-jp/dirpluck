@@ -9,17 +9,18 @@ example_006 = test_target_field("example 006")
 example_007 = test_target_field("example 007")
 example_008 = test_target_field("example 008")
 example_009 = test_target_field("example 009")
+example_010 = test_target_field("example 010")
 
 
-@summary("Pluck、Scope、Layout、Namespace、Always source の定義と配置。")
+@summary("Pluck、Scope、Layout、Namespace、Always / Extra source の定義と配置。")
 @canonical_source(
     "Configuration sources", filename="sources.md", order=10, merge_policy="local", heading="title"
 )
 class CONFIGURATION_PART:
     r"""
-    この文書は、Target を選ぶ Pluck / Scope、Archive 内の最上位配置を決める Layout、固定 source を追加する Always、および互換 Namespace を説明します。
+    この文書は、Target を選ぶ Pluck / Scope、Archive 内の最上位配置を決める Layout、固定 source を追加する Always、Case で有効化する Extra、および互換 Namespace を説明します。
 
-    この guide は source authoring を説明し、互換性上の厳密な契約は Specification が定義します。Target / Scope / Always / Case の解決は `../specification/runtime-targets.md`、Archive placement は `../specification/archive.md`、Namespace は `../specification/namespace.md`、source traversal boundary は `../specification/filesystem.md` を参照してください。CLI 操作は `../cli/INDEX.md`、trust boundary は `../TRUST.md` にあります。
+    この guide は source authoring を説明し、互換性上の厳密な契約は Specification が定義します。Target / Scope / Always / Extra / Case の解決は `../specification/runtime-targets.md`、Archive placement は `../specification/archive.md`、Namespace は `../specification/namespace.md`、source traversal boundary は `../specification/filesystem.md` を参照してください。CLI 操作は `../cli/INDEX.md`、trust boundary は `../TRUST.md` にあります。
     """
 
     merge @= TERMS.TERM_1
@@ -165,7 +166,7 @@ class CONFIGURATION_PART:
 
         Layout name は1個の Archive directory component です。`description` は任意で、空の `[layout.<name>]` も有効です。Layout を宣言しただけでは ZIP に空 directory は作りません。実際にその Layout を使う source があるときだけ `<name>/...` が Archive path に現れます。使用された Layout に `description` があれば generated README にその directory の説明として表示します。
 
-        `[about].always_layout` と `[about].targets_layout` はそれぞれ Always source / Target の既定 Layout です。個別の `[always.<name>].layout` または `[scope]` / `[scope.<name>].layout` がある場合は個別指定を優先します。個別指定も既定値も無い source は Archive root 直下へ配置します。
+        `[about].always_layout` と `[about].targets_layout` はそれぞれ Always / Extra source と Target の既定 Layout です。個別の `[always.<name>].layout` / `[extra.<name>].layout` または `[scope]` / `[scope.<name>].layout` がある場合は個別指定を優先します。個別指定も既定値も無い source は Archive root 直下へ配置します。
 
         参照先は Base composition 後の effective Layout 集合から解決し、未定義 Layout は error です。Layout name は大文字小文字を区別しない比較で一意でなければなりません。Layout は source 側 filesystem directory を指定するものではなく、Archive destination だけを決めます。
         """
@@ -208,7 +209,7 @@ class CONFIGURATION_PART:
 
         Always source の Selection は Target の Pluck とは独立して評価します。同じ physical file が Target 配下にも存在していても、Target 側の `ignore` や Selection result は Always source の Selection を変更しません。両方が同じ physical file を選択し、異なる Archive path に配置する場合は両方を収録します。
 
-        Layout 適用後の final archive root は source role に関係なく、大文字小文字を区別しない比較で一意でなければなりません。Target と Always が同じ root に解決する場合も composition は行わず error にします。Pluck を持たず Always source だけで完結する Configuration も有効です。
+        Layout 適用後の final archive root は source role に関係なく、大文字小文字を区別しない比較で一意でなければなりません。Target と Always / activated Extra が同じ root に解決する場合も composition は行わず error にします。Pluck を持たず fixed source だけで完結する Configuration も有効です。
         """
 
         title @= "Always"
@@ -225,4 +226,35 @@ class CONFIGURATION_PART:
         path = "/srv/company/reference"
         description = "Reference material maintained outside this project."
         must = ["*.md"]
+        """
+
+    class SECTION_033:
+        r"""
+        `[extra.<name>]` は、必要なときだけ Always Case から追加する fixed source を定義します。Table の中身は canonical `[always.<name>]` と同じで、required `path`、Selection の `description` / `must` / `may` / `ignore` / `allow_empty`、optional `layout` を使用できます。
+
+        ```toml
+        {{example_010}}
+        ```
+
+        Extra は定義しただけでは source として参加しません。`[case.always.<name>]` の完全指定 `include` または差分指定 `add` に Extra identifier を記述した run だけ、その Extra が Always source と同じ fixed source role で有効になります。Always Case を指定しない run や、その Extra を `include` / `add` しない Caseでは inactive のままです。
+
+        `include` は Always と Extra の共通 identifier namespace から最終的に参加する source を完全列挙します。`add` / `exclude` は既定の全 Always source に対する差分で、`add` は Extra だけを追加し、`exclude` は Always だけを除外します。`include` と `add` / `exclude` は同時指定できませんが、`add` と `exclude` は併用できます。種別違いの参照は Configuration error です。そのため `[always.foo]` と `[extra.foo]` のような曖昧な effective identifier は持てず、大文字小文字を区別しない比較でも一意である必要があります。
+
+        Layout は Always と同じ規則です。`[extra.<name>].layout` があればそれを優先し、なければ `[about].always_layout` を使い、どちらもなければ Archive root 直下へ配置します。有効化後の README、collision、`description_no_always` 判定では通常の Always source と同じ role として扱います。
+        """
+
+        title @= "Extra"
+
+        example_010 @= """
+        [always.guidelines]
+        path = "review-guidelines"
+        must = ["*.md"]
+
+        [extra.dev-tools]
+        path = "tooling"
+        description = "Tools needed only for development runs."
+        must = ["*.whl"]
+
+        [case.always.development]
+        add = ["dev-tools"]
         """

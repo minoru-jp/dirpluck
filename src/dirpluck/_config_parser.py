@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 import tomllib
@@ -28,6 +28,7 @@ from ._config_values import (
     _require_only_keys,
     _require_name,
     _validate_always_name,
+    _validate_extra_name,
     _validate_base_path,
     _validate_output_fragment,
     _validate_layout_name,
@@ -189,19 +190,28 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
     return MappingProxyType(scopes)
 
 
-def _parse_always(value: object, where: str) -> Mapping[str, Always]:
+def _parse_fixed_sources(
+    value: object,
+    where: str,
+    *,
+    validate_name: Callable[[object, str], str],
+    name_label: str,
+    compatibility_namespace: bool,
+) -> Mapping[str, Always]:
     if value is None:
         return MappingProxyType({})
     table = _table(value, where)
-    always: dict[str, Always] = {}
-    always_names: dict[str, str] = {}
+    sources: dict[str, Always] = {}
+    source_names: dict[str, str] = {}
     for raw_name, raw_source in table.items():
-        name = _validate_always_name(raw_name, where)
-        _require_distinct_casefold(name, always_names, where, label="Always source names")
+        name = validate_name(raw_name, where)
+        _require_distinct_casefold(name, source_names, where, label=name_label)
         source_where = f"{where}.{name}"
-        source_table, raw_namespace, uses_legacy_namespace = split_always_namespace(
-            _table(raw_source, source_where)
-        )
+        raw_table = _table(raw_source, source_where)
+        if compatibility_namespace:
+            source_table, raw_namespace, uses_legacy_namespace = split_always_namespace(raw_table)
+        else:
+            source_table, raw_namespace, uses_legacy_namespace = raw_table, None, False
         _require_only_keys(
             source_table,
             {"path", "description", "must", "may", "ignore", "allow_empty", "layout"},
@@ -210,9 +220,7 @@ def _parse_always(value: object, where: str) -> Mapping[str, Always]:
         raw_path = source_table.get("path")
         if not isinstance(raw_path, str):
             raise ConfigurationError(f"{source_where}.path: expected a string")
-        path = validate_filesystem_location(
-            raw_path, f"{source_where}.path", label="Always source path"
-        )
+        path = validate_filesystem_location(raw_path, f"{source_where}.path", label="source path")
         selection = _parse_selection(
             {key: item for key, item in source_table.items() if key not in {"path", "layout"}},
             source_where,
@@ -224,13 +232,33 @@ def _parse_always(value: object, where: str) -> Mapping[str, Always]:
         )
         if namespace is not None:
             warn_always_namespace(source_where, namespace=namespace, source_name=name)
-        always[name] = Always(
+        sources[name] = Always(
             path=path,
             selection=selection,
             compatibility_namespace=namespace,
             layout=_parse_layout_reference(source_table.get("layout"), f"{source_where}.layout"),
         )
-    return MappingProxyType(always)
+    return MappingProxyType(sources)
+
+
+def _parse_always(value: object, where: str) -> Mapping[str, Always]:
+    return _parse_fixed_sources(
+        value,
+        where,
+        validate_name=_validate_always_name,
+        name_label="Always source names",
+        compatibility_namespace=True,
+    )
+
+
+def _parse_extras(value: object, where: str) -> Mapping[str, Always]:
+    return _parse_fixed_sources(
+        value,
+        where,
+        validate_name=_validate_extra_name,
+        name_label="Extra source names",
+        compatibility_namespace=False,
+    )
 
 
 def _parse_always_case_names(value: object, where: str) -> tuple[str, ...] | None:
@@ -239,14 +267,16 @@ def _parse_always_case_names(value: object, where: str) -> tuple[str, ...] | Non
     try:
         items = _array(value, where)
     except ConfigurationError as exc:
-        raise ConfigurationError(f"{where}: expected an array of Always source names") from exc
+        raise ConfigurationError(
+            f"{where}: expected an array of Always/Extra source names"
+        ) from exc
     names: list[str] = []
     for index, item in enumerate(items):
         if not isinstance(item, str) or not item.strip():
             raise ConfigurationError(f"{where}[{index}]: expected a non-empty string")
         names.append(item)
     if len(set(names)) != len(names):
-        raise ConfigurationError(f"{where}: duplicate Always source names are not allowed")
+        raise ConfigurationError(f"{where}: duplicate Always/Extra source names are not allowed")
     return tuple(names)
 
 
@@ -266,13 +296,16 @@ def _parse_always_cases(value: object, where: str) -> Mapping[str, AlwaysCase]:
             )
         case_where = f"{where}.{name}"
         case_table = _table(raw_case, case_where)
-        _require_only_keys(case_table, {"description", "include", "exclude"}, case_where)
-        if "include" in case_table and "exclude" in case_table:
-            raise ConfigurationError(f"{case_where}: include and exclude are mutually exclusive")
+        _require_only_keys(case_table, {"description", "include", "add", "exclude"}, case_where)
+        if "include" in case_table and ("add" in case_table or "exclude" in case_table):
+            raise ConfigurationError(
+                f"{case_where}: include is mutually exclusive with add and exclude"
+            )
         description = _description(case_table, case_where)
         include = _parse_always_case_names(case_table.get("include"), f"{case_where}.include")
+        add = _parse_always_case_names(case_table.get("add"), f"{case_where}.add")
         exclude = _parse_always_case_names(case_table.get("exclude"), f"{case_where}.exclude")
-        cases[name] = AlwaysCase(description=description, include=include, exclude=exclude)
+        cases[name] = AlwaysCase(description=description, include=include, add=add, exclude=exclude)
     return MappingProxyType(cases)
 
 
@@ -396,7 +429,18 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
     data = _read_toml(manifest)
     _require_only_keys(
         data,
-        {"about", "shared", "pluck", "case", "scope", "always", "namespace", "layout", "output"},
+        {
+            "about",
+            "shared",
+            "pluck",
+            "case",
+            "scope",
+            "always",
+            "extra",
+            "namespace",
+            "layout",
+            "output",
+        },
         str(manifest),
     )
 
@@ -433,6 +477,7 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
         f"{manifest} [scope]",
     )
     always = _parse_always(data.get("always"), f"{manifest} [always]")
+    extras = _parse_extras(data.get("extra"), f"{manifest} [extra]")
     namespaces = _parse_namespaces(data.get("namespace"), f"{manifest} [namespace]")
     layouts = _parse_layouts(data.get("layout"), f"{manifest} [layout]")
     output = _parse_output(data.get("output"), f"{manifest} [output]")
@@ -451,6 +496,7 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
         pluck_cases=pluck_cases,
         scopes=scopes,
         always=always,
+        extras=extras,
         always_cases=always_cases,
         namespaces=namespaces,
         layouts=layouts,

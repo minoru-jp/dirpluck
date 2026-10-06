@@ -12,7 +12,7 @@ dirpluck -i PATH [-e NAME] [--case CASE] [--here[=FILENAME] | --output PATH] [--
 dirpluck --version
 ```
 
-If the selected Effective Configuration contains one or more Always sources, you may omit `TARGET` references even when Pluck is also defined; the resulting run ignores Pluck and archives only the Always sources. If Targets are supplied, directory Targets continue to use Pluck. Without a Pluck, positional references may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck.
+If the selected Effective Configuration has one or more participating fixed sources, you may omit `TARGET` references even when Pluck is also defined; the resulting run ignores Pluck and archives only the Always sources plus any Extra sources activated by the selected Always Case. If Targets are supplied, directory Targets continue to use Pluck. Without a Pluck, positional references may still select file Targets from Scopes with `target_kind = "file"` or `"both"`. Directory Targets require Pluck.
 
 ```console
 dirpluck ./example/

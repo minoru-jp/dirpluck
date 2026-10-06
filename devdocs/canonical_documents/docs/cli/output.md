@@ -62,7 +62,7 @@ CLI が表示するこれらの warning は、公式 Python API が `AlwaysMigra
 
 ## Archive index の source path
 
-生成されるアーカイブREADMEは Archive contents の人間向け index です。Always source はすべて Target より先に並び、各 Always section では任意の `description` を先に示してから selected file 数などの metadata を続けます。Target は Scope ごとにまとめ、directory Target はその Scope の Pluck group 配下に final Archive path を並べます。同じ Scope / Pluck の `description` は Target ごとに繰り返さず、その group に1回だけ表示します。File Target は Pluck を使わないため Scope 直下に表示します。
+生成されるアーカイブREADMEは Archive contents の人間向け index です。参加する Always source と有効化された Extra source はすべて Target より先に並び、各 fixed-source section では任意の `description` を先に示してから selected file 数などの metadata を続けます。Target は Scope ごとにまとめ、directory Target はその Scope の Pluck group 配下に final Archive path を並べます。同じ Scope / Pluck の `description` は Target ごとに繰り返さず、その group に1回だけ表示します。File Target は Pluck を使わないため Scope 直下に表示します。
 
 README 冒頭の `Scope: "..."` の説明は、Scope 名が Target を探した選択範囲の識別子にすぎず、Target 間の優先度・重要度・階層関係を表さないことを明示します。Scope 名に追加の意味を持たせる場合は `scope.description` に記述します。選択した Case 名、Configuration path / table、base chain などの実行 provenance は記録しません。
 

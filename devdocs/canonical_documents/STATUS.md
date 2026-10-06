@@ -18,15 +18,15 @@
 
 dirpluck の現在の開発段階、互換性方針、および 1.0 へ向けた判断基準を示します。
 
-0.17.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 以降は公開面の互換性維持を強く志向してきました。しかし、その後の実運用から 1.0 前に修正すべき設計上の問題がまだ残っていることが確認されたため、0.16.0 で残りの 0.x series の互換性方針を見直しました。
+0.18.x は **Beta** 系列です。0.9.0 で Configuration language と filesystem model の大きな再編を行い、0.10.0 以降は公開面の互換性維持を強く志向してきました。しかし、その後の実運用から 1.0 前に修正すべき設計上の問題がまだ残っていることが確認されたため、0.16.0 で残りの 0.x series の互換性方針を見直しました。
 
 ## 現在のステータス
 
-現在の公開 version 系列は `0.17.x`、開発段階は **Beta** です。
+現在の公開 version 系列は `0.18.x`、開発段階は **Beta** です。
 
 残りの 0.x series は、1.0.0 の公開契約を確定するための設計収束期間として扱います。既存利用者への移行負担は抑えますが、1.0 に不適切な設計を互換性のためだけに固定することはしません。
 
-0.15.0 は公開せず、そこで予定していた契約変更は 0.16.0 に統合しました。0.16.0 では内部実行 model を、入力の parse / normalize、filesystem からの extract、Archive / message output の3段階へ再構成しています。0.17.0 の Layout / conditional description もこの境界に沿って追加しています。公開 grammar を後段で再解釈せず、各層が前段の入力言語や後段の出力形式を必要以上に知覚しない依存方向を 1.0 向けの内部基盤とします。
+0.15.0 は公開せず、そこで予定していた契約変更は 0.16.0 に統合しました。0.16.0 では内部実行 model を、入力の parse / normalize、filesystem からの extract、Archive / message output の3段階へ再構成しています。0.17.0 の Layout / conditional description と、0.18.0 の Extra source もこの境界に沿って追加しています。公開 grammar を後段で再解釈せず、各層が前段の入力言語や後段の出力形式を必要以上に知覚しない依存方向を 1.0 向けの内部基盤とします。
 
 ## 安定性方針
 
@@ -46,7 +46,7 @@ Beta 期間では、特に次の点を確認します。
 
 - 実際の project tree と共有用 Archive 作成で、Configuration model の責務境界が明確で継続利用できること。
 - CLI と公式 Python API が同じ invocation semantics と migration diagnostics を提供できること。
-- Scope、Selection、Base、Layout、Namespace、Always、Output、Archive planning の主要契約を 1.0 向けに収束させること。
+- Scope、Selection、Base、Layout、Namespace、Always、Extra、Output、Archive planning の主要契約を 1.0 向けに収束させること。
 - parse / normalize → extract → output の責務境界を維持し、入力 language の概念や presentation 都合が不要な層へ逆流しないこと。
 - 実運用で見つかった不自然な意味境界を、必要なら Breaking Change を含めて 1.0 前に修正すること。
 - 変更時に deprecation、warning、Migration Guide など適切な移行手段を提供できること。

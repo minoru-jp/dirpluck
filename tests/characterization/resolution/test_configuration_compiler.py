@@ -520,6 +520,42 @@ class ConfigurationCompilerTests(unittest.TestCase):
             sources = resolve_sources(config, BuildRequest.create(case=".pick"))
             self.assertEqual([source.archive_root for source in sources], ["b"])
 
+    def test_always_case_definition_shadowing_replaces_include_with_add(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            base = root / "base"
+            derived = root / "derived"
+            (base / "a").mkdir(parents=True)
+            (base / "a" / "a.txt").write_text("a", encoding="utf-8")
+            (base / "tools").mkdir()
+            (base / "tools" / "tool.txt").write_text("tool", encoding="utf-8")
+            self._write(
+                base / "base.dirpluck",
+                """
+                [always.a]
+                path = "a"
+                must = ["a.txt"]
+                [extra.tools]
+                path = "tools"
+                must = ["tool.txt"]
+                [case.always.pick]
+                include = ["a"]
+            """,
+            )
+            config = load_config(
+                self._write(
+                    derived / "default.dirpluck",
+                    """
+                [about]
+                base = "../base/base.dirpluck"
+                [case.always.pick]
+                add = ["tools"]
+            """,
+                )
+            )
+            sources = resolve_sources(config, BuildRequest.create(case=".pick"))
+            self.assertEqual([source.archive_root for source in sources], ["a", "tools"])
+
     def test_case_selection_uses_effective_outer_pluck_after_base_composition(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
