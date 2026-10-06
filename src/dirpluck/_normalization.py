@@ -86,7 +86,7 @@ def _normalized_output(config: Config, request: BuildRequest) -> NormalizedOutpu
 def normalize(config: Config, request: BuildRequest) -> NormalizedExecution:
     """Compile all non-filesystem input semantics for one execution."""
 
-    extraction, about_description, compatibility_notices = compile_collection_input(
+    extraction, collection_presentation, compatibility_notices = compile_collection_input(
         config,
         case=request.case,
         target_references=request.targets,
@@ -95,7 +95,11 @@ def normalize(config: Config, request: BuildRequest) -> NormalizedExecution:
         extraction=extraction,
         output=_normalized_output(config, request),
         presentation=ArchivePresentation(
-            about_description=about_description,
+            about_description=collection_presentation.about_description,
+            description_no_targets=collection_presentation.description_no_targets,
+            description_no_always=collection_presentation.description_no_always,
+            description_empty=collection_presentation.description_empty,
+            layout_descriptions=collection_presentation.layout_descriptions,
             show_source_paths=request.paths,
         ),
         compatibility_notices=compatibility_notices,

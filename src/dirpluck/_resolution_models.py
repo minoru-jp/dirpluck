@@ -20,6 +20,7 @@ class ResolvedTarget:
     source_kind: TargetEntryKind
     scope_name: str | None
     scope_description: str | None
+    layout_name: str | None
 
 
 @dataclass(frozen=True)
@@ -36,3 +37,4 @@ class ResolvedSource:
     scope_name: str | None = None
     scope_description: str | None = None
     description: str | None = None
+    layout_name: str | None = None

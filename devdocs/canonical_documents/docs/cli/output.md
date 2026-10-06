@@ -54,7 +54,7 @@ Warning は 1.0.0 で旧記法が削除されることを示し、Shared referen
 
 ## 0.16 Always migration warning
 
-0.16.0 から 1.0.0 直前まで、CLI は Always migration を public warning として stderr へ表示します。0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source だけに layout migration warning を出します。Warning には旧 root と新 root を含めます。`[always.docs] path = "docs"` のように旧・新 identity が同じ場合、この layout warning は出ません。
+0.16.0 から 1.0.0 直前まで、CLI は Always migration を public warning として stderr へ表示します。0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source だけに layout migration warning を出します。Warning には旧 root と新 root を含めます。`[always.docs] path = "docs"` のように旧・新 identity が同じ場合、この layout warning は出ません。0.17.0 以降で explicit Layout が有効な Always source では、現在の final Archive destination と食い違う旧 0.16.x placement を表示しないため、この layout migration warning を抑制します。
 
 Always source に `namespace` がある場合は、layout 差分とは別に pre-1.0 compatibility warning を必ず報告します。0.16.x 以降の 0.x series では Namespace name が Always name を置き換えて Archive placement に使われますが、この field は 1.0.0 で削除されます。Archive directory name は `[always.<name>]` に直接記述してください。
 

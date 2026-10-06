@@ -76,6 +76,7 @@ def main() -> None:
     _run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", ".", "-v"])
     _run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"])
     _run([sys.executable, "tools/render_canonical_docs.py", "--check"])
+    _run([sys.executable, "tools/check_published_docs.py"])
     _clean_dist()
     _run([sys.executable, "-m", "build"])
     wheel, sdist = _artifacts()

@@ -35,7 +35,7 @@ class CONFIGURATION_PART:
 
         各 Configuration に書かれた relative filesystem path は、常にその Configuration file 自身の directory を基準に解決します。Base Configuration から継承した named Scope や Always source の path を、外側 Configuration の位置へ rebase しません。Default Scope も同じ Configuration-directory model に従い、Root Configuration file の directory をそのまま root とします。
 
-        Pluck、Always、Scope、Shared pattern の composition、description resolution、cycle detection、Output の扱いは `../specification/INDEX.md` に定義します。Base Configuration は Output を省略できます。Output を持たない root Configuration も `--preview` に使用でき、通常 build でも CLI `--here` / `--output` または Python API `output=` で runtime Output を与えれば実行できます。Runtime Output を使わない build では root 自身の fixed または timestamp Output を直接宣言します。
+        Pluck、Always、Scope、Layout、Shared pattern の composition、`[about]` の description / default Layout resolution、cycle detection、Output の扱いは `../specification/INDEX.md` に定義します。Layout definition は名前ごとに合成し、外側の同名 definition が内側を置き換えます。Layout reference は composition 後の effective Layout 集合に対して解決します。Base Configuration は Output を省略できます。Output を持たない root Configuration も `--preview` に使用でき、通常 build でも CLI `--here` / `--output` または Python API `output=` で runtime Output を与えれば実行できます。Runtime Output を使わない build では root 自身の fixed または timestamp Output を直接宣言します。
         """
 
         title @= "Base Configuration"

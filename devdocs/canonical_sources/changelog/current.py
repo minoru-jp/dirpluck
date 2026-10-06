@@ -11,6 +11,33 @@ class CHANGELOG:
     dirpluck 0.10.0 以降のリリース履歴。0.9.x 以前の履歴は [Changelog Archive](docs/changelog/INDEX.md) を参照してください。
     """
 
+    class RELEASE_27:
+        r"""
+        Archive 内の配置を明示する Layout と、resolved source の有無に応じた README description を追加する release。
+        """
+
+        title @= "0.17.0"
+
+        version @= "0.17.0"
+
+        added @= "`[layout.<name>]` を追加する。Layout name は1個の Archive directory component で、table は optional `description` だけを持てる。`description` を省略した空 table も有効とする。Layout は宣言済みの名前だけを参照でき、未定義参照は Base composition 後に Configuration error とする。"
+
+        added @= "`[about].always_layout` / `[about].targets_layout` を Always / Target の既定 Layout として追加し、`[always.<name>].layout` / `[scope]` / `[scope.<name>].layout` で source ごとに上書きできるようにする。優先順位は個別指定、`[about]` の既定値、未指定の順で、未指定 source は従来どおり Archive root 直下へ配置する。Layout definition 自体は directory entry を生成せず、実際に source が配置された場合だけ Archive path に現れる。"
+
+        added @= "`[about].description_no_targets`、`description_no_always`、`description_empty` を追加する。`description` は resolved source の構成に関係なく常に README へ表示し、追加 description は Always だけ、Target だけ、source 0件の各状態に対応する1個だけを表示する。`description_empty` は README 自体が生成されないことを意味せず、resolved Always / Target source が0件であることを表す。"
+
+        added @= "実際に使用された Layout が `description` を持つ場合、generated Archive README に Layout directory と説明を記録する。Description は任意であり、省略しても Layout placement は有効とする。"
+
+        changed @= "**Breaking:** resolved source の final Archive root は role に関係なく大文字小文字を区別しない比較で一意とする。0.16.x で許可していた Target と Always の exact-spelling root composition は廃止し、同じ final root へ解決する source は error とする。Layout 適用後の final Archive path を同じ collision rule で検証する。"
+
+        changed @= "Layout と Namespace を同一 source の Archive placement に合成しない。Scope の effective Layout と `namespace` が同時に存在する場合、および compatibility Always `namespace` と effective Layout が同時に存在する場合は Configuration error とする。"
+
+        changed @= "0.16.x からの breaking migration guide として `docs/migration/0.17.md` を追加し、Target / Always の同一 final root composition を Layout または source name 変更で解消する before / after を示す。"
+
+        changed @= "Canonical source から日本語 canonical document を生成した後、review 済みの公開英語文書との hash pair を `devdocs/config/publication_manifest.json` に記録する publication gate を追加する。Reusable CI / GitHub Release checks と `tools/check_release.py` はこの snapshot を検証し、canonical source だけが更新されて公開文書が旧 release のまま残る状態を拒否する。"
+
+        fixed @= "0.17.0 の explicit Layout が有効な Always source で、0.14.x → 0.16.x 用の `AlwaysMigrationWarning` が Layout 適用前の effective name を現在の配置先として表示していた問題を修正する。Explicit Layout が final Archive destination を決める場合は legacy layout migration warning を抑制し、Layout を使わない旧 Configuration の warning は維持する。"
+
     class RELEASE_26:
         r"""
         0.15.0 で予定していた公開変更を未公開のまま取り込み、Always / Case / Targetless run の契約更新と、内部実行 pipeline の責務再編をまとめて公開する breaking release。

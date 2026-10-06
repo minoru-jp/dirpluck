@@ -45,7 +45,7 @@ class CONFIGURATION_PART:
         {{example_001}}
         ```
 
-        `[pluck]` は directory {{TERM_3}}へ適用する{{TERM_11}}、`[scope]` / `[scope.<name>]` は Target を探し `target_kind` を決める{{TERM_16}}、`[always.<name>]` は{{TERM_5}}です。Archive 上で同名の source root を区別する必要がある場合は{{TERM_18}}を使えます。必要に応じて{{TERM_12}}、{{TERM_4}}、{{TERM_13}}を使って構成を広げます。
+        `[pluck]` は directory {{TERM_3}}へ適用する{{TERM_11}}、`[scope]` / `[scope.<name>]` は Target を探し `target_kind` を決める{{TERM_16}}、`[always.<name>]` は{{TERM_5}}です。Archive 内の最上位配置を分けたい場合は `[layout.<name>]` を宣言し、Always / Target の既定値または個別 source から参照します。必要に応じて{{TERM_12}}、{{TERM_4}}、{{TERM_13}}を使って構成を広げます。
         """
 
         title @= "基本形"
@@ -80,15 +80,17 @@ class CONFIGURATION_PART:
 
     class SECTION_202:
         r"""
-        `[about]` は Configuration 自身についての宣言です。`description` と `base` を持てます。
+        `[about]` は Configuration 自身についての宣言です。全体 `description`、source 構成に応じた追加 description、Always / Target の既定 Layout、および `base` を持てます。
 
         ```toml
         {{example_002}}
         ```
 
-        `description` は任意で、生成される Archive README の見出し直下に表示する Configuration 全体の説明です。Base chain に複数の description がある場合は、外側から見て最初に定義されたものを使います。
+        `description` は任意で、生成される Archive README の見出し直下に常に表示する Configuration 全体の説明です。`description_no_targets`、`description_no_always`、`description_empty` も任意で、resolved source が Always のみ、Target のみ、0件のときに対応する1個だけを追加表示します。`description_empty` の場合も generated `README.md` 自体は作られます。
 
-        `base` も任意で、この Configuration が基礎とする{{TERM_13}}を1個指定します。`description` を書かず `base` だけを書くこともできます。`[about]` を定義する場合は、少なくともどちらか一方を記述します。
+        `always_layout` / `targets_layout` は、宣言済み `[layout.<name>]` を参照して Always / Target の既定配置先を指定します。個別 `[always.<name>].layout` / `[scope].layout` / `[scope.<name>].layout` がある場合はそちらを優先し、どちらもなければ Archive root 直下へ配置します。
+
+        これらの `[about]` field は Base chain で field ごとに、外側から見て最初に定義された値を使います。`base` は任意で、この Configuration が基礎とする{{TERM_13}}を1個指定します。`[about]` を定義する場合は少なくとも1 field を記述します。
 
         Base chain の composition と cycle detection は `../specification/INDEX.md` を参照してください。
         """
@@ -98,6 +100,11 @@ class CONFIGURATION_PART:
         example_002 @= """
         [about]
         description = "Materials prepared for reviewing the authentication redesign."
+        description_no_targets = "This Archive contains only fixed reference material."
+        description_no_always = "This Archive contains only requested Targets."
+        description_empty = "No sources were selected for this run."
+        always_layout = "dependencies"
+        targets_layout = "development-targets"
         base = "../common/common.dirpluck"
         """
 

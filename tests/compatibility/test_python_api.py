@@ -81,6 +81,39 @@ class Pre10PythonApiCompatibilityTests(unittest.TestCase):
             self.assertEqual(migrations, [])
             self.assertEqual(result.archive_entries, ("README.md", "docs/guide.md"))
 
+    def test_run_suppresses_legacy_layout_migration_warning_when_017_layout_is_explicit(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            (root / "source").mkdir()
+            (root / "source" / "guide.md").write_text("guide\n", encoding="utf-8")
+            (root / "default.dirpluck").write_text(
+                textwrap.dedent(
+                    """
+                        [about]
+                        always_layout = "shared"
+
+                        [layout.shared]
+
+                        [always.docs]
+                        path = "source"
+                        must = ["guide.md"]
+                        """
+                ),
+                encoding="utf-8",
+            )
+
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", dirpluck.AlwaysMigrationWarning)
+                result = dirpluck.run(preview=True, cwd=root)
+
+            migrations = [
+                warning
+                for warning in caught
+                if issubclass(warning.category, dirpluck.AlwaysMigrationWarning)
+            ]
+            self.assertEqual(migrations, [])
+            self.assertEqual(result.archive_entries, ("README.md", "shared/docs/guide.md"))
+
     # Moved from tests/test_python_api.py:PythonApiTests.test_run_always_migration_warning_is_visible_by_default
     def test_run_always_migration_warning_is_visible_by_default(self):
         with resolved_temporary_directory() as temp:

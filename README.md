@@ -6,7 +6,7 @@ A TOML Configuration records what to include, what to exclude, and which fixed m
 
 ## Installation
 
-The current version is **0.16.0**.
+The current version is **0.17.0**.
 
 Python 3.11 or later is required.
 
@@ -17,7 +17,7 @@ dirpluck --version
 
 `dirpluck` has no third-party runtime dependencies.
 
-If you are upgrading from 0.14.x, see [Migrating to 0.16](https://github.com/minoru-jp/dirpluck/blob/main/docs/migration/0.16.md) for the breaking Always Archive-layout change.
+If you are upgrading from 0.16.x, see [Migrating to 0.17](https://github.com/minoru-jp/dirpluck/blob/main/docs/migration/0.17.md) for the final Archive-root uniqueness change and the move to Layout. If you are upgrading from 0.14.x or earlier, also review [Migrating to 0.16](https://github.com/minoru-jp/dirpluck/blob/main/docs/migration/0.16.md) for the earlier Always Archive-identity change.
 
 ## Example: prepare development context for an LLM
 
@@ -48,8 +48,11 @@ Create `default.dirpluck` at the workspace root:
 ```toml
 [about]
 description = "Repositories and runtime dependencies for LLM-assisted development."
+description_no_targets = "This Archive contains fixed material only; no development-target repository was selected."
+targets_layout = "repositories"
 
-[namespace.repositories]
+[layout.repositories]
+description = "Repositories selected as development targets for this task."
 
 [always.dependencies]
 description = "The foundational framework used by the target repositories."
@@ -64,7 +67,6 @@ must = ["*.whl"]
 [scope.projects]
 description = "Repositories that can be selected as development targets."
 path = "repositories"
-namespace = "repositories"
 ignore = ["archive/", "scratch/"]
 
 [shared.ignore]
@@ -100,7 +102,7 @@ path = "develop-target.zip"
 overwrite = true
 ```
 
-`always` adds fixed material regardless of the selected Target. `scope.projects` defines where selectable repositories live, and `pluck` applies the same Selection to each selected directory Target. Normally `.tmp/` is excluded; the `diff` Case includes it when the downloaded changes should be reviewed. `description` does not change selection semantics, but it is carried into the generated Archive README so a person or LLM can distinguish the development targets, foundation, and supporting tools.
+`always` adds fixed material regardless of the selected Target. `scope.projects` defines where selectable repositories live, and `pluck` applies the same Selection to each selected directory Target. `targets_layout = "repositories"` places selected Targets below the declared `repositories/` Layout. Normally `.tmp/` is excluded; the `diff` Case includes it when the downloaded changes should be reviewed. `description` does not change selection semantics, but it is carried into the generated Archive README so a person or LLM can distinguish the development targets, foundation, and supporting tools.
 
 ### Preview
 

@@ -483,6 +483,20 @@ def _validate_namespace_name(name: object, where: str) -> str:
     return _validate_archive_directory_name(name, where, label="Namespace names")
 
 
+def _validate_layout_name(name: object, where: str) -> str:
+    return _validate_archive_directory_name(name, where, label="Layout names")
+
+
+def _parse_layout_reference(  # pyright: ignore[reportUnusedFunction]
+    value: object, where: str
+) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ConfigurationError(f"{where}: expected a string")
+    return _validate_layout_name(value, where)
+
+
 def _validate_always_name(name: object, where: str) -> str:  # pyright: ignore[reportUnusedFunction]
     return _validate_archive_directory_name(name, where, label="Always source names")
 

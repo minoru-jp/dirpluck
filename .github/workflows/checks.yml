@@ -66,6 +66,9 @@ jobs:
       - name: Check canonical documents
         run: python tools/render_canonical_docs.py --check
 
+      - name: Check published documents
+        run: python tools/check_published_docs.py
+
   test:
     name: Test on Ubuntu (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

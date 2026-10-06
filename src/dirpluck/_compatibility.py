@@ -146,9 +146,16 @@ def always_layout_notice(
     source_root: Path,
     namespace: str | None,
     effective_name: str,
+    layout: str | None,
 ) -> CompatibilityNotice | None:
     """Return the 0.14-to-0.16 Always layout migration notice, if relevant."""
 
+    # An explicit 0.17+ Layout intentionally replaces the final Archive root.
+    # The legacy notice compares 0.14.x placement with the 0.16.x
+    # Always-name-based placement, so emitting it after a Layout has changed the
+    # destination would describe a path that is no longer the effective output.
+    if layout is not None:
+        return None
     if source_root.parent == source_root:
         return None
     base = Path(os.path.abspath(manifest.parent))

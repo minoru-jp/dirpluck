@@ -14,7 +14,7 @@ level: MUST
 
 ## SPEC_063
 
-A Scope `namespace` field references an effective Namespace name and retains the existing Target behavior: `NAMESPACE/` is prefixed to the Target's final Archive root. The Scope root, Target discovery, and Target entry name are unchanged. An unknown Namespace reference is a Configuration error.
+A Scope `namespace` field references an effective Namespace name and prefixes `NAMESPACE/` to a Target's final Archive root when Layout is not in use. The Scope root, Target discovery, and Target entry name are unchanged. An unknown Namespace reference is a Configuration error. If the same Scope also has an effective Layout from either an individual `layout` or `[about].targets_layout`, Layout and Namespace are not combined and the Configuration is an error. The same rule applies to a 0.x compatibility Always `namespace` when an individual or `[about].always_layout` provides an effective Layout. Always sources that use Namespace without Layout follow the Compatibility specification.
 
 level: MUST
 

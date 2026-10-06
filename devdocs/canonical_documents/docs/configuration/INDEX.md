@@ -38,7 +38,7 @@
 | Document | Summary |
 | --- | --- |
 | [Configuration overview](overview.md) | Configuration document の形式、基本形、metadata、path notation。 |
-| [Configuration sources](sources.md) | Pluck、Scope、Namespace、Always source の定義と配置。 |
+| [Configuration sources](sources.md) | Pluck、Scope、Layout、Namespace、Always source の定義と配置。 |
 | [Configuration selection](selection.md) | Selection、Shared patterns、Case の記述方法。 |
 | [Configuration composition](composition.md) | Base Configuration による再利用と composition。 |
 | [Configuration output](output.md) | Fixed / timestamp Output の指定方法。 |

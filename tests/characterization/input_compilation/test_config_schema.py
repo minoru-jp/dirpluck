@@ -757,3 +757,118 @@ class ConfigSchemaTests(ConfigTestCase):
                 """,
                     )
                 )
+
+    def test_layout_and_about_extension_fields_are_parsed(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(
+                self._write(
+                    root,
+                    """
+                [about]
+                description = "Archive summary."
+                description_no_targets = "Only fixed sources were selected."
+                description_no_always = "Only Targets were selected."
+                description_empty = "Nothing was selected."
+                always_layout = "dependencies"
+                targets_layout = "development-targets"
+
+                [layout.dependencies]
+                description = "Development dependencies."
+
+                [layout.development-targets]
+
+                [always.wheels]
+                path = "dist"
+                layout = "dependencies"
+                may = ["*.whl"]
+                allow_empty = true
+
+                [scope.work]
+                path = "work"
+                layout = "development-targets"
+                """,
+                )
+            )
+            self.assertEqual(config.about_description, "Archive summary.")
+            self.assertEqual(
+                config.about_description_no_targets, "Only fixed sources were selected."
+            )
+            self.assertEqual(config.about_description_no_always, "Only Targets were selected.")
+            self.assertEqual(config.about_description_empty, "Nothing was selected.")
+            self.assertEqual(config.about_always_layout, "dependencies")
+            self.assertEqual(config.about_targets_layout, "development-targets")
+            self.assertEqual(
+                config.layouts["dependencies"].description, "Development dependencies."
+            )
+            self.assertIsNone(config.layouts["development-targets"].description)
+            self.assertEqual(config.always["wheels"].layout, "dependencies")
+            self.assertEqual(config.scopes["work"].layout, "development-targets")
+
+    def test_layout_description_is_optional_but_layout_table_must_be_named(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(
+                self._write(
+                    root,
+                    """
+                [layout.dependencies]
+                """,
+                )
+            )
+            self.assertIsNone(config.layouts["dependencies"].description)
+
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(ConfigurationError, "define at least one \\[layout"):
+                load_config(
+                    self._write(
+                        root,
+                        """
+                    [layout]
+                    """,
+                    )
+                )
+
+    def test_layout_names_are_archive_directory_components_and_casefold_unique(self):
+        invalid_names = (".", "..", "a/b", "a\\b")
+        for name in invalid_names:
+            with self.subTest(name=name), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                with self.assertRaisesRegex(ConfigurationError, "one Archive directory component"):
+                    load_config(
+                        self._write(
+                            root,
+                            f"""
+                        [layout.{name!r}]
+                        """,
+                        )
+                    )
+
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(ConfigurationError, "distinct ignoring case"):
+                load_config(
+                    self._write(
+                        root,
+                        """
+                    [layout.Docs]
+                    [layout.docs]
+                    """,
+                    )
+                )
+
+    def test_new_about_descriptions_must_be_nonempty_strings(self):
+        for key in ("description_no_targets", "description_no_always", "description_empty"):
+            with self.subTest(key=key), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                with self.assertRaisesRegex(ConfigurationError, "expected a non-empty string"):
+                    load_config(
+                        self._write(
+                            root,
+                            f"""
+                        [about]
+                        {key} = "   "
+                        """,
+                        )
+                    )

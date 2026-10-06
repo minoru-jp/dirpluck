@@ -52,6 +52,7 @@ DOCUMENT_ARTIFACTS: tuple[tuple[str, str, Path], ...] = (
     ),
     ("document", "devdocs.canonical_sources.trust.canonical", Path("docs")),
     ("document", "devdocs.canonical_sources.migration.v0_16", Path("docs/migration")),
+    ("document", "devdocs.canonical_sources.migration.v0_17", Path("docs/migration")),
     ("document", "devdocs.canonical_sources.devdocs_readme.canonical", Path("devdocs")),
     ("document", "devdocs.canonical_sources.cli.overview", Path("docs/cli")),
     ("document", "devdocs.canonical_sources.cli.invocation_templates", Path("docs/cli")),

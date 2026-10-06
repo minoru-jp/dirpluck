@@ -2,6 +2,28 @@
 
 Release history for dirpluck from 0.10.0 onward. Earlier releases are available in the [Changelog Archive](docs/changelog/INDEX.md).
 
+## 0.17.0
+
+Add Layout for explicit Archive placement and conditional README descriptions based on which source roles resolve for a run.
+
+### Added
+
+- Add `[layout.<name>]`. A Layout name is one Archive directory component. The table accepts only optional `description`, and an empty table is valid. Layout references must name a declared Layout; unknown references are Configuration errors after Base composition.
+- Add `[about].always_layout` / `[about].targets_layout` as default Layouts for Always sources and Targets, with per-source overrides through `[always.<name>].layout`, `[scope].layout`, and `[scope.<name>].layout`. Precedence is per-source override, `[about]` default, then no Layout. Sources without a Layout remain at the Archive root. Merely declaring a Layout does not create an empty directory; it appears only when a source is actually placed there.
+- Add `[about].description_no_targets`, `description_no_always`, and `description_empty`. The ordinary `description` is always included when present. Exactly one conditional description is added for Always-only, Target-only, or zero-source runs. `description_empty` means no Always or Target source resolved; the generated `README.md` still exists.
+- When a used Layout has a `description`, record the Layout directory and description in the generated Archive README. The description is optional and omitting it does not affect placement.
+
+### Changed
+
+- **Breaking:** Require final Archive roots to be unique under a case-insensitive comparison regardless of source role. The exact-spelling Target / Always root composition allowed in 0.16.x is removed; sources that resolve to the same final root are an error. The same rule is applied after Layout placement.
+- Do not compose Layout and Namespace for one source. A Scope with both an effective Layout and `namespace`, or a compatibility Always `namespace` with an effective Layout, is a Configuration error.
+- Add `docs/migration/0.17.md` as the breaking migration guide from 0.16.x, with before/after examples for separating Target / Always final roots using Layout or a source-name change.
+- Add a publication gate after canonical-source realization. The reviewed hash pair for each Japanese canonical document and its published English counterpart is recorded in `devdocs/config/publication_manifest.json`. Reusable CI / GitHub Release checks and `tools/check_release.py` verify that snapshot, preventing a release where canonical sources have advanced while the published documents still describe an older version.
+
+### Fixed
+
+- Suppress the legacy 0.14.x → 0.16.x `AlwaysMigrationWarning` when an explicit 0.17 Layout is effective for that Always source. Previously the warning described the pre-Layout effective name as if it were the current placement, for example reporting `docs` while the actual root was `shared/docs`. Layout-free legacy Configurations keep the existing migration warning.
+
 ## 0.16.0
 
 0.15.0 was not published. This release folds in the public changes planned for that version and combines the Always / Case / targetless-run contract updates with a substantial reorganization of the internal execution pipeline.

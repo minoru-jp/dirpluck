@@ -20,7 +20,7 @@ The warning states that the legacy form will be removed in 1.0.0 and points Shar
 
 ## 0.16 Always migration warning
 
-From 0.16.0 through the release immediately before 1.0.0, the CLI reports public Always migration warnings to stderr. Dirpluck compares the valid 0.14.x Always Archive identity with the 0.16.x effective Always name and emits a layout migration warning only for sources whose Archive root actually changes. The warning includes both the old and new roots. For example, `[always.docs] path = "docs"` has the same old and new identity and does not emit a layout warning.
+From 0.16.0 through the release immediately before 1.0.0, the CLI reports public Always migration warnings to stderr. Dirpluck compares the valid 0.14.x Always Archive identity with the 0.16.x effective Always name and emits a layout migration warning only for sources whose Archive root actually changes. The warning includes both the old and new roots. For example, `[always.docs] path = "docs"` has the same old and new identity and does not emit a layout warning. Starting in 0.17.0, when an Always source has an explicit effective Layout, this legacy layout migration warning is suppressed so the CLI does not report the intermediate 0.16.x placement as though it were the current final Archive destination.
 
 If an Always source has `namespace`, a separate pre-1.0 compatibility warning is always reported. During the 0.x series from 0.16.x onward, the Namespace name replaces the Always name for Archive placement, but this field is removed in 1.0.0. Write the desired Archive directory name directly in `[always.<name>]`.
 

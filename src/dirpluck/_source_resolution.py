@@ -44,16 +44,13 @@ def _validate_resolved_archive_roots(sources: tuple[ResolvedSource, ...]) -> Non
                     "resolved sources have archive roots that differ only by case: "
                     + f"{previous.label} resolves to {previous.archive_root!r} and "
                     + f"{source.label} resolves to {source.archive_root!r}; "
-                    + "use identical spelling for intentional composition, "
-                    + "or choose distinct archive roots"
+                    + "choose distinct archive roots"
                 )
-            if {previous.role, source.role} != {"target", "fixed"}:
-                raise SelectionError(
-                    "resolved sources of the same kind must have distinct archive roots: "
-                    + f"{previous.label} and {source.label} both resolve to {source.archive_root!r}"
-                )
-        else:
-            roots[root_key] = source
+            raise SelectionError(
+                "resolved sources must have distinct archive roots: "
+                + f"{previous.label} and {source.label} both resolve to {source.archive_root!r}"
+            )
+        roots[root_key] = source
 
 
 def resolve_normalized_sources(spec: ExtractionSpec) -> tuple[ResolvedSource, ...]:
@@ -107,6 +104,7 @@ def resolve_normalized_sources(spec: ExtractionSpec) -> tuple[ResolvedSource, ..
                 scope_name=target.scope_name,
                 scope_description=target.scope_description,
                 description=selection_description,
+                layout_name=target.layout_name,
             )
         )
 
@@ -121,6 +119,7 @@ def resolve_normalized_sources(spec: ExtractionSpec) -> tuple[ResolvedSource, ..
                 archive_root=source.archive_root,
                 selection=source.selection,
                 description=source.selection.description,
+                layout_name=source.layout_name,
             )
         )
 

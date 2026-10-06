@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import json
 import re
@@ -74,6 +75,7 @@ EXPECTED_DOCUMENTS = {
     "STATUS.md",
     "docs/GETTING_STARTED.md",
     "docs/migration/0.16.md",
+    "docs/migration/0.17.md",
     *(f"docs/changelog/{name}" for name in CHANGELOG_DOCUMENTS),
     *(f"docs/cli/{name}" for name in CLI_DOCUMENTS),
     *(f"docs/configuration/{name}" for name in CONFIGURATION_DOCUMENTS),
@@ -145,6 +147,45 @@ class DocumentBuildTests(unittest.TestCase):
         context = cast(dict[str, object], json.loads(context_path.read_text(encoding="utf-8")))
         self.assertEqual(context, {"version": __version__})
 
+    def test_publication_manifest_tracks_canonical_and_public_documents(self):
+        manifest_path = ROOT / "devdocs" / "config" / "publication_manifest.json"
+        manifest = cast(dict[str, object], json.loads(manifest_path.read_text(encoding="utf-8")))
+        self.assertEqual(manifest.get("version"), 1)
+        documents_raw = manifest.get("documents")
+        self.assertIsInstance(documents_raw, dict)
+        documents = cast(dict[str, object], documents_raw)
+        self.assertEqual(set(documents), EXPECTED_DOCUMENTS)
+
+        for relative in sorted(EXPECTED_DOCUMENTS):
+            with self.subTest(document=relative):
+                entry_raw = documents[relative]
+                self.assertIsInstance(entry_raw, dict)
+                entry = cast(dict[str, object], entry_raw)
+                canonical = CANONICAL_DOCUMENTS / relative
+                public = ROOT / relative
+                self.assertTrue(public.is_file())
+                self.assertEqual(
+                    entry.get("canonical_sha256"), sha256(canonical.read_bytes()).hexdigest()
+                )
+                self.assertEqual(
+                    entry.get("public_sha256"), sha256(public.read_bytes()).hexdigest()
+                )
+                public_text = public.read_text(encoding="utf-8")
+                self.assertNotIn("shikumi-devdoc:translation-metadata", public_text)
+                self.assertNotIn("この文書は自動生成された翻訳元", public_text)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn(f"The current version is **{__version__}**.", readme)
+        self.assertIn(f"## {__version__}", changelog)
+
+    def test_published_document_snapshot_is_part_of_ci_and_release_checks(self):
+        workflow = (ROOT / ".github" / "workflows" / "checks.yml").read_text(encoding="utf-8")
+        release_check = (ROOT / "tools" / "check_release.py").read_text(encoding="utf-8")
+        command = "tools/check_published_docs.py"
+        self.assertIn(command, workflow)
+        self.assertIn(command, release_check)
+
     def test_documentation_and_test_tooling_dependencies_are_explicit(self):
         with (ROOT / "pyproject.toml").open("rb") as stream:
             project = tomllib.load(stream)
@@ -178,6 +219,7 @@ class DocumentBuildTests(unittest.TestCase):
         published_paths = (
             "docs/GETTING_STARTED.md",
             "docs/migration/0.16.md",
+            "docs/migration/0.17.md",
             "GLOSSARY.md",
             "docs/configuration/INDEX.md",
             "docs/recipes/INDEX.md",

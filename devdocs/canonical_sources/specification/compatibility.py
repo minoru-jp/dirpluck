@@ -44,3 +44,11 @@ class SPECIFICATION_PART:
             r"""0.16.0 から 1.0.0 未満で Always `namespace` を使用した Configuration は `AlwaysMigrationWarning` を報告し、この field が 1.0.0 で削除されることと、Archive directory name を `[always.<name>]` に直接記述する replacement を案内する。この warning は layout migration warning の有無とは独立して報告する。1.0.0 では Always `namespace` の受理とこの migration warning をともに削除する。"""
 
             level @= MUST
+
+    class SECTION_1304:
+        title @= "Always archive layout migration warning"
+
+        class SPEC_171:
+            r"""0.16.0 から 1.0.0 未満では、effective Layout を持たない Always source について 0.14.x で有効だった Archive identity と 0.16.x の effective Always name を比較し、両者が異なる場合だけ `AlwaysMigrationWarning` を報告する。Warning は旧 root と 0.16.x root を含める。0.17.0 以降で effective Layout が有効な Always source では、この legacy layout migration warning を報告してはならない。Explicit Layout が現在の final Archive destination を決めており、0.16.x の中間 placement は current output を表さないためである。Always `namespace` の削除 warning はこの抑制とは独立する。"""
+
+            level @= MUST

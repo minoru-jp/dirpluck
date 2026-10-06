@@ -30,7 +30,7 @@ class SECTION_001:
 
         {{TERM_1}} には runtime third-party dependency はありません。
 
-        0.14.x から upgrade する場合は、Always Archive layout の breaking change を `docs/migration/0.16.md` で確認してください。
+        0.16.x から upgrade する場合は、Target / Always の final Archive root 一意性と Layout への移行を `docs/migration/0.17.md` で確認してください。0.14.x 以前から upgrade する場合は、先に `docs/migration/0.16.md` の Always Archive identity 変更も確認してください。
         """
 
         title @= "インストール"
@@ -67,7 +67,7 @@ class SECTION_001:
         {{readme_llm_context_configuration}}
         ```
 
-        `always` は Target に関係なく固定資料を加えます。`scope.projects` は runtime に選べる repository の場所を定め、`pluck` は選ばれた directory Target へ同じ Selection を適用します。通常は `.tmp/` を除外し、`diff` Case のときだけ評価対象の差分を含めます。`description` は選択 semantics を変えませんが、生成される Archive README に役割を残すため、受け取った人や LLM が開発対象・基盤・補助 tool を区別できます。
+        `always` は Target に関係なく固定資料を加えます。`scope.projects` は runtime に選べる repository の場所を定め、`pluck` は選ばれた directory Target へ同じ Selection を適用します。`targets_layout = "repositories"` は選択した Target を宣言済み `repositories/` Layout の下へ配置します。通常は `.tmp/` を除外し、`diff` Case のときだけ評価対象の差分を含めます。`description` は選択 semantics を変えませんが、生成される Archive README に役割を残すため、受け取った人や LLM が開発対象・基盤・補助 tool を区別できます。
         """
 
         title @= "例: LLM に開発 context を渡す"
@@ -75,8 +75,11 @@ class SECTION_001:
         readme_llm_context_configuration @= """
         [about]
         description = "LLMによる開発作業のためのリポジトリと実行依存物。"
+        description_no_targets = "今回は開発対象リポジトリを含まず、固定資料だけを収録しています。"
+        targets_layout = "repositories"
 
-        [namespace.repositories]
+        [layout.repositories]
+        description = "今回の開発対象として選択されたリポジトリ。"
 
         [always.dependencies]
         description = "対象リポジトリが利用する基盤フレームワーク。"
@@ -91,7 +94,6 @@ class SECTION_001:
         [scope.projects]
         description = "開発対象として選択できるリポジトリ。"
         path = "repositories"
-        namespace = "repositories"
         ignore = ["archive/", "scratch/"]
 
         [shared.ignore]

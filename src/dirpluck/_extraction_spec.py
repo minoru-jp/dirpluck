@@ -20,6 +20,7 @@ class TargetRootSpec:
     target_kind: TargetKind
     ignore: tuple[TargetIgnorePattern, ...]
     archive_prefix: str | None
+    layout_name: str | None
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class FixedSourceSpec:
     archive_root: str
     root: Path
     selection: Selection
+    layout_name: str | None
 
 
 @dataclass(frozen=True)

@@ -135,7 +135,7 @@ class ArchiveTests(BuilderTestCase):
             self.assertIn("#### Pluck\n\nApplication sources.", readme)
             self.assertIn("##### `application/`\n\nFiles: 1", readme)
 
-    def test_target_and_always_may_share_exact_archive_root(self):
+    def test_target_and_always_must_not_share_exact_archive_root(self):
         with resolved_temporary_directory() as temp:
             root = Path(temp)
             project = root / "shikumi-devdoc"
@@ -155,16 +155,10 @@ class ArchiveTests(BuilderTestCase):
                 must = ["dist/shikumi_devdoc-*.whl"]
             """,
             )
-            sources = resolve_sources(config, BuildRequest.create("./shikumi-devdoc/"))
-            self.assertEqual(
-                [source.archive_root for source in sources],
-                ["shikumi-devdoc", "shikumi-devdoc"],
-            )
-            output = build_archive(config, BuildRequest.create("./shikumi-devdoc/"))
-            with zipfile.ZipFile(output) as archive:
-                names = set(archive.namelist())
-            self.assertIn("shikumi-devdoc/src/main.py", names)
-            self.assertIn("shikumi-devdoc/dist/shikumi_devdoc-0.1.0-py3-none-any.whl", names)
+            with self.assertRaisesRegex(
+                SelectionError, "resolved sources must have distinct archive roots"
+            ):
+                resolve_sources(config, BuildRequest.create("./shikumi-devdoc/"))
 
     def test_target_and_always_roots_that_differ_only_by_case_are_rejected(self):
         with resolved_temporary_directory() as temp:
@@ -188,7 +182,7 @@ class ArchiveTests(BuilderTestCase):
             )
             with self.assertRaisesRegex(
                 SelectionError,
-                "use identical spelling for intentional composition",
+                "choose distinct archive roots",
             ):
                 resolve_sources(config, BuildRequest.create("./App/"))
 
@@ -255,7 +249,7 @@ class ArchiveTests(BuilderTestCase):
 
             with self.assertRaisesRegex(
                 SelectionError,
-                "multiple files resolve to the same archive path",
+                "resolved sources must have distinct archive roots",
             ):
                 build_archive(config, BuildRequest.create("./shikumi-devdoc/"))
 
@@ -514,6 +508,215 @@ class ArchiveTests(BuilderTestCase):
             self.assertNotIn("archive-only directory prefix", readme)
             self.assertNotIn("Namespace:", readme)
             self.assertNotIn("Source root:", readme)
+
+    def test_archive_readme_uses_source_presence_specific_about_descriptions(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(
+                root,
+                """
+                [about]
+                description = "Common description."
+                description_no_targets = "There are no Targets."
+                description_no_always = "There are no Always sources."
+                description_empty = "There are no sources."
+
+                [always.docs]
+                path = "docs"
+                must = ["guide.md"]
+                """,
+            )
+            output = build_archive(config, BuildRequest.create())
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("Common description.", readme)
+            self.assertIn("There are no Targets.", readme)
+            self.assertNotIn("There are no Always sources.", readme)
+            self.assertNotIn("There are no sources.", readme)
+
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            target = root / "app"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            config = self._config(
+                root,
+                """
+                [about]
+                description = "Common description."
+                description_no_targets = "There are no Targets."
+                description_no_always = "There are no Always sources."
+                description_empty = "There are no sources."
+
+                [pluck]
+                must = ["file.txt"]
+                """,
+            )
+            output = build_archive(config, BuildRequest.create("./app/"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("Common description.", readme)
+            self.assertIn("There are no Always sources.", readme)
+            self.assertNotIn("There are no Targets.", readme)
+            self.assertNotIn("There are no sources.", readme)
+
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = self._config(
+                root,
+                """
+                [about]
+                description = "Common description."
+                description_no_targets = "There are no Targets."
+                description_no_always = "There are no Always sources."
+                description_empty = "There are no sources."
+                """,
+            )
+            output = build_archive(config, BuildRequest.create())
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("Common description.", readme)
+            self.assertIn("There are no sources.", readme)
+            self.assertNotIn("There are no Targets.", readme)
+            self.assertNotIn("There are no Always sources.", readme)
+            self.assertIn("This Archive contains only `README.md`.", readme)
+
+    def test_allow_empty_source_still_counts_for_conditional_description_presence(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "docs"
+            docs.mkdir()
+            config = self._config(
+                root,
+                """
+                [about]
+                description_no_targets = "Always is present."
+                description_empty = "No sources."
+
+                [always.docs]
+                path = "docs"
+                may = ["*.md"]
+                allow_empty = true
+                """,
+            )
+            output = build_archive(config, BuildRequest.create())
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("Always is present.", readme)
+            self.assertNotIn("No sources.", readme)
+
+    def test_archive_readme_omits_conditional_description_when_both_roles_exist(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            target = root / "app"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(
+                root,
+                """
+                [about]
+                description = "Common description."
+                description_no_targets = "NO TARGETS"
+                description_no_always = "NO ALWAYS"
+                description_empty = "EMPTY"
+
+                [pluck]
+                must = ["file.txt"]
+
+                [always.docs]
+                path = "docs"
+                must = ["guide.md"]
+                """,
+            )
+            output = build_archive(config, BuildRequest.create("./app/"))
+            with zipfile.ZipFile(output) as archive:
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("Common description.", readme)
+            self.assertNotIn("NO TARGETS", readme)
+            self.assertNotIn("NO ALWAYS", readme)
+            self.assertNotIn("EMPTY", readme)
+
+    def test_layouts_place_sources_under_declared_directories_and_describe_used_layouts(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            target = root / "app"
+            target.mkdir()
+            (target / "file.txt").write_text("x", encoding="utf-8")
+            dist = root / "dist"
+            dist.mkdir()
+            (dist / "tool.whl").write_bytes(b"wheel")
+            config = self._config(
+                root,
+                """
+                [about]
+                always_layout = "dependencies"
+                targets_layout = "development-targets"
+
+                [layout.dependencies]
+                description = "Install these dependencies first."
+
+                [layout.development-targets]
+                description = "These are the development Targets."
+
+                [layout.unused]
+                description = "This must not appear."
+
+                [pluck]
+                must = ["file.txt"]
+
+                [always.wheels]
+                path = "dist"
+                must = ["*.whl"]
+                """,
+            )
+            output = build_archive(config, BuildRequest.create("./app/"))
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("dependencies/wheels/tool.whl", names)
+            self.assertIn("development-targets/app/file.txt", names)
+            self.assertIn("## Layouts", readme)
+            self.assertIn("### `dependencies/`", readme)
+            self.assertIn("Install these dependencies first.", readme)
+            self.assertIn("### `development-targets/`", readme)
+            self.assertIn("These are the development Targets.", readme)
+            self.assertNotIn("This must not appear.", readme)
+            self.assertIn("## `dependencies/wheels/`", readme)
+            self.assertIn("##### `development-targets/app/`", readme)
+
+    def test_layout_without_description_is_valid_and_unused_layout_creates_no_directory(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            config = self._config(
+                root,
+                """
+                [about]
+                always_layout = "dependencies"
+
+                [layout.dependencies]
+                [layout.unused]
+
+                [always.docs]
+                path = "docs"
+                must = ["guide.md"]
+                """,
+            )
+            output = build_archive(config, BuildRequest.create())
+            with zipfile.ZipFile(output) as archive:
+                names = set(archive.namelist())
+                readme = archive.read("README.md").decode("utf-8")
+            self.assertIn("dependencies/docs/guide.md", names)
+            self.assertFalse(any(name.startswith("unused/") for name in names))
+            self.assertNotIn("## Layouts", readme)
 
 
 if __name__ == "__main__":

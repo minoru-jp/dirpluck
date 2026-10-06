@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Mapping
+from types import MappingProxyType
 
 from ._case import CaseSelection
 from ._compatibility import CompatibilityNotice, always_layout_notice
@@ -12,6 +14,7 @@ from ._config_models import (
     Always,
     AlwaysCase,
     Config,
+    Layout,
     SharedPatterns,
     Scope,
 )
@@ -21,6 +24,17 @@ from ._extraction_spec import BoundTargetSpec, ExtractionSpec, FixedSourceSpec, 
 from ._config_parser import load_config
 from ._target_syntax import parse_target_reference
 from .errors import ConfigurationError, SelectionError
+
+
+@dataclass(frozen=True)
+class CollectionPresentation:
+    """Configuration-derived metadata consumed only by human-readable archive output."""
+
+    about_description: str | None
+    description_no_targets: str | None
+    description_no_always: str | None
+    description_empty: str | None
+    layout_descriptions: Mapping[str, str | None]
 
 
 def _resolve_base_config(config: Config) -> Config | None:
@@ -97,6 +111,33 @@ def _validate_namespace_names(namespaces: frozenset[str]) -> None:
         by_casefold[key] = name
 
 
+def _compose_layouts(layers: tuple[Config, ...]) -> Mapping[str, Layout]:
+    layouts = {
+        name: layout for config in reversed(layers) for name, layout in config.layouts.items()
+    }
+    by_casefold: dict[str, str] = {}
+    for name in layouts:
+        key = name.casefold()
+        previous = by_casefold.get(key)
+        if previous is not None:
+            raise ConfigurationError(
+                "effective Layout names must be distinct ignoring case: "
+                + f"{previous!r} and {name!r}"
+            )
+        by_casefold[key] = name
+    return MappingProxyType(layouts)
+
+
+def _validate_layout_reference(
+    layout: str | None,
+    layouts: Mapping[str, Layout],
+    *,
+    where: str,
+) -> None:
+    if layout is not None and layout not in layouts:
+        raise ConfigurationError(f"effective {where} references unknown Layout {layout!r}")
+
+
 def _anchor_scope_root(config: Config, *, name: str | None, path: str | None) -> Path:
     base = config.manifest.parent
     candidate = base if name is None else Path(path or "")
@@ -142,6 +183,8 @@ def _compose_pluck(
 def _compose_scopes(
     layers: tuple[Config, ...],
     namespaces: frozenset[str],
+    layouts: Mapping[str, Layout],
+    default_layout: str | None,
 ) -> Mapping[str | None, TargetRootSpec]:
     root = layers[0]
     definitions: dict[str | None, tuple[Config, Scope]] = {None: (root, root.scopes[None])}
@@ -153,10 +196,17 @@ def _compose_scopes(
     compiled: dict[str | None, TargetRootSpec] = {}
     for name, (owner, raw_scope) in definitions.items():
         scope = raw_scope
+        where = "[scope]" if name is None else f"[scope.{name}]"
         if scope.namespace is not None and scope.namespace not in namespaces:
-            where = "[scope]" if name is None else f"[scope.{name}]"
             raise ConfigurationError(
                 f"effective {where}.namespace references unknown Namespace {scope.namespace!r}"
+            )
+        effective_layout = scope.layout if scope.layout is not None else default_layout
+        _validate_layout_reference(effective_layout, layouts, where=f"{where}.layout")
+        if scope.namespace is not None and effective_layout is not None:
+            raise ConfigurationError(
+                f"effective {where} cannot use both Namespace {scope.namespace!r} "
+                + f"and Layout {effective_layout!r}"
             )
         compiled[name] = TargetRootSpec(
             name=name,
@@ -165,7 +215,8 @@ def _compose_scopes(
             description=scope.description,
             target_kind=scope.target_kind,
             ignore=scope.ignore,
-            archive_prefix=scope.namespace,
+            archive_prefix=effective_layout if effective_layout is not None else scope.namespace,
+            layout_name=effective_layout,
         )
     return compiled
 
@@ -174,6 +225,8 @@ def _compose_always(
     layers: tuple[Config, ...],
     shared: SharedPatterns,
     namespaces: frozenset[str],
+    layouts: Mapping[str, Layout],
+    default_layout: str | None,
 ) -> tuple[Mapping[str, FixedSourceSpec], Mapping[str, CompatibilityNotice]]:
     definitions = {
         name: (config, source)
@@ -193,29 +246,41 @@ def _compose_always(
                 f"effective [always.{name}].namespace references unknown Namespace "
                 + repr(source.compatibility_namespace)
             )
-        archive_root = source.compatibility_namespace or name
+        effective_layout = source.layout if source.layout is not None else default_layout
+        _validate_layout_reference(effective_layout, layouts, where=f"[always.{name}].layout")
+        if source.compatibility_namespace is not None and effective_layout is not None:
+            raise ConfigurationError(
+                f"effective [always.{name}] cannot use both Namespace "
+                + f"{source.compatibility_namespace!r} and Layout {effective_layout!r}"
+            )
+        effective_name = source.compatibility_namespace or name
+        archive_root = (
+            effective_name if effective_layout is None else f"{effective_layout}/{effective_name}"
+        )
         key = archive_root.casefold()
         previous = archive_roots.get(key)
         if previous is not None:
             raise ConfigurationError(
-                "effective Always source names must be distinct ignoring case after namespace resolution: "
-                + f"[always.{previous}] resolves to a name that conflicts with {archive_root!r} "
+                "effective Always source archive roots must be distinct ignoring case after namespace resolution and Layout application: "
+                + f"[always.{previous}] conflicts with {archive_root!r} "
                 + f"from [always.{name}]"
             )
         archive_roots[key] = name
         root = _anchor_always_root(owner, source)
         compiled[name] = FixedSourceSpec(
-            label=f"always source {archive_root!r}",
+            label=f"always source {effective_name!r}",
             archive_root=archive_root,
             root=root,
             selection=normalize_selection(source.selection, shared, f"[always.{name}]"),
+            layout_name=effective_layout,
         )
         notice = always_layout_notice(
             manifest=owner.manifest,
             source_name=name,
             source_root=root,
             namespace=source.compatibility_namespace,
-            effective_name=archive_root,
+            effective_name=effective_name,
+            layout=effective_layout,
         )
         if notice is not None:
             notices[name] = notice
@@ -302,17 +367,30 @@ def compile_collection_input(
     *,
     case: CaseSelection,
     target_references: tuple[str, ...],
-) -> tuple[ExtractionSpec, str | None, tuple[CompatibilityNotice, ...]]:
+) -> tuple[ExtractionSpec, CollectionPresentation, tuple[CompatibilityNotice, ...]]:
     """Compile Configuration semantics into extraction input and archive metadata."""
 
     layers = _configuration_chain(config)
     shared = _compose_shared(layers)
     namespaces = _compose_namespaces(layers)
     _validate_namespace_names(namespaces)
+    layouts = _compose_layouts(layers)
+    default_always_layout = next(
+        (item.about_always_layout for item in layers if item.about_always_layout is not None),
+        None,
+    )
+    default_targets_layout = next(
+        (item.about_targets_layout for item in layers if item.about_targets_layout is not None),
+        None,
+    )
+    _validate_layout_reference(default_always_layout, layouts, where="[about].always_layout")
+    _validate_layout_reference(default_targets_layout, layouts, where="[about].targets_layout")
 
     pluck_default, pluck_cases = _compose_pluck(layers, shared)
-    scopes = _compose_scopes(layers, namespaces)
-    always, always_notices = _compose_always(layers, shared, namespaces)
+    scopes = _compose_scopes(layers, namespaces, layouts, default_targets_layout)
+    always, always_notices = _compose_always(
+        layers, shared, namespaces, layouts, default_always_layout
+    )
     always_cases = _compose_always_cases(layers, always)
     directory_selection, directory_selection_error = _selected_pluck(
         pluck_default, pluck_cases, case
@@ -321,9 +399,38 @@ def compile_collection_input(
     compatibility_notices = tuple(
         notice for name in selected_always_names if (notice := always_notices.get(name)) is not None
     )
-    about_description = next(
-        (item.about_description for item in layers if item.about_description is not None),
-        None,
+    presentation = CollectionPresentation(
+        about_description=next(
+            (item.about_description for item in layers if item.about_description is not None),
+            None,
+        ),
+        description_no_targets=next(
+            (
+                item.about_description_no_targets
+                for item in layers
+                if item.about_description_no_targets is not None
+            ),
+            None,
+        ),
+        description_no_always=next(
+            (
+                item.about_description_no_always
+                for item in layers
+                if item.about_description_no_always is not None
+            ),
+            None,
+        ),
+        description_empty=next(
+            (
+                item.about_description_empty
+                for item in layers
+                if item.about_description_empty is not None
+            ),
+            None,
+        ),
+        layout_descriptions=MappingProxyType(
+            {name: layout.description for name, layout in layouts.items()}
+        ),
     )
 
     reference_count = len(target_references)
@@ -363,6 +470,6 @@ def compile_collection_input(
             directory_selection_error=directory_selection_error,
             fixed_sources=tuple(always[name] for name in selected_always_names),
         ),
-        about_description,
+        presentation,
         compatibility_notices,
     )

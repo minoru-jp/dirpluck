@@ -40,20 +40,27 @@ must = ["*.md"]
 path = "artifacts/review.zip"
 ```
 
-`[pluck]` is the Pluck applied to directory Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for and where `target_kind` is chosen, and `[always.<name>]` defines Always sources. A Target and an Always source may intentionally compose into the same exactly spelled Archive root; case-only root differences remain invalid. Add Shared patterns, Pluck/Always Cases, Namespaces, and a Base Configuration as needed.
+`[pluck]` is the Pluck applied to directory Targets, `[scope]` / `[scope.<name>]` are the Scopes in which Targets are searched for and where `target_kind` is chosen, and `[always.<name>]` defines Always sources. To separate top-level placement inside the Archive, declare `[layout.<name>]` and reference it from the default policy for Always / Target sources or from an individual source. Add Shared patterns, Pluck/Always Cases, Namespaces, and a Base Configuration as needed.
 ## About
 
-`[about]` declares information about the Configuration itself. It may contain `description` and `base`.
+`[about]` declares information about the Configuration itself. It may contain the overall `description`, conditional descriptions based on the resolved source roles, default Layouts for Always / Target sources, and `base`.
 
 ```toml
 [about]
 description = "Materials prepared for reviewing the authentication redesign."
+description_no_targets = "This Archive contains only fixed reference material."
+description_no_always = "This Archive contains only requested Targets."
+description_empty = "No sources were selected for this run."
+always_layout = "dependencies"
+targets_layout = "development-targets"
 base = "../common/common.dirpluck"
 ```
 
-`description` is optional and describes the Configuration as a whole. It is displayed directly below the heading in the generated Archive README. If multiple Configurations in a base chain define a description, the first definition found from the outermost Configuration inward is used.
+`description` is optional and describes the Configuration as a whole. When present, it is always displayed directly below the heading in the generated Archive README. `description_no_targets`, `description_no_always`, and `description_empty` are also optional. Exactly one is added when the resolved sources are Always-only, Target-only, or zero sources respectively. The generated `README.md` still exists in the empty case.
 
-`base` is also optional and names one Base Configuration on which this Configuration is based. A Configuration may specify only `base` without a `description`. If `[about]` is present, at least one of these fields must be present.
+`always_layout` / `targets_layout` reference declared `[layout.<name>]` definitions and provide the default placement for Always sources / Targets. An individual `[always.<name>].layout`, `[scope].layout`, or `[scope.<name>].layout` takes precedence. If neither the individual source nor `[about]` selects a Layout, that source is placed directly at the Archive root.
+
+These `[about]` fields are resolved independently along the Base chain: for each field, the first definition found from the outermost Configuration inward is used. `base` is optional and names one Base Configuration on which this Configuration is based. If `[about]` is present, at least one field must be present.
 
 See [Specification](../specification/INDEX.md) for base-chain composition and cycle detection.
 ## Path notation

@@ -61,6 +61,7 @@ class ExtractedSource:
     source_path: Path
     description: str | None
     selected_count: int
+    layout_name: str | None = None
     scope_name: str | None = None
     scope_description: str | None = None
     target_overlaps: tuple[TargetOverlapStatus, ...] = ()

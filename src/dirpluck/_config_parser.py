@@ -12,6 +12,7 @@ from ._config_models import (
     Always,
     AlwaysCase,
     Config,
+    Layout,
     Output,
     Scope,
     SelectionDefinition,
@@ -19,6 +20,7 @@ from ._config_models import (
 from ._config_values import (
     _array,
     _parse_cases,
+    _parse_layout_reference,
     _parse_namespace_reference,
     _parse_pluck,
     _parse_selection,
@@ -28,6 +30,7 @@ from ._config_values import (
     _validate_always_name,
     _validate_base_path,
     _validate_output_fragment,
+    _validate_layout_name,
     _validate_namespace_name,
     _validate_scope_name,
     _validated_description,
@@ -72,10 +75,14 @@ def _table(value: object, where: str, *, none_as_empty: bool = False) -> dict[st
     return cast(dict[str, object], value)
 
 
-def _description(table: Mapping[str, object], where: str) -> str | None:
-    if "description" not in table:
+def _description_field(table: Mapping[str, object], key: str, where: str) -> str | None:
+    if key not in table:
         return None
-    return _validated_description(table["description"], f"{where}.description")
+    return _validated_description(table[key], f"{where}.{key}")
+
+
+def _description(table: Mapping[str, object], where: str) -> str | None:
+    return _description_field(table, "description", where)
 
 
 def _require_distinct_casefold(
@@ -111,6 +118,24 @@ def _parse_namespaces(value: object, where: str) -> frozenset[str]:
     return frozenset(namespaces)
 
 
+def _parse_layouts(value: object, where: str) -> Mapping[str, Layout]:
+    if value is None:
+        return MappingProxyType({})
+    table = _table(value, where)
+    if not table:
+        raise ConfigurationError(f"{where}: define at least one [layout.<name>]")
+    layouts: dict[str, Layout] = {}
+    layout_names: dict[str, str] = {}
+    for raw_name, raw_layout in table.items():
+        name = _validate_layout_name(raw_name, where)
+        _require_distinct_casefold(name, layout_names, where, label="Layout names")
+        layout_where = f"{where}.{name}"
+        layout_table = _table(raw_layout, layout_where)
+        _require_only_keys(layout_table, {"description"}, layout_where)
+        layouts[name] = Layout(description=_description(layout_table, layout_where))
+    return MappingProxyType(layouts)
+
+
 def _parse_scope_target_kind(value: object, where: str) -> TargetKind:
     if value is None:
         return "directory"
@@ -120,7 +145,7 @@ def _parse_scope_target_kind(value: object, where: str) -> TargetKind:
 
 
 def _parse_scope(table: dict[str, object], where: str, *, name: str | None) -> Scope:
-    allowed = {"description", "target_kind", "ignore", "namespace"}
+    allowed = {"description", "target_kind", "ignore", "namespace", "layout"}
     if name is not None:
         allowed.add("path")
     _require_only_keys(table, allowed, where)
@@ -137,6 +162,7 @@ def _parse_scope(table: dict[str, object], where: str, *, name: str | None) -> S
         target_kind=_parse_scope_target_kind(table.get("target_kind"), f"{where}.target_kind"),
         ignore=_validated_target_ignores(table.get("ignore"), f"{where}.ignore"),
         namespace=_parse_namespace_reference(table.get("namespace"), f"{where}.namespace"),
+        layout=_parse_layout_reference(table.get("layout"), f"{where}.layout"),
     )
 
 
@@ -144,7 +170,7 @@ def _parse_scopes(value: object, where: str) -> Mapping[str | None, Scope]:
     table = _table(value, where, none_as_empty=True)
     scopes: dict[str | None, Scope] = {}
     default: dict[str, object] = {}
-    default_fields = {"description", "target_kind", "ignore", "namespace"}
+    default_fields = {"description", "target_kind", "ignore", "namespace", "layout"}
 
     for raw_key, raw_value in table.items():
         if raw_key in default_fields and not isinstance(raw_value, dict):
@@ -178,7 +204,7 @@ def _parse_always(value: object, where: str) -> Mapping[str, Always]:
         )
         _require_only_keys(
             source_table,
-            {"path", "description", "must", "may", "ignore", "allow_empty"},
+            {"path", "description", "must", "may", "ignore", "allow_empty", "layout"},
             source_where,
         )
         raw_path = source_table.get("path")
@@ -188,7 +214,7 @@ def _parse_always(value: object, where: str) -> Mapping[str, Always]:
             raw_path, f"{source_where}.path", label="Always source path"
         )
         selection = _parse_selection(
-            {key: item for key, item in source_table.items() if key != "path"},
+            {key: item for key, item in source_table.items() if key not in {"path", "layout"}},
             source_where,
         )
         namespace = (
@@ -202,6 +228,7 @@ def _parse_always(value: object, where: str) -> Mapping[str, Always]:
             path=path,
             selection=selection,
             compatibility_namespace=namespace,
+            layout=_parse_layout_reference(source_table.get("layout"), f"{source_where}.layout"),
         )
     return MappingProxyType(always)
 
@@ -264,16 +291,51 @@ def _parse_case_table(
     )
 
 
-def _parse_about(value: object, where: str) -> tuple[str | None, str | None]:
+def _parse_about(
+    value: object, where: str
+) -> tuple[
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+]:
     if value is None:
-        return None, None
+        return None, None, None, None, None, None, None
     table = _table(value, where)
-    _require_only_keys(table, {"description", "base"}, where)
+    _require_only_keys(
+        table,
+        {
+            "description",
+            "description_no_targets",
+            "description_no_always",
+            "description_empty",
+            "always_layout",
+            "targets_layout",
+            "base",
+        },
+        where,
+    )
     if not table:
-        raise ConfigurationError(f"{where}: define description and/or base")
+        raise ConfigurationError(f"{where}: define at least one supported field")
     description = _description(table, where)
+    description_no_targets = _description_field(table, "description_no_targets", where)
+    description_no_always = _description_field(table, "description_no_always", where)
+    description_empty = _description_field(table, "description_empty", where)
+    always_layout = _parse_layout_reference(table.get("always_layout"), f"{where}.always_layout")
+    targets_layout = _parse_layout_reference(table.get("targets_layout"), f"{where}.targets_layout")
     base = _validate_base_path(table["base"], f"{where}.base") if "base" in table else None
-    return description, base
+    return (
+        description,
+        description_no_targets,
+        description_no_always,
+        description_empty,
+        always_layout,
+        targets_layout,
+        base,
+    )
 
 
 def _parse_output(value: object, where: str) -> Output | None:
@@ -334,11 +396,19 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
     data = _read_toml(manifest)
     _require_only_keys(
         data,
-        {"about", "shared", "pluck", "case", "scope", "always", "namespace", "output"},
+        {"about", "shared", "pluck", "case", "scope", "always", "namespace", "layout", "output"},
         str(manifest),
     )
 
-    about_description, base = _parse_about(data.get("about"), f"{manifest} [about]")
+    (
+        about_description,
+        about_description_no_targets,
+        about_description_no_always,
+        about_description_empty,
+        about_always_layout,
+        about_targets_layout,
+        base,
+    ) = _parse_about(data.get("about"), f"{manifest} [about]")
     shared = _parse_shared(data.get("shared"), f"{manifest} [shared]")
     raw_pluck, raw_legacy_cases, uses_legacy_pluck = split_legacy_pluck_table(data.get("pluck"))
     pluck = _parse_pluck(raw_pluck, f"{manifest} [pluck]")
@@ -364,11 +434,17 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
     )
     always = _parse_always(data.get("always"), f"{manifest} [always]")
     namespaces = _parse_namespaces(data.get("namespace"), f"{manifest} [namespace]")
+    layouts = _parse_layouts(data.get("layout"), f"{manifest} [layout]")
     output = _parse_output(data.get("output"), f"{manifest} [output]")
 
     config = Config(
         manifest=manifest,
         about_description=about_description,
+        about_description_no_targets=about_description_no_targets,
+        about_description_no_always=about_description_no_always,
+        about_description_empty=about_description_empty,
+        about_always_layout=about_always_layout,
+        about_targets_layout=about_targets_layout,
         base=base,
         shared=shared,
         pluck=pluck,
@@ -377,6 +453,7 @@ def load_config(path: str | Path = CONFIG_NAME) -> Config:
         always=always,
         always_cases=always_cases,
         namespaces=namespaces,
+        layouts=layouts,
         output=output,
     )
     if uses_legacy_pluck:

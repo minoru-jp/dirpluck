@@ -86,20 +86,22 @@ Translation metadata in the canonical documents carries policies that must survi
 
 A collection `INDEX.md` is translated from the canonical index realized from `order` and `summary`; the published index does not carry extra prose of its own. Explanatory navigation and reading guidance belong in the collection's canonical `overview.md`.
 
-For changes to meaning, structure, or information content, edit the canonical source, regenerate the canonical document, then reflect the same content in the published English document. Do not treat a canonical document as an independently editable source.
+For changes to meaning, structure, or information content, edit the canonical source, regenerate the canonical document, then use that canonical document as the translation source for the published English document at the same relative path. Do not treat either a canonical document or a published English document as the source of truth for content changes.
 
 Repository-wide generation orchestration stays in the repository-specific `tools/render_canonical_docs.py`. The set of canonical sources, publication targets, index titles, and project context are dirpluck-specific information and are not pushed into shikumi-devdoc's generic API.
 
 ```console
 python tools/render_canonical_docs.py
 python tools/render_canonical_docs.py --check
+python tools/check_published_docs.py --update
+python tools/check_published_docs.py
 ```
 
-`--check` compares committed canonical documents with a temporary realization and detects drift from their sources of truth.
+`render_canonical_docs.py --check` compares committed canonical documents with a temporary realization and detects drift from their sources of truth. After translating and publishing the English documents, `check_published_docs.py --update` records the canonical/public hash pairs in `devdocs/config/publication_manifest.json`. The normal `check_published_docs.py` verifies that neither side has moved away from that reviewed snapshot and that the root README / CHANGELOG publish the current release version. Updating the manifest does not replace translation or review; it records the snapshot that completed those steps for the release gate.
 
 ## Version control and distribution
 
-Canonical sources, Japanese canonical documents, and published English documents are all committed so changes can be reviewed across the full source-to-publication path.
+Canonical sources, Japanese canonical documents, published English documents, and `devdocs/config/publication_manifest.json` are all committed so changes can be reviewed across the full source-to-publication path together with the reviewed publication snapshot.
 
 `devdocs/` is included in the source distribution so the documentation generation and validation inputs remain available with a release. Canonical sources and canonical documents are not included in the wheel. Instead, the wheel bundles the repository's published `README.md`, `GLOSSARY.md`, top-level `CHANGELOG.md`, `STATUS.md`, and complete `docs/` tree, including the changelog archive, under `dirpluck/_docs/`.
 
@@ -109,8 +111,8 @@ The `devdocs/` directory layout and canonical implementation are repository-deve
 
 GitHub Actions centralizes the shared quality gate in reusable `.github/workflows/checks.yml`. Ruff formatting is enforced for `src/`, `tests/`, and `tools/` with `ruff format --check`, while `ruff check .` continues to lint the whole repository including canonical sources. Canonical sources are intentionally outside the formatter scope because they use Python syntax as a documentation DSL and raw document indentation can be meaningful. The same shared checks also run basedpyright, canonical-document drift validation, and the Python 3.11 through 3.14 `unittest` matrix; Python 3.13 additionally verifies compatibility with the legacy `python -m unittest discover -s tests` form.
 
-Normal CI runs on pushes to `main` and pull requests targeting `main`, calls the shared checks, and uses a separate build job to build the wheel and sdist and verify distribution metadata and contents.
+Normal CI runs on pushes to `main` and pull requests targeting `main`, calls the shared checks, and validates both canonical-document drift and the reviewed published-document snapshot. A separate build job builds the wheel and sdist and verifies distribution metadata and contents.
 
 When a GitHub Release is published, the release workflow checks out the release tag itself and verifies that the tag matches the dynamic package version before running the same reusable checks against that tag. Only after those checks pass does it build and verify the release distributions, smoke-test the built wheel in an isolated environment, and publish that same artifact set to PyPI through Trusted Publishing.
 
-Locally, `python tools/check_release.py` reproduces the combined quality and release checks: Ruff formatting and lint, basedpyright, both `unittest` discovery forms, canonical-document validation, wheel / sdist build, metadata and distribution-content checks, and an installed-wheel CLI smoke test.
+Before a release, realize canonical-source changes with `python tools/render_canonical_docs.py`, translate the resulting Japanese canonical documents into the corresponding published English documents, and update the reviewed snapshot with `python tools/check_published_docs.py --update`. Locally, `python tools/check_release.py` reproduces the combined quality and release checks: Ruff formatting and lint, basedpyright, both `unittest` discovery forms, canonical-document drift validation, the published-document snapshot check, wheel / sdist build, metadata and distribution-content checks, and an installed-wheel CLI smoke test. A state where canonical sources have moved but the published English documents still describe an older release does not pass the release gate.

@@ -48,7 +48,7 @@ title: Definition composition
 
 ### SPEC_029
 
-`[about].description` は Root Configuration から Base chain をたどり、最初に定義された値を effective description とする。Chain 全体に定義がなければ effective description は存在しない。`about.base` は chain link であり継承対象の値ではない。Base Configuration に書かれた `[scope]` はその Configuration 自身を Root として使う場合の default Scope 設定であり、outer Root の default Scope へ継承しない。
+`[about].description` / `description_no_targets` / `description_no_always` / `description_empty` / `always_layout` / `targets_layout` は field ごとに Root Configuration から Base chain をたどり、最初に定義された値を effective value とする。Chain 全体に定義がなければその effective value は存在しない。`about.base` は chain link であり継承対象の値ではない。Base Configuration に書かれた `[scope]` はその Configuration 自身を Root として使う場合の default Scope 設定であり、outer Root の default Scope へ継承しない。
 
 level: MUST
 
@@ -58,7 +58,8 @@ level: MUST
 - Pluck Case: `[case.pluck.<name>]` は Case name ごとに統合し、同名 Case は Root に近い Configuration の complete Selection definition 全体を採用し、異なる名前はすべて残す。
 - Always source: 同名 source は Root に近い Configuration の definition 全体を採用し、異なる名前はすべて残す。
 - Always Case: `[case.always.<name>]` は Case name ごとに統合し、同名 Case は Root に近い Configuration の `description` / `include` / `exclude` を含む definition 全体を採用し、異なる名前はすべて残す。
-- Named Scope: 同名 Scope は Root に近い Configuration の `description` / `target_kind` / `path` / `ignore` / `namespace` を含む definition 全体を採用し、異なる名前はすべて残す。Default Scope は Base から継承せず、Runtime Target, Scope, and Case の default Scope rule に従って Root Configuration location から root を決め、Root Configuration の `[scope]` に書かれた `description` / `target_kind` / `ignore` / `namespace` だけを使う。
+- Named Scope: 同名 Scope は Root に近い Configuration の `description` / `target_kind` / `path` / `ignore` / `layout` / `namespace` を含む definition 全体を採用し、異なる名前はすべて残す。Default Scope は Base から継承せず、Runtime Target, Scope, and Case の default Scope rule に従って Root Configuration location から root を決め、Root Configuration の `[scope]` に書かれた `description` / `target_kind` / `ignore` / `layout` / `namespace` だけを使う。
+- Layout: 同名 Layout は Root に近い Configuration の definition 全体を採用し、異なる名前はすべて残す。Composition 後の effective Layout name は大文字小文字を区別しない比較で一意でなければならない。`[about].always_layout` / `[about].targets_layout` と source 個別 `layout` reference は Base composition 後の effective Layout 集合に対して解決する。
 - ネームスペース: 同名 Namespace は Root に近い Configuration の definition 全体を採用し、異なる名前はすべて残す。Scope の Namespace reference は Base composition 後の effective Namespace 集合に対して解決する。
 - Shared pattern: `must` / `may` / `ignore` を独立した namespace とし、各 namespace の同名 pattern set は Root に近い Configuration の配列全体を採用する。
 

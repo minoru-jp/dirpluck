@@ -97,7 +97,7 @@ class API_REFERENCE_PART:
 
     class SECTION_036:
         r"""
-        0.16.0 から 1.0.0 直前まで、`dirpluck.run()` は Always migration を公開 `AlwaysMigrationWarning` として Python の warnings framework へ報告します。0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source にだけ layout migration warning を出します。Warning message には旧 root と新 root を含めます。旧・新 identity が同じ source には layout warning を出しません。
+        0.16.0 から 1.0.0 直前まで、`dirpluck.run()` は Always migration を公開 `AlwaysMigrationWarning` として Python の warnings framework へ報告します。0.14.x で有効だった Always source の旧 Archive identity と 0.16.x の effective Always name を比較し、実際に Archive root が変わる source にだけ layout migration warning を出します。Warning message には旧 root と新 root を含めます。旧・新 identity が同じ source には layout warning を出しません。0.17.0 以降で explicit Layout が有効な Always source では、Layout が現在の final Archive destination を意図的に決めているため、この旧 layout migration warning は抑制します。
 
         `[always.<name>].namespace` を使用した場合は、layout 差分とは別に pre-1.0 compatibility warning を必ず報告します。0.16.x では Namespace name が Always name を一時的に置き換えますが、この field は 1.0.0 で削除されます。Archive directory name は `[always.<name>]` に直接記述してください。
 

@@ -32,7 +32,7 @@ title: Definition composition
 
 ### SPEC_029
 
-`[about].description` is searched from the Root Configuration through its base chain; the first defined value becomes the effective description. If no Configuration in the chain defines one, there is no effective description. `about.base` is a chain link and is not inherited as a value. A `[scope]` written in a Base Configuration configures the default Scope only when that Configuration itself is the Root; it is not inherited into an outer Root's default Scope.
+`[about].description`, `description_no_targets`, `description_no_always`, `description_empty`, `always_layout`, and `targets_layout` are each searched independently from the Root Configuration through its base chain; for each field, the first defined value becomes the effective value. If no Configuration in the chain defines a field, that effective value does not exist. `about.base` is a chain link and is not inherited as a value. A `[scope]` written in a Base Configuration configures the default Scope only when that Configuration itself is the Root; it is not inherited into an outer Root's default Scope.
 
 level: MUST
 
@@ -42,7 +42,8 @@ level: MUST
 - Pluck Case: `[case.pluck.<name>]` definitions are combined by Case name. For the same name, the complete Selection definition from the Configuration closest to the Root is used; differently named Cases all remain.
 - Always source: for the same source name, the complete definition from the Configuration closest to the Root is used; differently named sources all remain.
 - Always Case: `[case.always.<name>]` definitions are combined by Case name. For the same name, the complete definition, including `description`, `include`, and `exclude`, from the Configuration closest to the Root is used; differently named Cases all remain.
-- Named Scope: for the same Scope name, the complete definition from the Configuration closest to the Root is used, including `description`, `target_kind`, `path`, `ignore`, and `namespace`; differently named Scopes all remain. The default Scope is not inherited from a Base Configuration. Its root follows the default-Scope rule in Runtime Target, Scope, and Case, and only the Root Configuration's `[scope].description` / `target_kind` / `ignore` / `namespace` applies.
+- Named Scope: for the same Scope name, the complete definition from the Configuration closest to the Root is used, including `description`, `target_kind`, `path`, `ignore`, `layout`, and `namespace`; differently named Scopes all remain. The default Scope is not inherited from a Base Configuration. Its root follows the default-Scope rule in Runtime Target, Scope, and Case, and only the Root Configuration's `[scope].description` / `target_kind` / `ignore` / `layout` / `namespace` applies.
+- Layout: for the same Layout name, the complete definition from the Configuration closest to the Root is used; differently named Layouts all remain. Effective Layout names after composition must be unique under a case-insensitive comparison. `[about].always_layout`, `[about].targets_layout`, and per-source `layout` references are resolved against the effective Layout set after Base composition.
 - Namespace: for the same Namespace name, the definition from the Configuration closest to the Root is used; differently named Namespaces all remain. Scope Namespace references are resolved against the effective Namespace set after Base composition.
 - Shared pattern: `must`, `may`, and `ignore` are independent namespaces. Within each namespace, the complete array from the Configuration closest to the Root is used for a same-named pattern set.
 

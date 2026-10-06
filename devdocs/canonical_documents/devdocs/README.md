@@ -118,20 +118,22 @@ canonical document の translation metadata は、Vocabulary の `preserve_spell
 
 Collection の `INDEX.md` は `order` / `summary` から実現した canonical index 自体を翻訳し、公開版だけに追加 prose を持たせません。説明的な導線や読み分けは各 collection の `overview.md` canonical source に置きます。
 
-意味、構造、情報量を変更する場合は canonical source を編集し、canonical document を再生成してから公開英語文書へ反映します。canonical document を正本として直接編集しません。
+意味、構造、情報量を変更する場合は canonical source を編集し、canonical document を再生成してから、その canonical document を翻訳元として同じ relative path の公開英語文書へ反映します。canonical document や公開英語文書を変更の正本として直接編集しません。
 
 Dirpluck repository 全体の generation orchestration は repository 固有の `tools/render_canonical_docs.py` に置きます。対象 canonical source、publication target、index title、context などは Dirpluck 固有情報なので shikumi-devdoc の汎用 API へ持ち込みません。
 
 ```console
 python tools/render_canonical_docs.py
 python tools/render_canonical_docs.py --check
+python tools/check_published_docs.py --update
+python tools/check_published_docs.py
 ```
 
-`--check` は commit 済み canonical document を一時生成結果と比較し、正本との drift を検出します。
+`render_canonical_docs.py --check` は commit 済み canonical document を一時生成結果と比較し、正本との drift を検出します。公開英語文書へ翻訳・配備した後は `check_published_docs.py --update` で canonical document と公開文書の hash pair を `devdocs/config/publication_manifest.json` に記録します。通常の `check_published_docs.py` は canonical document または公開文書がその reviewed snapshot から変化していないこと、root README / CHANGELOG が現在の release version を公開していることを検証します。Manifest の更新は翻訳・review の代替ではなく、その工程が完了した snapshot を release gate へ渡すための記録です。
 
 ## Version control と distribution
 
-Canonical sources、日本語 canonical documents、公開英語文書はいずれも version control へ commit し、正本から公開物までの差分を review できる状態にします。
+Canonical sources、日本語 canonical documents、公開英語文書、および `devdocs/config/publication_manifest.json` はいずれも version control へ commit し、正本から公開物までの差分と、review 済み publication snapshot を確認できる状態にします。
 
 `devdocs/` は source distribution に含め、release の文書生成・検証に利用できるようにします。一方、wheel には canonical source / canonical document は含めません。Wheel には repository の公開 `README.md`、`GLOSSARY.md`、トップレベルの `CHANGELOG.md`、`STATUS.md`、CHANGELOG archive を含む `docs/` 全体を `dirpluck/_docs/` 以下へ同梱します。
 
@@ -141,8 +143,8 @@ Source distribution は release の再構築・検証に必要な source 全体�
 
 GitHub Actions の共通品質 gate は reusable `.github/workflows/checks.yml` に集約します。Ruff formatter は `src/`、`tests/`、`tools/` を対象に `ruff format --check` で検証し、canonical source を含む repository 全体には `ruff check .` を適用します。Canonical source は Python syntax を使う文書 DSL で raw document content の indentation も意味を持つため formatter 対象には含めません。あわせて basedpyright、canonical document drift check、Python 3.11 から 3.14 の `unittest` matrix を実行し、Python 3.13 では従来の `python -m unittest discover -s tests` 形式も互換確認します。
 
-通常 CI は `main` への push と `main` を対象とする pull request で共通 checks を呼び出し、別の build job で wheel / sdist を構築して distribution metadata と contents を検証します。
+通常 CI は `main` への push と `main` を対象とする pull request で共通 checks を呼び出し、canonical document drift に加えて reviewed published-document snapshot も検証します。別の build job で wheel / sdist を構築して distribution metadata と contents を検証します。
 
 GitHub Release の `published` event では release tag 自体を checkout し、tag と dynamic package version の一致を先に確認します。その後、同じ reusable checks を release tag に対して実行し、成功した場合だけ release distribution を build・検証します。Built wheel の isolated install smoke test を通した同一 artifact を PyPI Trusted Publishing で公開します。
 
-Local では `python tools/check_release.py` により、Ruff format / lint、basedpyright、両方の `unittest` discovery 形式、canonical document check、wheel / sdist build、metadata / distribution contents、installed wheel の CLI smoke test をまとめて再現できます。
+Release 前には canonical source の変更を `python tools/render_canonical_docs.py` で実現し、その日本語 canonical document を翻訳元として対応する公開英語文書へ配備し、`python tools/check_published_docs.py --update` で reviewed snapshot を更新します。Local では `python tools/check_release.py` により、Ruff format / lint、basedpyright、両方の `unittest` discovery 形式、canonical document drift、published-document snapshot、wheel / sdist build、metadata / distribution contents、installed wheel の CLI smoke testをまとめて再現できます。Canonical source だけを更新して公開英語文書が旧 release のまま残る状態は release gate を通しません。

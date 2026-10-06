@@ -1,6 +1,6 @@
 # Python API overview
 
-This document describes the official Python API for dirpluck 0.16.x. The API is intentionally small: it exposes the same execution model as the CLI without making the Configuration parser or builder pipeline part of the general compatibility contract.
+This document describes the official Python API for dirpluck 0.17.x. The API is intentionally small: it exposes the same execution model as the CLI without making the Configuration parser or builder pipeline part of the general compatibility contract.
 
 See [`run()`](run.md) for arguments and runtime modifiers, [`RunResult`](result.md) for return values, [`DirpluckError`](errors.md) for the public error boundary, and [Package surface](surface.md) for compatibility-supported package-root exports. Configuration, Target, Case, and Archive execution semantics are shared with the [Specification](../specification/INDEX.md).
 
@@ -10,7 +10,7 @@ The center of the official API is `dirpluck.run()`. It accepts the same kinds of
 
 The CLI remains responsible for human-facing argument parsing, help, exit status, and stdout / stderr formatting. The Python API does not use `SystemExit` as its normal control flow. It returns a `RunResult` and raises expected dirpluck failures as `DirpluckError` subclasses. Non-fatal planning diagnostics are returned in `RunResult.warnings`; the CLI prints the same warnings to stderr. Configuration and migration lifecycle warnings use Python's warnings framework, and the CLI collects those same public warnings and renders them to stderr.
 
-For 0.16.x, only names explicitly exported from the package root are official Python API. Lower-level modules and underscore-prefixed names are implementation details and are not compatibility-supported during Beta.
+For 0.17.x, only names explicitly exported from the package root are official Python API. Lower-level modules and underscore-prefixed names are implementation details and are not compatibility-supported during Beta.
 
 ## Basic form
 

@@ -30,6 +30,7 @@
 [case.always.<name>]
 [scope]
 [scope.<name>]
+[layout.<name>]
 [namespace.<name>]
 [always.<name>]
 [output]
@@ -46,7 +47,7 @@ level: MUST
 
 ## SPEC_013
 
-`[about]` は任意で、`description` と `base` だけを持つ。両 field はそれぞれ任意だが、`[about]` を定義する場合は少なくとも一方を必要とする。`description` は空でない string、`base` は1個の Configuration file path とする。
+`[about]` は任意で、`description` / `description_no_targets` / `description_no_always` / `description_empty` / `always_layout` / `targets_layout` / `base` を持てる。各 field は任意だが、`[about]` を定義する場合は少なくとも1 field を必要とする。4つの description field は空でない string とする。`always_layout` / `targets_layout` は1個の Archive directory component として有効な Layout name reference、`base` は1個の Configuration file path とする。
 
 level: MUST
 
@@ -54,7 +55,7 @@ condition: `[about]` を定義する場合
 
 ## SPEC_014
 
-Base chain を構成する各 Configuration は Pluck を0個または1個、名前付き Scope、Always source、Shared pattern、ネームスペースを0個以上持てる。`[scope]` は root Configuration で常設される default Scope の optional `description` / `target_kind` / `ignore` / `namespace` 設定であり、Scope の存在宣言ではない。Named Scope は required `path` と同じ optional field を持つ。`target_kind` は `"directory"` / `"file"` / `"both"` のいずれかで、既定は `"directory"` とする。Canonical `[always.<name>]` は required `path` と Selection field だけを持ち、`namespace` は 1.0 schema に含めない。Case definition は top-level `[case]` namespace の下に置き、`[case.pluck.<name>]` は Pluck の完全な Selection、`[case.always.<name>]` は effective Always source 集合の membership filter とする。これにより `case` は Always source 名として予約せず、`[always.case]` は通常の Always source definition として使用できる。
+Base chain を構成する各 Configuration は Pluck を0個または1個、名前付き Scope、Layout、Always source、Shared pattern、ネームスペースを0個以上持てる。`[scope]` は root Configuration で常設される default Scope の optional `description` / `target_kind` / `ignore` / `layout` / `namespace` 設定であり、Scope の存在宣言ではない。Named Scope は required `path` と同じ optional field を持つ。`target_kind` は `"directory"` / `"file"` / `"both"` のいずれかで、既定は `"directory"` とする。`[layout.<name>]` は Archive 内の最上位 directory を宣言する名前付き definition で、optional `description` だけを持てる。`description` を省略した空 table も valid とし、親 `[layout]` だけを定義して名前付き Layout を1個も持たない Configuration は error とする。Layout name は TOML key として解釈した後に1個の Archive directory component として検証し、同一 Configuration 内で大文字小文字を区別しない比較で一意でなければならない。Canonical `[always.<name>]` は required `path`、Selection field、optional `layout` を持ち、`namespace` は 1.0 schema に含めない。Case definition は top-level `[case]` namespace の下に置き、`[case.pluck.<name>]` は Pluck の完全な Selection、`[case.always.<name>]` は effective Always source 集合の membership filter とする。これにより `case` は Always source 名として予約せず、`[always.case]` は通常の Always source definition として使用できる。
 
 level: MUST
 

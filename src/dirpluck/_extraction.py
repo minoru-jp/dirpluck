@@ -181,6 +181,7 @@ def extract(
             source_path=source.directory,
             description=source.description,
             selected_count=selection_counts[source.key],
+            layout_name=source.layout_name,
             scope_name=source.scope_name,
             scope_description=source.scope_description,
             target_overlaps=target_overlaps.get(source.key, ()),

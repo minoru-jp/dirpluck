@@ -1,6 +1,6 @@
 # Package surface
 
-The official package-root exports for 0.16.x are exactly:
+The official package-root exports for 0.17.x are exactly:
 
 ```python
 from dirpluck import (

@@ -37,3 +37,13 @@ level: MUST
 From 0.16.0 until 1.0.0, a Configuration that uses Always `namespace` reports `AlwaysMigrationWarning`, explaining that the field is removed in 1.0.0 and that the replacement is to write the Archive directory name directly in `[always.<name>]`. This warning is reported independently of any layout-migration warning. In 1.0.0, both acceptance of Always `namespace` and this migration warning are removed.
 
 level: MUST
+
+## SECTION_1304
+
+title: Always archive layout migration warning
+
+### SPEC_171
+
+From 0.16.0 until 1.0.0, an Always source with no effective Layout is compared using the valid 0.14.x Archive identity and the 0.16.x effective Always name. `AlwaysMigrationWarning` is reported only when those roots differ, and the warning includes both the old root and the 0.16.x root. Starting in 0.17.0, this legacy layout-migration warning must not be reported when the Always source has an effective Layout. An explicit Layout intentionally determines the current final Archive destination, so the intermediate 0.16.x placement does not describe the current output. The removal warning for Always `namespace` remains independent of this suppression.
+
+level: MUST

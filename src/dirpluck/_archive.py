@@ -140,6 +140,45 @@ def _render_target_sources(
     return lines
 
 
+def _conditional_about_description(
+    presentation: ArchivePresentation,
+    sources: tuple[ExtractedSource, ...],
+) -> str | None:
+    has_targets = any(source.role == "target" for source in sources)
+    has_always = any(source.role == "fixed" for source in sources)
+    if not has_targets and not has_always:
+        return presentation.description_empty
+    if not has_targets:
+        return presentation.description_no_targets
+    if not has_always:
+        return presentation.description_no_always
+    return None
+
+
+def _render_layout_descriptions(
+    presentation: ArchivePresentation,
+    sources: tuple[ExtractedSource, ...],
+) -> list[str]:
+    used = sorted(
+        {source.layout_name for source in sources if source.layout_name is not None},
+        key=str.casefold,
+    )
+    described = [
+        (name, presentation.layout_descriptions.get(name))
+        for name in used
+        if presentation.layout_descriptions.get(name) is not None
+    ]
+    if not described:
+        return []
+    lines = ["## Layouts", ""]
+    for name, description in described:
+        lines.extend([f"### {_markdown_code_span(f'{name}/')}", ""])
+        if description is None:
+            raise AssertionError("described Layout unexpectedly has no description")
+        lines.extend([description, ""])
+    return lines
+
+
 def _render_archive_readme(
     presentation: ArchivePresentation,
     sources: tuple[ExtractedSource, ...],
@@ -147,6 +186,9 @@ def _render_archive_readme(
     lines = ["# Archive contents", ""]
     if presentation.about_description is not None:
         lines.extend([presentation.about_description, ""])
+    conditional_description = _conditional_about_description(presentation, sources)
+    if conditional_description is not None:
+        lines.extend([conditional_description, ""])
 
     if not sources:
         lines.extend(["No sources were selected. This Archive contains only `README.md`.", ""])
@@ -159,6 +201,8 @@ def _render_archive_readme(
         )
     )
     target_sources = tuple(source for source in sources if source.role == "target")
+
+    lines.extend(_render_layout_descriptions(presentation, sources))
 
     if target_sources:
         scope_note = (

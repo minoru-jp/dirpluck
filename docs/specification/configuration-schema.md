@@ -14,6 +14,7 @@ The accepted top-level structure is:
 [case.always.<name>]
 [scope]
 [scope.<name>]
+[layout.<name>]
 [namespace.<name>]
 [always.<name>]
 [output]
@@ -30,7 +31,7 @@ level: MUST
 
 ## SPEC_013
 
-`[about]` is optional and may contain only `description` and `base`. Each field is independently optional, but if `[about]` is present, at least one must be present. `description` is a non-empty string. `base` is one Configuration file path.
+`[about]` is optional and may contain `description`, `description_no_targets`, `description_no_always`, `description_empty`, `always_layout`, `targets_layout`, and `base`. Each field is optional, but if `[about]` is present at least one field must be present. All four description fields are non-empty strings. `always_layout` and `targets_layout` are Layout-name references valid as one Archive directory component, and `base` is one Configuration file path.
 
 level: MUST
 
@@ -38,7 +39,7 @@ condition: when `[about]` is defined
 
 ## SPEC_014
 
-Each Configuration in a Base chain may contain zero or one Pluck and zero or more named Scopes, Always sources, Shared patterns, and Namespaces. `[scope]` configures the optional `description` / `target_kind` / `ignore` / `namespace` fields of the always-present default Scope in the Root Configuration; it is not a declaration that creates a Scope. A named Scope has a required `path` and the same optional fields. `target_kind` is `"directory"`, `"file"`, or `"both"` and defaults to `"directory"`. A canonical `[always.<name>]` has required `path` plus Selection fields only; `namespace` is not part of the 1.0 schema. Case definitions live under the top-level `[case]` namespace. `[case.pluck.<name>]` is a complete Pluck Selection, while `[case.always.<name>]` filters membership in the effective Always-source set. Therefore `case` is not reserved as an Always-source name and `[always.case]` remains a normal Always source definition.
+Each Configuration in a Base chain may contain zero or one Pluck and zero or more named Scopes, Layouts, Always sources, Shared patterns, and Namespaces. `[scope]` configures the optional `description` / `target_kind` / `ignore` / `layout` / `namespace` fields of the always-present default Scope in the Root Configuration; it is not a declaration that creates a Scope. A named Scope has a required `path` and the same optional fields. `target_kind` is `"directory"`, `"file"`, or `"both"` and defaults to `"directory"`. `[layout.<name>]` is a named declaration for a top-level Archive directory and may contain only optional `description`; omitting `description` and leaving the table empty is valid, while a bare parent `[layout]` with no named Layouts is an error. After TOML key parsing, a Layout name is validated as one Archive directory component and must be unique within a Configuration under a case-insensitive comparison. A canonical `[always.<name>]` has required `path`, Selection fields, and optional `layout`; `namespace` is not part of the 1.0 schema. Case definitions live under the top-level `[case]` namespace. `[case.pluck.<name>]` is a complete Pluck Selection, while `[case.always.<name>]` filters membership in the effective Always-source set. Therefore `case` is not reserved as an Always-source name and `[always.case]` remains a normal Always source definition.
 
 level: MUST
 

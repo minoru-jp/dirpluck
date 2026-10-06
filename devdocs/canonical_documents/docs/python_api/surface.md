@@ -16,7 +16,7 @@
 
 # Package surface
 
-0.16.x の公式 package-root export は次の6名です。
+0.17.x の公式 package-root export は次の6名です。
 
 ```python
 from dirpluck import (

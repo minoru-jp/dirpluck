@@ -43,6 +43,13 @@ class SelectionDefinition:
 
 
 @dataclass(frozen=True)
+class Layout:
+    """One declared top-level Archive placement directory."""
+
+    description: str | None
+
+
+@dataclass(frozen=True)
 class Scope:
     """One unnamed or named place in which runtime Targets are searched."""
 
@@ -51,6 +58,7 @@ class Scope:
     target_kind: TargetKind
     ignore: tuple[TargetIgnorePattern, ...]
     namespace: str | None
+    layout: str | None
 
 
 @dataclass(frozen=True)
@@ -60,6 +68,7 @@ class Always:
     path: str
     selection: SelectionDefinition
     compatibility_namespace: str | None
+    layout: str | None
 
 
 @dataclass(frozen=True)
@@ -92,6 +101,11 @@ class Config:
 
     manifest: Path
     about_description: str | None
+    about_description_no_targets: str | None
+    about_description_no_always: str | None
+    about_description_empty: str | None
+    about_always_layout: str | None
+    about_targets_layout: str | None
     base: str | None
     shared: SharedPatterns
     pluck: SelectionDefinition | None
@@ -100,4 +114,5 @@ class Config:
     always: Mapping[str, Always]
     always_cases: Mapping[str, AlwaysCase]
     namespaces: frozenset[str]
+    layouts: Mapping[str, Layout]
     output: Output | None

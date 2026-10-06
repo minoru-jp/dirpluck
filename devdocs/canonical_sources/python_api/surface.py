@@ -12,7 +12,7 @@ package_exports = test_target_field("package-root exports")
 )
 class API_REFERENCE_PART:
     r"""
-    0.16.x の公式 package-root export は次の6名です。
+    0.17.x の公式 package-root export は次の6名です。
 
     ```python
     {{package_exports}}

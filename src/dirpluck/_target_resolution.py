@@ -208,6 +208,7 @@ def resolve_target_expression(
                 source_kind=source_kind,
                 scope_name=scope.name,
                 scope_description=scope.description,
+                layout_name=scope.layout_name,
             )
             for path, source_root, source_kind in targets
         )
@@ -241,6 +242,7 @@ def resolve_target_expression(
                 source_kind=source_kind,
                 scope_name=scope.name,
                 scope_description=scope.description,
+                layout_name=scope.layout_name,
             ),
         )
 

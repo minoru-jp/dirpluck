@@ -50,7 +50,7 @@ The legacy syntax becomes invalid in 1.0.0. Migrate Shared references to `{ shar
 
 ## Always migration warning
 
-From 0.16.0 through the release immediately before 1.0.0, `dirpluck.run()` reports Always migration through the public `AlwaysMigrationWarning` category in Python's warnings framework. Dirpluck compares the valid 0.14.x Always Archive identity with the 0.16.x effective Always name and emits a layout migration warning only for sources whose Archive root actually changes. The warning includes both the old and new roots. No layout warning is emitted when the old and new identities are the same.
+From 0.16.0 through the release immediately before 1.0.0, `dirpluck.run()` reports Always migration through the public `AlwaysMigrationWarning` category in Python's warnings framework. Dirpluck compares the valid 0.14.x Always Archive identity with the 0.16.x effective Always name and emits a layout migration warning only for sources whose Archive root actually changes. The warning includes both the old and new roots. No layout warning is emitted when the old and new identities are the same. Starting in 0.17.0, an Always source with an explicit effective Layout suppresses this legacy layout warning because the Layout intentionally determines the current final Archive destination.
 
 Using `[always.<name>].namespace` always reports a separate pre-1.0 compatibility warning, independent of the layout comparison. In 0.16.x the Namespace name temporarily replaces the Always name for Archive placement, but the field is removed in 1.0.0. Write the desired Archive directory name directly in `[always.<name>]`.
 

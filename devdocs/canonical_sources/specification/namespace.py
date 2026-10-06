@@ -20,7 +20,7 @@ class SPECIFICATION_PART:
         level @= MUST
 
     class SPEC_063:
-        r"""Scope の `namespace` field は effective Namespace name を参照し、従来どおり Target の final archive root に `NAMESPACE/` prefix を追加する。Scope root、Target discovery、Target entry name は変更しない。Unknown Namespace reference は Configuration error とする。"""
+        r"""Scope の `namespace` field は effective Namespace name を参照し、Layout を使用しない Target の final archive root に `NAMESPACE/` prefix を追加する。Scope root、Target discovery、Target entry name は変更しない。Unknown Namespace reference は Configuration error とする。同じ Scope に個別または `[about].targets_layout` 由来の effective Layout が存在する場合は Namespace と Layout を合成せず Configuration error とする。0.x compatibility として Always `namespace` を使用する source でも、個別または `[about].always_layout` 由来の effective Layout が同時に存在する場合は Namespace と Layout を合成せず Configuration error とする。Namespace だけを使用する Always の compatibility semantics は Compatibility specification に従う。"""
 
         level @= MUST
 

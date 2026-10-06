@@ -290,7 +290,7 @@ class ConfigurationCompilerTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(
                 SelectionError,
-                "resolved sources of the same kind must have distinct archive roots",
+                "resolved sources must have distinct archive roots",
             ):
                 resolve_sources(config, BuildRequest.create("./docs/", "work/docs/"))
 
@@ -557,6 +557,231 @@ class ConfigurationCompilerTests(unittest.TestCase):
             plan = plan_archive(config, BuildRequest.create("./project/", case="audit"))
             self.assertIn("project/outer.txt", plan.entries)
             self.assertIn("Outer audit.", plan.readme)
+
+    def test_layout_reference_can_be_satisfied_by_base_configuration(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            self._write(
+                root / "base.dirpluck",
+                """
+                [layout.dependencies]
+                description = "Dependencies."
+                """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
+                [about]
+                base = "base.dirpluck"
+                always_layout = "dependencies"
+
+                [always.docs]
+                path = "docs"
+                must = ["guide.md"]
+
+                [output]
+                path = "out.zip"
+                """,
+                )
+            )
+            source = resolve_sources(config, BuildRequest.create())[0]
+            self.assertEqual(source.archive_root, "dependencies/docs")
+            self.assertEqual(source.layout_name, "dependencies")
+
+    def test_unknown_layout_references_are_rejected_after_composition(self):
+        bodies = (
+            """
+            [about]
+            always_layout = "missing"
+            """,
+            """
+            [scope]
+            layout = "missing"
+            """,
+            """
+            [always.docs]
+            path = "docs"
+            layout = "missing"
+            may = ["*.md"]
+            allow_empty = true
+            """,
+        )
+        for body in bodies:
+            with self.subTest(body=body), resolved_temporary_directory() as temp:
+                root = Path(temp)
+                config = load_config(
+                    self._write(
+                        root / "default.dirpluck",
+                        body + "\n[output]\npath = 'out.zip'\n",
+                    )
+                )
+                with self.assertRaisesRegex(ConfigurationError, "unknown Layout 'missing'"):
+                    resolve_sources(config, BuildRequest.create())
+
+    def test_individual_layout_overrides_general_layout(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            for directory in ("a", "b"):
+                source = root / directory
+                source.mkdir()
+                (source / "file.txt").write_text(directory, encoding="utf-8")
+            work = root / "work"
+            self._project(work, "one")
+            self._project(work, "two")
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
+                [about]
+                always_layout = "dependencies"
+                targets_layout = "targets"
+
+                [layout.dependencies]
+                [layout.targets]
+                [layout.special]
+
+                [pluck]
+                must = ["file.txt"]
+
+                [always.a]
+                path = "a"
+                must = ["file.txt"]
+                layout = "special"
+
+                [always.b]
+                path = "b"
+                must = ["file.txt"]
+
+                [scope.work]
+                path = "work"
+                layout = "special"
+
+                [output]
+                path = "out.zip"
+                """,
+                )
+            )
+            sources = resolve_sources(config, BuildRequest.create("work/one/", "work/two/"))
+            roots = {source.archive_root for source in sources}
+            self.assertEqual(roots, {"special/one", "special/two", "special/a", "dependencies/b"})
+
+    def test_layout_and_namespace_cannot_be_effective_on_the_same_scope(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
+                [about]
+                targets_layout = "targets"
+
+                [layout.targets]
+                [namespace.legacy]
+
+                [scope]
+                namespace = "legacy"
+
+                [output]
+                path = "out.zip"
+                """,
+                )
+            )
+            with self.assertRaisesRegex(ConfigurationError, "cannot use both Namespace"):
+                resolve_sources(config, BuildRequest.create())
+
+    def test_always_layout_and_compatibility_namespace_cannot_be_effective_together(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "docs"
+            docs.mkdir()
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
+                [about]
+                always_layout = "dependencies"
+
+                [layout.dependencies]
+                [namespace.legacy]
+
+                [always.docs]
+                path = "docs"
+                namespace = "legacy"
+                may = ["*.md"]
+                allow_empty = true
+
+                [output]
+                path = "out.zip"
+                """,
+                )
+            )
+            with self.assertRaisesRegex(ConfigurationError, "cannot use both Namespace"):
+                resolve_sources(config, BuildRequest.create())
+
+    def test_about_default_layout_is_inherited_field_by_field_from_base(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "guide.md").write_text("guide", encoding="utf-8")
+            self._write(
+                root / "base.dirpluck",
+                """
+                [about]
+                always_layout = "dependencies"
+
+                [layout.dependencies]
+                """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
+                [about]
+                base = "base.dirpluck"
+                description = "Outer description."
+
+                [always.docs]
+                path = "docs"
+                must = ["guide.md"]
+
+                [output]
+                path = "out.zip"
+                """,
+                )
+            )
+            source = resolve_sources(config, BuildRequest.create())[0]
+            self.assertEqual(source.archive_root, "dependencies/docs")
+
+    def test_layout_names_must_be_unique_ignoring_case_after_composition(self):
+        with resolved_temporary_directory() as temp:
+            root = Path(temp)
+            self._write(
+                root / "base.dirpluck",
+                """
+                [layout.Docs]
+                """,
+            )
+            config = load_config(
+                self._write(
+                    root / "default.dirpluck",
+                    """
+                [about]
+                base = "base.dirpluck"
+
+                [layout.docs]
+
+                [output]
+                path = "out.zip"
+                """,
+                )
+            )
+            with self.assertRaisesRegex(ConfigurationError, "effective Layout names"):
+                resolve_sources(config, BuildRequest.create())
 
 
 if __name__ == "__main__":
