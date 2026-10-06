@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from hashlib import sha256
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import json
 import re
 import tomllib
+from tempfile import TemporaryDirectory
 from typing import cast
 import unittest
 
 from dirpluck import __version__
+from tools.check_published_docs import document_digest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,10 +148,19 @@ class DocumentBuildTests(unittest.TestCase):
         context = cast(dict[str, object], json.loads(context_path.read_text(encoding="utf-8")))
         self.assertEqual(context, {"version": __version__})
 
+    def test_publication_digest_is_independent_of_markdown_line_endings(self):
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            lf = root / "lf.md"
+            crlf = root / "crlf.md"
+            lf.write_bytes(b"# Title\n\nBody\n")
+            crlf.write_bytes(b"# Title\r\n\r\nBody\r\n")
+            self.assertEqual(document_digest(lf), document_digest(crlf))
+
     def test_publication_manifest_tracks_canonical_and_public_documents(self):
         manifest_path = ROOT / "devdocs" / "config" / "publication_manifest.json"
         manifest = cast(dict[str, object], json.loads(manifest_path.read_text(encoding="utf-8")))
-        self.assertEqual(manifest.get("version"), 1)
+        self.assertEqual(manifest.get("version"), 2)
         documents_raw = manifest.get("documents")
         self.assertIsInstance(documents_raw, dict)
         documents = cast(dict[str, object], documents_raw)
@@ -164,12 +174,8 @@ class DocumentBuildTests(unittest.TestCase):
                 canonical = CANONICAL_DOCUMENTS / relative
                 public = ROOT / relative
                 self.assertTrue(public.is_file())
-                self.assertEqual(
-                    entry.get("canonical_sha256"), sha256(canonical.read_bytes()).hexdigest()
-                )
-                self.assertEqual(
-                    entry.get("public_sha256"), sha256(public.read_bytes()).hexdigest()
-                )
+                self.assertEqual(entry.get("canonical_sha256"), document_digest(canonical))
+                self.assertEqual(entry.get("public_sha256"), document_digest(public))
                 public_text = public.read_text(encoding="utf-8")
                 self.assertNotIn("shikumi-devdoc:translation-metadata", public_text)
                 self.assertNotIn("この文書は自動生成された翻訳元", public_text)

@@ -17,8 +17,12 @@ class _Arguments(Protocol):
     update: bool
 
 
-def _digest(path: Path) -> str:
-    return sha256(path.read_bytes()).hexdigest()
+def document_digest(path: Path) -> str:
+    # Publication snapshots track Markdown content, not the platform-specific
+    # physical line endings produced by a Git checkout. ``read_text`` uses
+    # universal-newline handling, so LF and CRLF documents hash identically.
+    text = path.read_text(encoding="utf-8")
+    return sha256(text.encode("utf-8")).hexdigest()
 
 
 def _current_version() -> str:
@@ -74,11 +78,11 @@ def _snapshot() -> dict[str, object]:
         public = ROOT / relative
         _validate_public_document(public, relative)
         documents[relative.as_posix()] = {
-            "canonical_sha256": _digest(canonical),
-            "public_sha256": _digest(public),
+            "canonical_sha256": document_digest(canonical),
+            "public_sha256": document_digest(public),
         }
     _validate_release_markers()
-    return {"version": 1, "documents": documents}
+    return {"version": 2, "documents": documents}
 
 
 def _write_manifest(snapshot: dict[str, object]) -> None:
